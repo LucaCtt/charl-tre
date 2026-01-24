@@ -93,13 +93,25 @@ class Trainer:
 
         return epoch_loss, epoch_recon, epoch_kl
 
-    def train(self, n_epochs: int) -> None:
+    def train(self, max_epochs: int) -> None:
         """Train the VAE model for a specified number of epochs."""
-        for epoch in range(n_epochs):
+        latest_checkpoint = self.checkpoint_manager.load_latest_checkpoint()
+        if latest_checkpoint is not None:
+            model_state, optimizer_state, start_epoch = latest_checkpoint
+            self.model.module.load_state_dict(model_state)
+            self.optimizer.load_state_dict(optimizer_state)
+        else:
+            start_epoch = 0
+
+        for epoch in range(start_epoch, max_epochs):
             epoch_loss, epoch_recon, epoch_kl = self.__run_epoch(epoch)
 
             if self.gpu_id == 0:
-                self.checkpoint_manager.save_checkpoint(self.model, self.optimizer, epoch)
+                self.checkpoint_manager.save_checkpoint(
+                    self.model.module.state_dict(),
+                    self.optimizer.state_dict(),
+                    epoch,
+                )
                 logger.info([epoch, epoch_loss, epoch_recon, epoch_kl])
 
             if self.early_stopping.step(epoch_loss):
