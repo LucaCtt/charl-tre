@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "ipykernel>=7.1.0",
+    "pydantic-settings>=2.12.0",
     "safetensors>=0.7.0",
     "scipy>=1.17.0",
     "torch>=2.9.1",
@@ -30,11 +31,12 @@ ignore = [
     "D107",    # Missing docstring in __init__
     "FBT001",  # Boolean-typed positional argument in function definition
     "FBT002",  # Boolean-typed keyword argument in function definition
-    "ANN204",  # Missing return type for special method `__init__`
     "D203",    # Incorrect blank line before class
     "D213",    # Multi line summary second line
-    "PLC0415", # Imports at top level
     "S310",    # Audit URL open for permitted access
     "T201",    # print found
     "PLR0913", # Too many arguments in function definition
+    "TC001",   # Move stuff into type checking block
+    "TC002",   # Move stuff into type checking block
+    "TC003",   # Move stuff into type checking block
 ]
