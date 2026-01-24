@@ -12,3 +12,6 @@ wheels/
 
 # Dataset
 dataset/
+
+# Logs and checkpoints
+vaed_models_*/
