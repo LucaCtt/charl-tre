@@ -1,5 +1,3 @@
-"""Variational Autoencoder (VAE) model definition."""
-
 from typing import Literal
 
 import torch
@@ -19,6 +17,15 @@ class VAE(nn.Module):
         latent_dim: int = 2,
         categorical_dim: int = 2,
     ) -> None:
+        """Initialize the VAE model.
+
+        Arguments:
+            enc_input_shape (tuple[int, int, int]): Shape of the encoder input.
+            dec_input_shape (tuple[int, int, int]): Shape of the decoder input.
+            latent_dim (int): Dimensionality of the latent space.
+            categorical_dim (int): Number of categories for the categorical latent variables.
+
+        """
         super().__init__()
 
         self.encoder = CSIEncoder(enc_input_shape, latent_dim, categorical_dim)
@@ -46,7 +53,7 @@ def vae_loss(
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Compute the VAE loss with categorical latent variables.
 
-    Args:
+    Arguments:
         x_recon (torch.Tensor): Reconstructed input.
         x_true (torch.Tensor): True input.
         z (torch.Tensor): Latent variable tensor.
@@ -75,7 +82,7 @@ def vae_loss(
     posterior = posterior_distrib.probs
 
     # Prior p(y): uniform categorical
-    prior = torch.ones_like(z) / z.size(-1) # z.size(-1) is the categorical dimension
+    prior = torch.ones_like(z) / z.size(-1)  # z.size(-1) is the categorical dimension
     prior = prior.clamp_min(eps)
     prior_distrib = torch.distributions.Categorical(probs=prior)
     log_prior = prior_distrib.probs.log()

@@ -8,7 +8,7 @@ from torch import nn
 def _sample_gumbel_like(tensor: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
     """Draw Gumbel(0,1) noise of the same shape as `tensor` with robust clamping of uniforms.
 
-    Args:
+    Arguments:
         tensor (torch.Tensor): Tensor whose shape to match.
         eps (float): Small constant for numerical stability.
 
@@ -33,7 +33,7 @@ def gumbel_softmax_stable(
     Clamps uniforms, enforces a minimum temperature,
     optional centering before softmax (shift-invariant, avoids overflow).
 
-    Args:
+    Arguments:
         logits (torch.Tensor): Logits of the categorical distribution.
         tau (float): Temperature parameter.
         dim (int): Dimension along which to apply softmax.
@@ -64,7 +64,7 @@ def gumbel_softmax_straight_through_stable(
 
     In forward pass we get a hard one-hot sample, in backward gradients flow as if soft (y_soft).
 
-    Args:
+    Arguments:
         logits (torch.Tensor): Logits of the categorical distribution.
         tau (float): Temperature parameter.
         dim (int): Dimension along which to apply softmax.

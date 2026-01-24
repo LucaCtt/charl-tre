@@ -1,11 +1,10 @@
 [project]
-name = "csi-vae"
+name = "csi-vae-gumbel"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.13,<3.14"
 dependencies = [
-    "ipykernel>=7.1.0",
     "pydantic-settings>=2.12.0",
     "safetensors>=0.7.0",
     "scipy>=1.17.0",
@@ -16,7 +15,15 @@ dependencies = [
 [dependency-groups]
 dev = [
     "ruff>=0.14.13",
+    "ipykernel>=7.1.0",
 ]
+
+[project.scripts]
+train = "csi_vae_gumbel.main:main"
+
+[build-system]
+requires = ["uv_build>=0.9.26,<0.10.0"]
+build-backend = "uv_build"
 
 [tool.ruff]
 line-length = 120
@@ -27,16 +34,15 @@ select = [
     "ALL", # include all the rules, including new ones
 ]
 ignore = [
+    "D100",    # Missing docstring in public module
+    "D104",    # Missing docstring in public package
     "D105",    # Missing docstring in magic method
-    "D107",    # Missing docstring in __init__
     "FBT001",  # Boolean-typed positional argument in function definition
     "FBT002",  # Boolean-typed keyword argument in function definition
     "D203",    # Incorrect blank line before class
     "D213",    # Multi line summary second line
-    "S310",    # Audit URL open for permitted access
-    "T201",    # print found
     "PLR0913", # Too many arguments in function definition
-    "TC001",   # Move stuff into type checking block
-    "TC002",   # Move stuff into type checking block
-    "TC003",   # Move stuff into type checking block
+    "TC001",
+    "TC002",
+    "TC003",
 ]

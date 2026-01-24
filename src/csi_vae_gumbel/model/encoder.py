@@ -1,5 +1,3 @@
-"""CSI encoder module for VAE."""
-
 import torch
 from torch import nn
 
@@ -10,6 +8,14 @@ class CSIEncoder(nn.Module):
     """CSI encoder module for VAE."""
 
     def __init__(self, input_shape: tuple[int, int, int], latent_dim: int, categorical_dim: int) -> None:
+        """Initialize the CSI encoder.
+
+        Arguments:
+            input_shape (tuple[int, int, int]): Shape of the input tensor (height, width, channels).
+            latent_dim (int): Dimensionality of the latent space.
+            categorical_dim (int): Number of categories for the categorical latent variables.
+
+        """
         super().__init__()
 
         self.latent_dim = latent_dim

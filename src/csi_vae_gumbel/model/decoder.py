@@ -1,5 +1,3 @@
-"""CSI decoder module for VAE."""
-
 import torch
 from torch import nn
 
@@ -14,6 +12,15 @@ class CSIDecoder(nn.Module):
         categorical_dim: int,
         out_filter: int,
     ) -> None:
+        """Initialize the CSI decoder.
+
+        Arguments:
+            input_shape (tuple[int, int, int]): Shape of the decoder input.
+            latent_dim (int): Dimensionality of the latent space.
+            categorical_dim (int): Number of categories for the categorical latent variables.
+            out_filter (int): Number of output filters.
+
+        """
         super().__init__()
 
         self.input_shape = input_shape

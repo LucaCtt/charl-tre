@@ -1,5 +1,3 @@
-"""CSI Dataset module."""
-
 from pathlib import Path
 from string import ascii_uppercase
 
@@ -25,6 +23,17 @@ class CSIDataset(Dataset):
         antenna: int,
         normalize: bool = True,
     ) -> None:
+        """Initialize the CSI dataset.
+
+        Arguments:
+            files: List of paths to the .mat files containing the CSI data.
+            n_samples: Number of samples to extract from each CSI matrix file.
+            window_size: Size of the sliding window to extract from each sample.
+            n_antennas: Total number of antennas used, either a single one or all of them.
+            antenna: If n_antennas==1, select which antenna to use (0 to 3). Otherwise, this value is ignored.
+            normalize: Whether to normalize the CSI data by the global maximum value.
+
+        """
         self.window_size = window_size
         self.n_antennas = n_antennas
         self.normalize = normalize
@@ -87,7 +96,6 @@ def build_dataloader(
 ) -> DataLoader:
     """Build the CSI dataset dataloader with DistributedSampler."""
     files = [dataset_path / f"S1a_{x}.mat" for x in ascii_uppercase[:n_activities]]
-    print(f"Found {len(files)} matrix files: {[f.name for f in files]}")
 
     # Shape of dataset samples: (n_antennas, window_size, n_subcarriers)
     dataset = CSIDataset(

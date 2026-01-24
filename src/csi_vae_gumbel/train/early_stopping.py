@@ -1,10 +1,13 @@
-"""Early stopping utility to halt training when validation loss stops improving."""
-
-
 class EarlyStopping:
     """Early stopping utility to halt training when validation loss stops improving."""
 
     def __init__(self, patience: int) -> None:
+        """Initialize EarlyStopping with a patience parameter.
+
+        Arguments:
+            patience: Number of epochs to wait for improvement before stopping.
+
+        """
         self.patience = patience
         self.best_loss = float("inf")
         self.counter = 0

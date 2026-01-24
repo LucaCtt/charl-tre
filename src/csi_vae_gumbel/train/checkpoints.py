@@ -1,4 +1,3 @@
-"""Checkpoint management for saving and loading model states."""
 
 from pathlib import Path
 
@@ -11,6 +10,12 @@ class CheckpointManager:
     """Manages saving and loading of model checkpoints."""
 
     def __init__(self, checkpoint_dir: Path) -> None:
+        """Initialize the CheckpointManager with a directory to save checkpoints.
+
+        Arguments:
+            checkpoint_dir: Directory where checkpoints will be saved.
+
+        """
         self.checkpoint_dir = checkpoint_dir
 
         checkpoint_dir.mkdir(parents=True, exist_ok=True)

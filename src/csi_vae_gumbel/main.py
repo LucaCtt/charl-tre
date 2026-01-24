@@ -1,9 +1,9 @@
-"""Main module to train the VAE model using DDP."""
-
 import os
+from pathlib import Path
 
 import torch
 from torch.distributed import destroy_process_group, init_process_group
+from torch.multiprocessing.spawn import spawn
 
 from csi_vae_gumbel.dataset import build_dataloader
 from csi_vae_gumbel.model.vae import VAE
@@ -13,7 +13,7 @@ from csi_vae_gumbel.train.early_stopping import EarlyStopping
 from csi_vae_gumbel.train.trainer import Trainer
 
 
-def ddp_setup(rank: int, world_size: int) -> None:
+def _ddp_setup(rank: int, world_size: int) -> None:
     """Initialize the distributed environment.
 
     Arguments:
@@ -34,7 +34,7 @@ def ddp_setup(rank: int, world_size: int) -> None:
     init_process_group(backend=backend, rank=rank, world_size=world_size)
 
 
-def main(rank: int, world_size: int) -> None:
+def train(rank: int, world_size: int) -> None:
     """Train the VAE model using Distributed Data Parallel (DDP).
 
     Arguments:
@@ -42,11 +42,11 @@ def main(rank: int, world_size: int) -> None:
         world_size: Total number of processes.
 
     """
-    ddp_setup(rank, world_size)
+    _ddp_setup(rank, world_size)
     settings = Settings()
 
     dataloader = build_dataloader(
-        dataset_path=settings.dataset_path,
+        dataset_path=Path(settings.dataset_path),
         batch_size=settings.batch_size,
         window_size=settings.window_size,
         n_activities=settings.n_activities,
@@ -57,8 +57,19 @@ def main(rank: int, world_size: int) -> None:
     model = VAE(latent_dim=settings.latent_dim, categorical_dim=settings.categorical_dim)
     optimizer = torch.optim.Adam(model.parameters(), lr=settings.learning_rate)
     early_stopping = EarlyStopping(patience=settings.patience)
-    checkpoint_manager = CheckpointManager(settings.checkpoint_dir)
+    checkpoint_manager = CheckpointManager(Path(settings.checkpoint_dir))
+
     trainer = Trainer(model, dataloader, optimizer, early_stopping, checkpoint_manager, rank)
     trainer.train(settings.n_epochs)
 
     destroy_process_group()
+
+
+def main() -> None:
+    """Spawn multiple processes for distributed training."""
+    world_size = torch.cuda.device_count() if torch.cuda.is_available() else 1
+    spawn(train, args=(world_size,), nprocs=world_size)
+
+
+if __name__ == "__main__":
+    main()

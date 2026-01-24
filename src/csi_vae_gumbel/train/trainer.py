@@ -1,5 +1,3 @@
-"""Trainer module for VAE model using Distributed Data Parallel."""
-
 import logging
 from collections import OrderedDict
 
@@ -28,6 +26,17 @@ class Trainer:
         checkpoint_manager: CheckpointManager,
         gpu_id: int,
     ) -> None:
+        """Initialize the Trainer.
+
+        Arguments:
+            model: VAE model to be trained.
+            dataloader: DataLoader for training data.
+            optimizer: Optimizer for training.
+            early_stopping: EarlyStopping instance to monitor training.
+            checkpoint_manager: CheckpointManager to save model checkpoints.
+            gpu_id: GPU ID for Distributed Data Parallel.
+
+        """
         self.model = DistributedDataParallel(model, device_ids=[gpu_id])
         self.dataloader = dataloader
         self.optimizer = optimizer
