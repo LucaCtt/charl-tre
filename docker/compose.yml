@@ -1,0 +1,27 @@
+name: csi_vae_gumbel
+
+services:
+  train:
+    build:
+      context: ..
+      dockerfile: docker/dockerfile
+    container_name: csi_vae_gumbel_train
+    environment:
+      - MASTER_ADDR=csi_vae_gumbel_train
+      - MASTER_PORT=12345
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ${PWD}/out:/app/out
+      - ${PWD}/dataset:/app/dataset
+    restart: on-failure:3
+    shm_size: '16g'
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+    runtime: nvidia

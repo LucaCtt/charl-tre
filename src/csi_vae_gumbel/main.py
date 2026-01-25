@@ -38,8 +38,11 @@ def _ddp_setup(rank: int, world_size: int) -> None:
         world_size: Total number of processes
 
     """
-    os.environ["MASTER_ADDR"] = "localhost"
-    os.environ["MASTER_PORT"] = "12355"
+    if "MASTER_ADDR" not in os.environ:
+        os.environ["MASTER_ADDR"] = "localhost"
+
+    if "MASTER_PORT" not in os.environ:
+        os.environ["MASTER_PORT"] = "12355"
 
     acc = torch.accelerator.current_accelerator()
     if acc is None:
@@ -138,7 +141,7 @@ def train(rank: int, world_size: int) -> None:
                 progress.update(
                     epoch_task,
                     advance=1,
-                    epoch=epoch+1,
+                    epoch=epoch + 1,
                     batch=progress.tasks[0].completed + 1,
                     loss=epoch_loss,
                     recon=epoch_recon,

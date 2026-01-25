@@ -1,4 +1,3 @@
-# Pull the uv image to avoid an additional download step
 FROM pytorch/pytorch:2.10.0-cuda12.6-cudnn9-runtime
 
 # The uv installer requires curl (and certificates) to download the release archive
@@ -26,7 +25,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-install-project --no-dev
 
 COPY src src
+COPY README.md .
 
+# Install the project itself
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev
 
