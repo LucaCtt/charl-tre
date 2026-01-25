@@ -16,7 +16,7 @@ from csi_vae_gumbel.train.early_stopping import EarlyStopping
 from csi_vae_gumbel.train.trainer import Trainer
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 formatter = JsonFormatter()
 handler = logging.StreamHandler(stream=sys.stdout)
 handler.setFormatter(formatter)

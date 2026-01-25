@@ -26,9 +26,7 @@ class Settings(BaseSettings):
     latent_dim: int = 2
     categorical_dim: int = n_activities
     vae_name: str = f"vaed_s1a_a{antenna}_ls{latent_dim}" if n_antennas == 1 else f"vaed_s1a_f_ls{latent_dim}"
-    checkpoint_dir: str = (
-        f"vaed_models_{n_activities}activities/{dt.now(tz=UTC).strftime('%Y%m%d_%H%M%S')}/{vae_name}"
-    )
+    checkpoint_dir: str = f"vaed_models_{n_activities}activities/{dt.now(tz=UTC).strftime('%Y%m%d_%H%M%S')}/{vae_name}"
 
     # Training config
     batch_size: int = 24
