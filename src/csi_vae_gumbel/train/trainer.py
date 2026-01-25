@@ -1,13 +1,12 @@
 import logging
-from collections import OrderedDict
 
 import torch
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
-from tqdm import tqdm
 
-from csi_vae_gumbel.model.vae import VAE, vae_loss
+from csi_vae_gumbel.model.loss import vae_loss
+from csi_vae_gumbel.model.vae import VAE
 from csi_vae_gumbel.train.checkpoints import CheckpointManager
 from csi_vae_gumbel.train.early_stopping import EarlyStopping
 
@@ -65,28 +64,24 @@ class Trainer:
         epoch_recon = 0.0
         epoch_kl = 0.0
 
-        with tqdm(
-            self.dataloader,
-            desc=f"Epoch {epoch + 1}",
-            unit="batch",
-            disable=(self.gpu_id != 0),
-        ) as progress_bar:
-            for x_true, _ in progress_bar:
-                loss, recon_loss, kl_loss = self.__run_batch(x_true.to(self.gpu_id))
+        for batch_count, (x_true, _) in enumerate(self.dataloader):
+            loss, recon_loss, kl_loss = self.__run_batch(x_true.to(self.gpu_id))
 
-                epoch_loss += loss
-                epoch_recon += recon_loss
-                epoch_kl += kl_loss
+            epoch_loss += loss
+            epoch_recon += recon_loss
+            epoch_kl += kl_loss
 
-                progress_bar.set_postfix(
-                    OrderedDict(
-                        [
-                            ("loss", loss),
-                            ("recon_loss", recon_loss),
-                            ("kl_loss", kl_loss),
-                        ],
-                    ),
+            if self.gpu_id == 0:
+                logger.debug(
+                    {
+                        "epoch": epoch,
+                        "batch": batch_count,
+                        "batch_loss": loss,
+                        "batch_recon_loss": recon_loss,
+                        "batch_kl_loss": kl_loss,
+                    },
                 )
+
         epoch_loss /= len(self.dataloader)
         epoch_recon /= len(self.dataloader)
         epoch_kl /= len(self.dataloader)
@@ -112,7 +107,7 @@ class Trainer:
                     self.optimizer.state_dict(),
                     epoch,
                 )
-                logger.info([epoch, epoch_loss, epoch_recon, epoch_kl])
+                logger.info({"epoch": epoch, "loss": epoch_loss, "recon_loss": epoch_recon, "kl_loss": epoch_kl})
 
             if self.early_stopping.step(epoch_loss):
                 break

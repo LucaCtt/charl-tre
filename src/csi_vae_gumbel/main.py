@@ -1,7 +1,10 @@
+import logging
 import os
+import sys
 from pathlib import Path
 
 import torch
+from pythonjsonlogger.json import JsonFormatter
 from torch.distributed import destroy_process_group, init_process_group
 from torch.multiprocessing.spawn import spawn
 
@@ -11,6 +14,13 @@ from csi_vae_gumbel.settings import Settings
 from csi_vae_gumbel.train.checkpoints import CheckpointManager
 from csi_vae_gumbel.train.early_stopping import EarlyStopping
 from csi_vae_gumbel.train.trainer import Trainer
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+formatter = JsonFormatter()
+handler = logging.StreamHandler(stream=sys.stdout)
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
 
 def _ddp_setup(rank: int, world_size: int) -> None:
