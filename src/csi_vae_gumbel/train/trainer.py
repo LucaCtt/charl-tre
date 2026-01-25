@@ -1,4 +1,6 @@
-import logging
+import queue
+import threading
+from collections.abc import Callable
 
 import torch
 from torch.nn.parallel import DistributedDataParallel
@@ -10,7 +12,24 @@ from csi_vae_gumbel.model.vae import VAE
 from csi_vae_gumbel.train.checkpoints import CheckpointManager
 from csi_vae_gumbel.train.early_stopping import EarlyStopping
 
-logger = logging.getLogger(__name__)
+
+class _AsyncCallbackWorker:
+    """Asynchronous worker to run callback functions without blocking the training loop."""
+
+    def __init__(self) -> None:
+        """Initialize the asynchronous callback worker."""
+        self.__q = queue.Queue()
+        self.__worker = threading.Thread(target=self._loop, daemon=True)
+        self.__worker.start()
+
+    def _loop(self) -> None:
+        while True:
+            callback = self.__q.get()
+            callback()
+
+    def submit(self, callback: Callable, *args: float, **kwargs: float) -> None:
+        """Submit a new task to the worker."""
+        self.__q.put(lambda: callback(*args, **kwargs))
 
 
 class Trainer:
@@ -24,6 +43,8 @@ class Trainer:
         early_stopping: EarlyStopping,
         checkpoint_manager: CheckpointManager,
         gpu_id: int,
+        batch_callback: Callable | None = None,
+        epoch_callback: Callable | None = None,
     ) -> None:
         """Initialize the Trainer.
 
@@ -34,80 +55,80 @@ class Trainer:
             early_stopping: EarlyStopping instance to monitor training.
             checkpoint_manager: CheckpointManager to save model checkpoints.
             gpu_id: GPU ID for Distributed Data Parallel.
+            batch_callback: Optional callback function called at the end of each batch.
+            epoch_callback: Optional callback function called at the end of each epoch.
 
         """
-        self.model = DistributedDataParallel(model, device_ids=[gpu_id])
-        self.dataloader = dataloader
-        self.optimizer = optimizer
-        self.early_stopping = early_stopping
-        self.checkpoint_manager = checkpoint_manager
-        self.gpu_id = gpu_id
+        self.__model = DistributedDataParallel(model.to(gpu_id), device_ids=[gpu_id])
+        self.__dataloader = dataloader
+        self.__optimizer = optimizer
+        self.__early_stopping = early_stopping
+        self.__checkpoint_manager = checkpoint_manager
+        self.__gpu_id = gpu_id
+        self.__batch_callback = batch_callback
+        self.__epoch_callback = epoch_callback
+
+        self.__callback_worker = _AsyncCallbackWorker()
 
     def __run_batch(self, x_true: torch.Tensor) -> tuple[float, float, float]:
-        self.optimizer.zero_grad()
-        x_recon, z = self.model(x_true, 0.1)
+        self.__optimizer.zero_grad()
+        x_recon, z = self.__model(x_true, 0.1)
+
         loss, recon_loss, kl_loss, _, _ = vae_loss(x_recon, x_true, z)
 
         loss.backward()
-        self.optimizer.step()
+        self.__optimizer.step()
 
         return loss.item(), recon_loss.item(), kl_loss.item()
 
     def __run_epoch(self, epoch: int) -> tuple[float, float, float]:
-        self.model.train()
+        self.__model.train()
 
         # Set the epoch for shuffling if using DistributedSampler
-        if isinstance(self.dataloader.sampler, DistributedSampler):
-            self.dataloader.sampler.set_epoch(epoch)
+        if isinstance(self.__dataloader.sampler, DistributedSampler):
+            self.__dataloader.sampler.set_epoch(epoch)
 
         epoch_loss = 0.0
         epoch_recon = 0.0
         epoch_kl = 0.0
 
-        for batch_count, (x_true, _) in enumerate(self.dataloader):
-            loss, recon_loss, kl_loss = self.__run_batch(x_true.to(self.gpu_id))
+        for x_true, _ in self.__dataloader:
+            loss, recon_loss, kl_loss = self.__run_batch(x_true.to(self.__gpu_id))
+
+            if self.__gpu_id == 0 and self.__batch_callback is not None:
+                self.__callback_worker.submit(self.__batch_callback, epoch, loss, recon_loss, kl_loss)
 
             epoch_loss += loss
             epoch_recon += recon_loss
             epoch_kl += kl_loss
 
-            if self.gpu_id == 0:
-                logger.debug(
-                    {
-                        "epoch": epoch,
-                        "batch": batch_count,
-                        "batch_loss": loss,
-                        "batch_recon_loss": recon_loss,
-                        "batch_kl_loss": kl_loss,
-                    },
-                )
-
-        epoch_loss /= len(self.dataloader)
-        epoch_recon /= len(self.dataloader)
-        epoch_kl /= len(self.dataloader)
+        epoch_loss /= len(self.__dataloader)
+        epoch_recon /= len(self.__dataloader)
+        epoch_kl /= len(self.__dataloader)
 
         return epoch_loss, epoch_recon, epoch_kl
 
     def train(self, max_epochs: int) -> None:
         """Train the VAE model for a specified number of epochs."""
-        latest_checkpoint = self.checkpoint_manager.load_latest_checkpoint()
+        latest_checkpoint = self.__checkpoint_manager.load_latest_checkpoint()
         if latest_checkpoint is not None:
             model_state, optimizer_state, start_epoch = latest_checkpoint
-            self.model.module.load_state_dict(model_state)
-            self.optimizer.load_state_dict(optimizer_state)
+            self.__model.module.load_state_dict(model_state)
+            self.__optimizer.load_state_dict(optimizer_state)
         else:
             start_epoch = 0
 
         for epoch in range(start_epoch, max_epochs):
             epoch_loss, epoch_recon, epoch_kl = self.__run_epoch(epoch)
 
-            if self.gpu_id == 0:
-                self.checkpoint_manager.save_checkpoint(
-                    self.model.module.state_dict(),
-                    self.optimizer.state_dict(),
+            if self.__gpu_id == 0:
+                self.__checkpoint_manager.save_checkpoint(
+                    self.__model.module.state_dict(),
+                    self.__optimizer.state_dict(),
                     epoch,
                 )
-                logger.info({"epoch": epoch, "loss": epoch_loss, "recon_loss": epoch_recon, "kl_loss": epoch_kl})
+                if self.__epoch_callback is not None:
+                    self.__callback_worker.submit(self.__epoch_callback, epoch, epoch_loss, epoch_recon, epoch_kl)
 
-            if self.early_stopping.step(epoch_loss):
+            if self.__early_stopping.step(epoch_loss):
                 break
