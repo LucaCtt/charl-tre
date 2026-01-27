@@ -1,3 +1,4 @@
+import math
 from typing import Literal
 
 import torch
@@ -8,8 +9,8 @@ def vae_loss(
     x_recon: torch.Tensor,
     x_true: torch.Tensor,
     z: torch.Tensor,
-    kl_weight: float = 5e-4,
-    free_bits: float = 0.0,
+    kl_weight: float = 1e-3,
+    free_bits: float = 1.0,
     entropy_weight: float = 0.0,
     entropy_mode: Literal["none", "penalty", "bonus"] = "none",
     eps: float = 1e-12,
@@ -37,18 +38,13 @@ def vae_loss(
 
     # Log q(y|x)
     log_z = nn.functional.log_softmax(z, dim=-1)
-    log_z = log_z.clamp_min(eps)
 
-    # Posterior q(y|x)
-    probs_z = nn.functional.softmax(z, dim=-1)
-    posterior_distrib = torch.distributions.Categorical(probs=probs_z)
-    posterior = posterior_distrib.probs
+    # Posterior q(y|x): categorical, softmax over logits
+    posterior = nn.functional.softmax(z, dim=-1)
 
-    # Prior p(y): uniform categorical
-    prior = torch.ones_like(z) / z.size(-1)  # z.size(-1) is the categorical dimension
-    prior = prior.clamp_min(eps)
-    prior_distrib = torch.distributions.Categorical(probs=prior)
-    log_prior = prior_distrib.probs.log()
+    # Prior p(y): uniform categorical, where p(y) = 1/K
+    # Skip straight to log p(y)
+    log_prior = torch.full_like(z, -math.log(z.size(-1)))
 
     # KL(q || p)
     kl_per_sample = (posterior * (log_z - log_prior)).view(z.size(0), -1).sum(dim=1)
@@ -66,7 +62,7 @@ def vae_loss(
     elif entropy_mode == "bonus":
         ent_term = -entropy_weight * entropy
     else:
-        ent_term = torch.Tensor([0.0]).to(x_recon.device)
+        ent_term = torch.zeros((), device=x_recon.device)
 
     total_loss = recon + kl_weight * kl + ent_term
 

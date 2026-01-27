@@ -6,7 +6,7 @@ import torch
 from pythonjsonlogger.json import JsonFormatter
 from rich.console import Console
 from rich.logging import RichHandler
-from rich.progress import BarColumn, Progress, TextColumn
+from rich.progress import BarColumn, Progress, TextColumn, TimeRemainingColumn
 from torch.distributed import destroy_process_group, init_process_group
 from torch.multiprocessing.spawn import spawn
 
@@ -88,14 +88,15 @@ def train(rank: int, world_size: int) -> None:
         checkpoint_manager = CheckpointManager(Path(settings.checkpoint_dir))
 
         bar_column = BarColumn()
-        epoch_column = TextColumn("Epoch {task.fields[epoch]}/{task.fields[total_epochs]}")
-        batch_column = TextColumn("Batch {task.completed}/{task.total}")
+        epoch_column = TextColumn("Epoch: {task.fields[epoch]}/{task.fields[total_epochs]}")
+        batch_column = TextColumn("Batch: {task.completed}/{task.total}")
         loss_column = TextColumn("Loss: {task.fields[loss]:.4f}")
         recon_column = TextColumn("Recon: {task.fields[recon]:.4f}")
         kl_column = TextColumn("KL: {task.fields[kl]:.4f}")
 
         with Progress(
             bar_column,
+            TimeRemainingColumn(compact=True),
             epoch_column,
             batch_column,
             loss_column,

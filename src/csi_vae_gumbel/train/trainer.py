@@ -72,7 +72,7 @@ class Trainer:
 
     def __run_batch(self, x_true: torch.Tensor) -> tuple[float, float, float]:
         self.__optimizer.zero_grad()
-        x_recon, z = self.__model(x_true, 0.1)
+        x_recon, z = self.__model(x_true, 0.9)
 
         loss, recon_loss, kl_loss, _, _ = vae_loss(x_recon, x_true, z)
 

@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     )
 
     # Training config
-    batch_size: int = 24
-    n_epochs: int = 1
+    batch_size: int = 16*3
+    n_epochs: int = 50
     patience: int = 3
     learning_rate: float = 1e-3
