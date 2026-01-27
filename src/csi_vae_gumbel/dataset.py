@@ -49,8 +49,22 @@ class CSIDataset(Dataset):
             # num_samples, n_subcarriers, n_antennas
             mat = sio.loadmat(file)
 
+            # Shape of csi for now is: (num_samples, n_subcarriers, n_antennas)
+            # We will later rearrange it.
             csi = np.array(mat["csi"])
             csi = csi[:n_samples, ..., int(antenna)] if n_antennas == 1 else csi[:n_samples]
+
+            # 802.11ax has 2048 subcarriers (160 MHz bandwidth), we can keep one data
+            # point every 4 subcarriers to reduce input size, make the methodology compatible
+            # with 802.11ac (popular in literature) while still keeping most of the information.
+            csi = csi[:, ::4, :]
+
+            # We can further discard the second half of the subcarriers
+            # and keep most of the information,
+            csi = csi[:, :csi.shape[1] // 2, :]
+
+            # Discard phase information, keep only magnitude.
+            # Phase is often very noisy and not very informative.
             csi = np.round(np.abs(csi)).astype(np.float32)
 
             if normalize:

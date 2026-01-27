@@ -13,7 +13,6 @@ def vae_loss(
     free_bits: float = 1.0,
     entropy_weight: float = 0.0,
     entropy_mode: Literal["none", "penalty", "bonus"] = "none",
-    eps: float = 1e-12,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Compute the VAE loss with categorical latent variables.
 
@@ -26,7 +25,6 @@ def vae_loss(
         prior_prob (float): Prior probability for the categorical distribution.
         entropy_weight (float): Weight for the entropy term.
         entropy_mode (Literal["none", "penalty", "bonus"]): Mode for entropy term.
-        eps (float): Small constant for numerical stability.
 
     Returns:
         tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]: Total loss, reconstruction loss,
