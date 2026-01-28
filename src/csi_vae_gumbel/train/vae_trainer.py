@@ -5,8 +5,8 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from csi_vae_gumbel.model.loss import vae_loss
-from csi_vae_gumbel.model.vae import MultiViewCategoricalVAE
+from csi_vae_gumbel.models.loss import vae_loss
+from csi_vae_gumbel.models.vae import MultiViewCategoricalVAE
 from csi_vae_gumbel.train.async_callback_worker import AsyncCallbackWorker
 from csi_vae_gumbel.train.checkpoints import CheckpointManager
 from csi_vae_gumbel.train.early_stopping import EarlyStopping
