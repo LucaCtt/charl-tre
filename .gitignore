@@ -14,4 +14,4 @@ wheels/
 dataset/
 
 # Logs and checkpoints
-vaed_models_*/
+out/

@@ -19,7 +19,9 @@ class Settings(BaseSettings):
     n_samples: int = 12000
     """Number of samples to extract from each CSI matrix file."""
     window_size: int = 150
-    """Size of the sliding window to extract from each sample."""
+    """Size of the window of CSI in a sample, where 150 CSI = 1 second of data."""
+    overlap_size: int = 15
+    """Size of the overlap between two consecutive windows."""
     n_antennas: int = 4
     """Total number of antennas used."""
     n_subcarriers: int = 2048
@@ -30,11 +32,11 @@ class Settings(BaseSettings):
     # Categorical VAE config
     latent_dim: int = 2
     categorical_dim: int = n_activities
-    vae_name: str = f"vaed_s1a_ls{latent_dim * categorical_dim}"
-    checkpoint_dir: str = f"out/vaed_models/{dt.now(tz=UTC).strftime('%Y%m%d_%H%M%S')}/{vae_name}"
+    vae_name: str = f"vaec_s1a_ls{latent_dim * categorical_dim}"
+    checkpoint_dir: str = f"out/vaec_models/{dt.now(tz=UTC).strftime('%Y%m%d_%H%M%S')}/{vae_name}"
 
     # Training config
-    batch_size: int = 8 * 3
-    n_epochs: int = 50
+    batch_size: int = 36 * 3
+    n_epochs: int = 1
     patience: int = 3
     learning_rate: float = 1e-3

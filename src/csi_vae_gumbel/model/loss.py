@@ -1,8 +1,9 @@
-import math
 from typing import Literal
 
 import torch
+from torch import distributions as dist
 from torch import nn
+from torch.nn import functional as func
 
 
 def vae_loss(
@@ -32,29 +33,28 @@ def vae_loss(
 
     """
     # Reconstruction loss
-    recon = nn.functional.binary_cross_entropy(x_recon, x_true, reduction="mean")
+    recon = func.binary_cross_entropy(x_recon, x_true, reduction="mean")
 
-    # Log q(y|x)
-    log_z = nn.functional.log_softmax(z, dim=-1)
+    # Posterior q(y|x)
+    q = dist.Categorical(logits=z)
 
-    # Posterior q(y|x): categorical, softmax over logits
-    posterior = nn.functional.softmax(z, dim=-1)
+    # Prior p(y): uniform categorical
+    num_classes = z.size(-1)
+    p = dist.Categorical(probs=torch.full_like(z, 1.0 / num_classes))
 
-    # Prior p(y): uniform categorical, where p(y) = 1/K
-    # Skip straight to log p(y)
-    log_prior = torch.full_like(z, -math.log(z.size(-1)))
-
-    # KL(q || p)
-    kl_per_sample = (posterior * (log_z - log_prior)).view(z.size(0), -1).sum(dim=1)
+    # KL(q || p), per sample
+    kl_per_sample = dist.kl_divergence(q, p)
+    kl_per_sample = kl_per_sample.view(z.size(0), -1).sum(dim=1)
     if free_bits > 0.0:
         kl_per_sample = nn.functional.relu(kl_per_sample - free_bits)
     kl = kl_per_sample.mean()
 
-    # Entropy H(q): -sum q log q, safe version
-    entropy_per_sample = -(posterior * log_z).view(z.size(0), -1).sum(dim=1)
+    # Entropy H(q)
+    entropy_per_sample = q.entropy()
+    entropy_per_sample = entropy_per_sample.view(z.size(0), -1).sum(dim=1)
     entropy = entropy_per_sample.mean()
 
-    # Entropy term (sign depends on mode)
+    # Entropy term
     if entropy_mode == "penalty":
         ent_term = +entropy_weight * entropy
     elif entropy_mode == "bonus":

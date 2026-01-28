@@ -11,7 +11,7 @@ from torch.utils.data.distributed import DistributedSampler
 class CSIDataset(Dataset):
     """CSI Dataset for PyTorch.
 
-    Shape of dataset items is (n_antennas, window_size, n_subcarriers)
+    Shape of dataset items is [n_antennas, window_size, n_subcarriers]
     """
 
     def __init__(
@@ -19,6 +19,7 @@ class CSIDataset(Dataset):
         files: list[Path],
         n_samples: int,
         window_size: int,
+        overlap_size: int,
         n_antennas: int,
         normalize: bool = True,
     ) -> None:
@@ -28,11 +29,14 @@ class CSIDataset(Dataset):
             files: List of paths to the .mat files containing the CSI data.
             n_samples: Number of samples to extract from each CSI matrix file.
             window_size: Size of the sliding window to extract from each sample.
+            overlap_size: Size of the overlap between two consecutive windows.
+            downsample_factor: Factor by which to downsample the window size.
             n_antennas: Total number of antennas used, either a single one or all of them.
             normalize: Whether to normalize the CSI data by the global maximum value.
 
         """
         self.window_size = window_size
+        self.overlap_size = overlap_size
         self.n_antennas = n_antennas
         self.normalize = normalize
 
@@ -47,7 +51,7 @@ class CSIDataset(Dataset):
             # num_samples, n_subcarriers, n_antennas
             mat = sio.loadmat(file)
 
-            # Shape of csi for now is: (num_samples, n_subcarriers, n_antennas)
+            # Shape of csi for now is: [num_samples, n_subcarriers, n_antennas]
             # We will later rearrange it.
             csi = np.array(mat["csi"])
             csi = csi[:n_samples, ..., :n_antennas]
@@ -97,25 +101,8 @@ class CSIDataset(Dataset):
         return x, y
 
 
-def build_dataloader(
-    dataset_path: Path,
-    batch_size: int,
-    window_size: int,
-    n_activities: int,
-    n_samples: int,
-    n_antennas: int,
-) -> DataLoader:
-    """Build the CSI dataset dataloader with DistributedSampler."""
-    files = [dataset_path / f"S1a_{x}.mat" for x in ascii_uppercase[:n_activities]]
-
-    # Shape of dataset samples: (n_antennas, window_size, n_subcarriers)
-    dataset = CSIDataset(
-        files=files,
-        n_samples=n_samples,
-        window_size=window_size,
-        n_antennas=n_antennas,
-    )
-
+def _get_dataloader(dataset: Dataset, batch_size: int) -> DataLoader:
+    """Build a DataLoader with DistributedSampler."""
     # Shape of dataloader batches: (batch_size, n_antennas, window_size, n_subcarriers)
     return DataLoader(
         dataset,
@@ -124,3 +111,37 @@ def build_dataloader(
         shuffle=False,  # DistributedSampler already shuffles the data
         sampler=DistributedSampler(dataset),
     )
+
+
+def get_splits(
+    dataset_path: Path,
+    batch_size: int,
+    window_size: int,
+    overlap_size: int,
+    n_activities: int,
+    n_samples: int,
+    n_antennas: int,
+    test_size: float = 0.2,
+) -> tuple[DataLoader, DataLoader]:
+    """Build the CSI dataset train/test dataloaders with DistributedSampler."""
+    files = [dataset_path / f"S1a_{x}.mat" for x in ascii_uppercase[:n_activities]]
+
+    # Shape of dataset samples: (n_antennas, window_size, n_subcarriers)
+    dataset = CSIDataset(
+        files=files,
+        n_samples=n_samples,
+        window_size=window_size,
+        overlap_size=overlap_size,
+        n_antennas=n_antennas,
+    )
+
+    n_total = len(dataset)
+    n_test = int(n_total * test_size)
+    n_train = n_total - n_test
+
+    train_dataset, test_dataset = torch.utils.data.random_split(
+        dataset,
+        [n_train, n_test],
+    )
+
+    return _get_dataloader(train_dataset, batch_size), _get_dataloader(test_dataset, batch_size)

@@ -1,5 +1,3 @@
-import queue
-import threading
 from collections.abc import Callable
 
 import torch
@@ -9,30 +7,12 @@ from torch.utils.data.distributed import DistributedSampler
 
 from csi_vae_gumbel.model.loss import vae_loss
 from csi_vae_gumbel.model.vae import MultiViewCategoricalVAE
+from csi_vae_gumbel.train.async_callback_worker import AsyncCallbackWorker
 from csi_vae_gumbel.train.checkpoints import CheckpointManager
 from csi_vae_gumbel.train.early_stopping import EarlyStopping
 
 
-class _AsyncCallbackWorker:
-    """Asynchronous worker to run callback functions without blocking the training loop."""
-
-    def __init__(self) -> None:
-        """Initialize the asynchronous callback worker."""
-        self.__q = queue.Queue()
-        self.__worker = threading.Thread(target=self._loop, daemon=True)
-        self.__worker.start()
-
-    def _loop(self) -> None:
-        while True:
-            callback = self.__q.get()
-            callback()
-
-    def submit(self, callback: Callable, *args: float, **kwargs: float) -> None:
-        """Submit a new task to the worker."""
-        self.__q.put(lambda: callback(*args, **kwargs))
-
-
-class Trainer:
+class VAETrainer:
     """Trainer class for VAE model using Distributed Data Parallel (DDP)."""
 
     def __init__(
@@ -68,7 +48,7 @@ class Trainer:
         self.__batch_callback = batch_callback
         self.__epoch_callback = epoch_callback
 
-        self.__callback_worker = _AsyncCallbackWorker()
+        self.__callback_worker = AsyncCallbackWorker()
 
     def __run_batch(self, x_true: torch.Tensor) -> tuple[float, float, float]:
         self.__optimizer.zero_grad()
