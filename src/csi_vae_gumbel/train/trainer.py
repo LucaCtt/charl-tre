@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 from csi_vae_gumbel.model.loss import vae_loss
-from csi_vae_gumbel.model.vae import VAE
+from csi_vae_gumbel.model.vae import MultiViewCategoricalVAE
 from csi_vae_gumbel.train.checkpoints import CheckpointManager
 from csi_vae_gumbel.train.early_stopping import EarlyStopping
 
@@ -37,7 +37,7 @@ class Trainer:
 
     def __init__(
         self,
-        model: VAE,
+        model: MultiViewCategoricalVAE,
         dataloader: DataLoader,
         optimizer: torch.optim.Optimizer,
         early_stopping: EarlyStopping,

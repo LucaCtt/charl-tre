@@ -20,7 +20,6 @@ class CSIDataset(Dataset):
         n_samples: int,
         window_size: int,
         n_antennas: int,
-        antenna: int,
         normalize: bool = True,
     ) -> None:
         """Initialize the CSI dataset.
@@ -30,7 +29,6 @@ class CSIDataset(Dataset):
             n_samples: Number of samples to extract from each CSI matrix file.
             window_size: Size of the sliding window to extract from each sample.
             n_antennas: Total number of antennas used, either a single one or all of them.
-            antenna: If n_antennas==1, select which antenna to use (0 to 3). Otherwise, this value is ignored.
             normalize: Whether to normalize the CSI data by the global maximum value.
 
         """
@@ -52,7 +50,7 @@ class CSIDataset(Dataset):
             # Shape of csi for now is: (num_samples, n_subcarriers, n_antennas)
             # We will later rearrange it.
             csi = np.array(mat["csi"])
-            csi = csi[:n_samples, ..., int(antenna)] if n_antennas == 1 else csi[:n_samples]
+            csi = csi[:n_samples, ..., :n_antennas]
 
             # 802.11ax has 2048 subcarriers (160 MHz bandwidth), we can keep one data
             # point every 4 subcarriers to reduce input size, make the methodology compatible
@@ -61,7 +59,7 @@ class CSIDataset(Dataset):
 
             # We can further discard the second half of the subcarriers
             # and keep most of the information,
-            csi = csi[:, :csi.shape[1] // 2, :]
+            csi = csi[:, : csi.shape[1] // 2, :]
 
             # Discard phase information, keep only magnitude.
             # Phase is often very noisy and not very informative.
@@ -91,7 +89,7 @@ class CSIDataset(Dataset):
 
         # (window_size, n_subcarriers, n_antennas) → (n_antennas, window_size, n_subcarriers)
         # The window_size represents the time dimension
-        window = window[np.newaxis, ...] if self.n_antennas == 1 else np.transpose(window, (2, 0, 1))
+        window = np.transpose(window, (2, 0, 1))
 
         x = torch.from_numpy(window) / self.global_max
         y = self.labels[file_id]
@@ -106,7 +104,6 @@ def build_dataloader(
     n_activities: int,
     n_samples: int,
     n_antennas: int,
-    antenna: int,
 ) -> DataLoader:
     """Build the CSI dataset dataloader with DistributedSampler."""
     files = [dataset_path / f"S1a_{x}.mat" for x in ascii_uppercase[:n_activities]]
@@ -117,7 +114,6 @@ def build_dataloader(
         n_samples=n_samples,
         window_size=window_size,
         n_antennas=n_antennas,
-        antenna=antenna,
     )
 
     # Shape of dataloader batches: (batch_size, n_antennas, window_size, n_subcarriers)

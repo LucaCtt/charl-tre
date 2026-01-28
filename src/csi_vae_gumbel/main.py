@@ -11,7 +11,7 @@ from torch.distributed import destroy_process_group, init_process_group
 from torch.multiprocessing.spawn import spawn
 
 from csi_vae_gumbel.dataset import build_dataloader
-from csi_vae_gumbel.model.vae import VAE
+from csi_vae_gumbel.model.vae import MultiViewCategoricalVAE
 from csi_vae_gumbel.settings import Settings
 from csi_vae_gumbel.train.checkpoints import CheckpointManager
 from csi_vae_gumbel.train.early_stopping import EarlyStopping
@@ -76,11 +76,16 @@ def train(rank: int, world_size: int) -> None:
             n_activities=settings.n_activities,
             n_samples=settings.n_samples,
             n_antennas=settings.n_antennas,
-            antenna=settings.antenna,
         )
         logger.info("DataLoader built", extra={"gpu_id": rank})
 
-        model = VAE(latent_dim=settings.latent_dim, categorical_dim=settings.categorical_dim)
+        model = MultiViewCategoricalVAE(
+            window_size=settings.window_size,
+            n_antennas=settings.n_antennas,
+            n_categories=settings.n_activities,
+            categorical_dim=settings.categorical_dim,
+            hidden_latent_dim=settings.hidden_latent_dim,
+        )
         logger.info("Model initialized", extra={"gpu_id": rank})
 
         optimizer = torch.optim.Adam(model.parameters(), lr=settings.learning_rate)
