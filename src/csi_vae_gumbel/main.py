@@ -6,16 +6,15 @@ import torch
 from pythonjsonlogger.json import JsonFormatter
 from rich.console import Console
 from rich.logging import RichHandler
-from rich.progress import BarColumn, Progress, TextColumn, TimeRemainingColumn
+from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
 from torch.distributed import destroy_process_group, init_process_group
 from torch.multiprocessing.spawn import spawn
+from torch.utils.data import DataLoader
 
-from csi_vae_gumbel.dataset import build_dataloader
-from csi_vae_gumbel.model.vae import MultiViewCategoricalVAE
+from csi_vae_gumbel.dataset import get_splits
+from csi_vae_gumbel.models import Classifier, MultiViewCategoricalVAE
 from csi_vae_gumbel.settings import Settings
-from csi_vae_gumbel.train.checkpoints import CheckpointManager
-from csi_vae_gumbel.train.early_stopping import EarlyStopping
-from csi_vae_gumbel.train.trainer import Trainer
+from csi_vae_gumbel.train import CheckpointManager, ClassifierTrainer, EarlyStopping, VAETrainer
 
 settings = Settings()
 
@@ -52,7 +51,135 @@ def _ddp_setup(rank: int, world_size: int) -> None:
     backend = torch.distributed.get_default_backend_for_device(acc)
 
     init_process_group(backend=backend, rank=rank, world_size=world_size)
-    logger.info("DDP initialized", extra={"gpu_id": rank, "n_gpus": world_size, "backend": backend})
+
+
+def _train_vae(rank: int, train_dataloader: DataLoader) -> MultiViewCategoricalVAE:
+    vae = MultiViewCategoricalVAE(
+        window_size=settings.window_size,
+        n_antennas=settings.n_antennas,
+        n_categories=settings.n_activities,
+        categorical_dim=settings.categorical_dim,
+        hidden_latent_dim=settings.hidden_latent_dim,
+    )
+
+    optimizer = torch.optim.Adam(vae.parameters(), lr=settings.learning_rate)
+    early_stopping = EarlyStopping(patience=settings.patience)
+    checkpoint_manager = CheckpointManager(Path(settings.checkpoint_dir))
+
+    with Progress(
+        BarColumn(),
+        TimeRemainingColumn(compact=True),
+        TextColumn("Epoch: {task.fields[epoch]}/{task.fields[total_epochs]}"),
+        TextColumn("Batch: {task.fields[batch]}/{task.total}"),
+        TextColumn("Loss: {task.fields[loss]:.4f}  Recon: {task.fields[recon]:.4f}  KL: {task.fields[kl]:.4f}"),
+        disable=rank != 0,
+        console=console,
+    ) as progress:
+        epoch_task = progress.add_task(
+            "Training",
+            total=len(train_dataloader),
+            total_epochs=settings.n_epochs,
+            epoch=1,
+            batch=0,
+            loss=0.0,
+            recon=0.0,
+            kl=0.0,
+        )
+
+        def batch_callback(epoch: int, epoch_loss: float, epoch_recon: float, epoch_kl: float) -> None:
+            logger.debug(
+                "VAE epoch progress",
+                extra={
+                    "epoch": epoch + 1,
+                    "loss": epoch_loss,
+                    "recon_loss": epoch_recon,
+                    "kl_loss": epoch_kl,
+                },
+            )
+            progress.update(
+                epoch_task,
+                advance=1,
+                epoch=epoch + 1,
+                batch=progress.tasks[0].completed + 1,
+                loss=epoch_loss,
+                recon=epoch_recon,
+                kl=epoch_kl,
+            )
+            if progress.finished and epoch + 1 < settings.n_epochs:
+                progress.reset(epoch_task)
+
+        vae_trainer = VAETrainer(
+            vae,
+            train_dataloader,
+            optimizer,
+            early_stopping,
+            checkpoint_manager,
+            rank,
+            batch_callback=batch_callback,
+        )
+        vae_trainer.train(settings.n_epochs)
+
+    return vae
+
+
+def _train_classifier(rank: int, train_dataloader: DataLoader, vae: MultiViewCategoricalVAE) -> Classifier:
+    classifier = Classifier(
+        input_dim=settings.categorical_dim * settings.n_activities,
+        output_dim=settings.n_activities,
+        hidden_dim=128,
+    )
+    optimizer = torch.optim.Adam(classifier.parameters(), lr=settings.learning_rate)
+
+    with Progress(
+        BarColumn(),
+        TimeRemainingColumn(compact=True),
+        TextColumn("Epoch: {task.fields[epoch]}/{task.fields[total_epochs]}"),
+        TextColumn("Batch: {task.fields[batch]}/{task.total}"),
+        TextColumn("Loss: {task.fields[loss]:.4f}  Accuracy: {task.fields[accuracy]:.4f}"),
+        disable=rank != 0,
+        console=console,
+    ) as progress:
+        epoch_task = progress.add_task(
+            "Training Classifier",
+            total=len(train_dataloader),
+            total_epochs=settings.n_epochs,
+            epoch=1,
+            batch=0,
+            loss=0.0,
+            accuracy=0.0,
+        )
+
+        def batch_callback(epoch: int, epoch_loss: float, epoch_accuracy: float) -> None:
+            logger.debug(
+                "Classifier epoch progress",
+                extra={
+                    "epoch": epoch + 1,
+                    "loss": epoch_loss,
+                    "accuracy": epoch_accuracy,
+                },
+            )
+            progress.update(
+                epoch_task,
+                advance=1,
+                epoch=epoch + 1,
+                batch=progress.tasks[0].completed + 1,
+                loss=epoch_loss,
+                accuracy=epoch_accuracy,
+            )
+            if progress.finished and epoch + 1 < settings.n_epochs:
+                progress.reset(epoch_task)
+
+        class_trainer = ClassifierTrainer(
+            classifier,
+            train_dataloader,
+            vae,
+            optimizer,
+            batch_callback=batch_callback,
+            gpu_id=rank,
+        )
+        class_trainer.train(settings.n_epochs)
+
+    return classifier
 
 
 def train(rank: int, world_size: int) -> None:
@@ -65,110 +192,47 @@ def train(rank: int, world_size: int) -> None:
     """
     _ddp_setup(rank, world_size)
 
-    if rank == 0:
-        logger.info("Starting training", extra=settings.model_dump())
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("Loading CSI data..."),
+        console=console,
+        disable=rank != 0,
+    ) as progress:
+        progress.add_task("load_data", total=None)
 
-    try:
-        dataloader = build_dataloader(
+        train_dataloader, test_dataloader = get_splits(
             dataset_path=Path(settings.dataset_path),
             batch_size=settings.batch_size // world_size,
             window_size=settings.window_size,
+            overlap_size=settings.overlap_size,
             n_activities=settings.n_activities,
             n_samples=settings.n_samples,
             n_antennas=settings.n_antennas,
         )
-        logger.info("DataLoader built", extra={"gpu_id": rank})
 
-        model = MultiViewCategoricalVAE(
-            window_size=settings.window_size,
-            n_antennas=settings.n_antennas,
-            n_categories=settings.n_activities,
-            categorical_dim=settings.categorical_dim,
-            hidden_latent_dim=settings.hidden_latent_dim,
+    vae = _train_vae(rank, train_dataloader)
+    classifier = _train_classifier(rank, train_dataloader, vae)
+
+    accuracy = 0.0
+
+    for x, y in test_dataloader:
+        _, logits_vae = vae(x.to(rank))
+        logits_vae = logits_vae.view(logits_vae.size(0), -1)
+        logits = classifier(logits_vae)
+        preds = torch.argmax(logits, dim=1)
+        accuracy += (preds == y.to(rank)).float().mean().item()
+
+    accuracy /= len(test_dataloader)
+
+    if rank == 0:
+        logger.info(
+            "Classification accuracy",
+            extra={
+                "accuracy": accuracy,
+            },
         )
-        logger.info("Model initialized", extra={"gpu_id": rank})
 
-        optimizer = torch.optim.Adam(model.parameters(), lr=settings.learning_rate)
-        early_stopping = EarlyStopping(patience=settings.patience)
-        checkpoint_manager = CheckpointManager(Path(settings.checkpoint_dir))
-
-        bar_column = BarColumn()
-        epoch_column = TextColumn("Epoch: {task.fields[epoch]}/{task.fields[total_epochs]}")
-        batch_column = TextColumn("Batch: {task.completed}/{task.total}")
-        loss_column = TextColumn("Loss: {task.fields[loss]:.4f}")
-        recon_column = TextColumn("Recon: {task.fields[recon]:.4f}")
-        kl_column = TextColumn("KL: {task.fields[kl]:.4f}")
-
-        with Progress(
-            bar_column,
-            TimeRemainingColumn(compact=True),
-            epoch_column,
-            batch_column,
-            loss_column,
-            recon_column,
-            kl_column,
-            disable=rank != 0,
-            console=console,
-        ) as progress:
-            epoch_task = progress.add_task(
-                "Training...",
-                total=len(dataloader),
-                epoch=1,
-                total_epochs=settings.n_epochs,
-                batch=1,
-                loss=0.0,
-                recon=0.0,
-                kl=0.0,
-            )
-
-            def epoch_callback(epoch: int, epoch_loss: float, epoch_recon: float, epoch_kl: float) -> None:
-                logger.info(
-                    "Epoch completed",
-                    extra={
-                        "epoch": epoch + 1,
-                        "loss": epoch_loss,
-                        "recon_loss": epoch_recon,
-                        "kl_loss": epoch_kl,
-                        "gpu_id": rank,
-                    },
-                )
-
-            def batch_callback(epoch: int, epoch_loss: float, epoch_recon: float, epoch_kl: float) -> None:
-                logger.debug(
-                    "Epoch progress",
-                    extra={
-                        "epoch": epoch + 1,
-                        "loss": epoch_loss,
-                        "recon_loss": epoch_recon,
-                        "kl_loss": epoch_kl,
-                        "gpu_id": rank,
-                    },
-                )
-                progress.update(
-                    epoch_task,
-                    advance=1,
-                    epoch=epoch + 1,
-                    batch=progress.tasks[0].completed + 1,
-                    loss=epoch_loss,
-                    recon=epoch_recon,
-                    kl=epoch_kl,
-                )
-                if progress.finished:
-                    progress.reset(epoch_task)
-
-            trainer = Trainer(
-                model,
-                dataloader,
-                optimizer,
-                early_stopping,
-                checkpoint_manager,
-                rank,
-                batch_callback=batch_callback,
-                epoch_callback=epoch_callback,
-            )
-            trainer.train(settings.n_epochs)
-    finally:
-        destroy_process_group()
+    destroy_process_group()
 
 
 def main() -> None:

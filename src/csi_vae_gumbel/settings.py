@@ -30,9 +30,8 @@ class Settings(BaseSettings):
     """Dimension of the hidden latent space per antenna."""
 
     # Categorical VAE config
-    latent_dim: int = 2
-    categorical_dim: int = n_activities
-    vae_name: str = f"vaec_s1a_ls{latent_dim * categorical_dim}"
+    categorical_dim: int = 10
+    vae_name: str = f"vaec_s1a_ls{n_activities * categorical_dim}"
     checkpoint_dir: str = f"out/vaec_models/{dt.now(tz=UTC).strftime('%Y%m%d_%H%M%S')}/{vae_name}"
 
     # Training config

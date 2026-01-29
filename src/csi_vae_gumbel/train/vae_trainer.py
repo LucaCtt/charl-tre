@@ -24,7 +24,6 @@ class VAETrainer:
         checkpoint_manager: CheckpointManager,
         gpu_id: int,
         batch_callback: Callable | None = None,
-        epoch_callback: Callable | None = None,
     ) -> None:
         """Initialize the Trainer.
 
@@ -46,7 +45,6 @@ class VAETrainer:
         self.__checkpoint_manager = checkpoint_manager
         self.__gpu_id = gpu_id
         self.__batch_callback = batch_callback
-        self.__epoch_callback = epoch_callback
 
         self.__callback_worker = AsyncCallbackWorker()
 
@@ -99,16 +97,14 @@ class VAETrainer:
             start_epoch = 0
 
         for epoch in range(start_epoch, max_epochs):
-            epoch_loss, epoch_recon, epoch_kl = self.__run_epoch(epoch)
+            epoch_loss, _, _ = self.__run_epoch(epoch)
 
             if self.__gpu_id == 0:
                 self.__checkpoint_manager.save_checkpoint(
                     self.__model.module.state_dict(),
                     self.__optimizer.state_dict(),
-                    epoch,
+                    epoch+1,
                 )
-                if self.__epoch_callback is not None:
-                    self.__callback_worker.submit(self.__epoch_callback, epoch, epoch_loss, epoch_recon, epoch_kl)
 
             if self.__early_stopping.step(epoch_loss):
                 break

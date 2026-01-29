@@ -19,6 +19,7 @@ class Classifier(nn.Module):
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(inplace=True),
             nn.Linear(hidden_dim, output_dim),
+            nn.Softmax(dim=1),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
