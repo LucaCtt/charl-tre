@@ -50,7 +50,7 @@ def _ddp_setup(rank: int, world_size: int) -> None:
 
     backend = torch.distributed.get_default_backend_for_device(acc)
 
-    init_process_group(backend=backend, rank=rank, world_size=world_size)
+    init_process_group(backend=backend, rank=rank, world_size=world_size, device_id=rank)
 
 
 def _train_vae(rank: int, train_dataloader: DataLoader) -> MultiViewCategoricalVAE:
@@ -208,10 +208,7 @@ def train(rank: int, world_size: int) -> None:
             n_antennas=settings.n_antennas,
         )
 
-    vae = _train_vae(rank, train_dataloader).module
-    if not isinstance(vae, MultiViewCategoricalVAE):
-        msg = "Trained VAE is not of type MultiViewCategoricalVAE."
-        raise TypeError(msg)
+    vae = _train_vae(rank, train_dataloader)
     classifier = _train_classifier(rank, train_dataloader, vae)
 
     if rank == 0:

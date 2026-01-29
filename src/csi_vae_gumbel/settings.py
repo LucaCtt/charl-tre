@@ -30,12 +30,12 @@ class Settings(BaseSettings):
     """Dimension of the hidden latent space per antenna."""
 
     # Categorical VAE config
-    categorical_dim: int = 10
+    categorical_dim: int = 12
     vae_name: str = f"vaec_s1a_ls{n_activities * categorical_dim}"
     checkpoint_dir: str = f"out/vaec_models/{dt.now(tz=UTC).strftime('%Y%m%d_%H%M%S')}/{vae_name}"
 
     # Training config
     batch_size: int = 36 * 3
-    n_epochs: int = 1
+    n_epochs: int = 50
     patience: int = 3
     learning_rate: float = 1e-3

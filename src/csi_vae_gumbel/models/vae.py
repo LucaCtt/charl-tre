@@ -168,7 +168,6 @@ class MultiViewCategoricalVAE(nn.Module):
 
         # Map to categorical logits
         logits = func.linear(combined_z, self.bottleneck_weight, self.bottleneck_bias)
-        logits = func.relu(logits)
         logits = logits.view(-1, self.categorical_dim, self.n_categories)
 
         # Gumbel-Softmax sampling
@@ -177,7 +176,6 @@ class MultiViewCategoricalVAE(nn.Module):
         # Map back to combined latent space
         z_cat_flat = z_hard.view(z_hard.size(0), -1)
         recon_combined = func.linear(z_cat_flat, self.bottleneck_weight.t())
-        recon_combined = func.relu(recon_combined)
 
         # Decode and stack
         recon = self.decode(recon_combined)

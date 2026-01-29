@@ -44,8 +44,6 @@ class CSIDataset(Dataset):
         self.labels = []
         self.index_map = []
 
-        global_max = 0.0
-
         # Load files once, build index map
         for label, file in enumerate(files):
             # num_samples, n_subcarriers, n_antennas
@@ -69,18 +67,14 @@ class CSIDataset(Dataset):
             # Phase is often very noisy and not very informative.
             csi = np.round(np.abs(csi)).astype(np.float32)
 
-            if normalize:
-                global_max = max(global_max, csi.max())
-
             file_id = len(self.data)
             self.data.append(csi)
             self.labels.append(label)
 
             # Build lazy sliding-window index
-            for start in range(n_samples - window_size):
+            step_size = window_size - overlap_size
+            for start in range(0, n_samples - window_size, step_size):
                 self.index_map.append((file_id, start))
-
-        self.global_max = global_max if normalize else 1.0
 
     def __len__(self) -> int:
         return len(self.index_map)
@@ -95,22 +89,16 @@ class CSIDataset(Dataset):
         # The window_size represents the time dimension
         window = np.transpose(window, (2, 0, 1))
 
-        x = torch.from_numpy(window) / self.global_max
+        # Min-max normalization per window, not global to avoid outliers issues
+        if self.normalize:
+            win_min = window.min()
+            win_max = window.max()
+            window = (window - win_min) / (win_max - win_min + 1e-8)
+
+        x = torch.from_numpy(window)
         y = self.labels[file_id]
 
         return x, y
-
-
-def _get_dataloader(dataset: Dataset, batch_size: int) -> DataLoader:
-    """Build a DataLoader with DistributedSampler."""
-    # Shape of dataloader batches: (batch_size, n_antennas, window_size, n_subcarriers)
-    return DataLoader(
-        dataset,
-        batch_size=batch_size,
-        pin_memory=True,
-        shuffle=False,  # DistributedSampler already shuffles the data
-        sampler=DistributedSampler(dataset),
-    )
 
 
 def get_splits(
@@ -144,4 +132,21 @@ def get_splits(
         [n_train, n_test],
     )
 
-    return _get_dataloader(train_dataset, batch_size), _get_dataloader(test_dataset, batch_size)
+    # Split train data over gpus
+    train_dataloader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        pin_memory=True,
+        shuffle=False,  # DistributedSampler already shuffles the data
+        sampler=DistributedSampler(train_dataset),
+    )
+
+    # Keep test data on cpu, no need to distribute it
+    test_dataloader = DataLoader(
+        test_dataset,
+        batch_size=batch_size,
+        pin_memory=True,
+        shuffle=True,
+    )
+
+    return train_dataloader, test_dataloader
