@@ -136,18 +136,21 @@ class MultiViewCategoricalVAE(nn.Module):
             xi = xi.view(xi.size(0), 16, 38, 64)
 
             # First transposed convolutional layer
-            xi = nn.functional.conv_transpose2d(xi, self.conv_weights_2[i], stride=2, padding=1, output_padding=(0, 1))
+            xi = func.conv_transpose2d(xi, self.conv_weights_2[i], stride=2, padding=1, output_padding=(0, 1))
             xi = func.relu(xi)
 
-            xi = nn.functional.conv_transpose2d(xi, self.conv_weights_1[i], stride=2, padding=1, output_padding=(1, 1))
-            # Second transposed convolutional layer
-            xi = func.relu(xi)
+            xi = func.conv_transpose2d(xi, self.conv_weights_1[i], stride=2, padding=1, output_padding=(1, 1))
+
+            # No ReLU here otherwise otherwise negative values become 0, sigmoid(0) = 0.5
+            # so we cannot reconstruct values near 0 properly.
 
             # Final sigmoid activation with learnable scale
-            recons.append(torch.sigmoid(xi * self.decoder_scale[i]))
+            xi = torch.sigmoid(xi * self.decoder_scale[i])
+
+            recons.append(xi)
         return torch.stack(recons, dim=1).squeeze(2)
 
-    def forward(self, x: torch.Tensor, tau: float = 1.0) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor, tau: float = 1.0) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Forward pass through the Multi-View Categorical VAE.
 
         Arguments:
@@ -155,24 +158,28 @@ class MultiViewCategoricalVAE(nn.Module):
             tau (float): Temperature parameter for Gumbel-Softmax.
 
         Returns:
-            tuple[torch.Tensor, torch.Tensor]: Reconstructed outputs and logits.
+            tuple[torch.Tensor, torch.Tensor, torch.Tensor]: Reconstructed output tensor,
+                                                             hard categorical latent tensor,
+                                                             and logits tensor.
 
         """
         # Encoder -> combined latent
         combined_z = self.encode(x)
 
         # Map to categorical logits
-        logits = nn.functional.linear(combined_z, self.bottleneck_weight, self.bottleneck_bias)
+        logits = func.linear(combined_z, self.bottleneck_weight, self.bottleneck_bias)
+        logits = func.relu(logits)
         logits = logits.view(-1, self.categorical_dim, self.n_categories)
 
         # Gumbel-Softmax sampling
-        z_cat = nn.functional.gumbel_softmax(logits, tau=tau, hard=True)
+        z_hard = func.gumbel_softmax(logits, tau=tau, hard=True)
 
         # Map back to combined latent space
-        z_cat_flat = z_cat.view(z_cat.size(0), -1)
-        recon_combined = nn.functional.linear(z_cat_flat, self.bottleneck_weight.t())
+        z_cat_flat = z_hard.view(z_hard.size(0), -1)
+        recon_combined = func.linear(z_cat_flat, self.bottleneck_weight.t())
+        recon_combined = func.relu(recon_combined)
 
         # Decode and stack
         recon = self.decode(recon_combined)
 
-        return recon, logits
+        return recon, z_hard, logits

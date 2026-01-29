@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 from csi_vae_gumbel.dataset import get_splits
 from csi_vae_gumbel.models import Classifier, MultiViewCategoricalVAE
 from csi_vae_gumbel.settings import Settings
-from csi_vae_gumbel.train import CheckpointManager, ClassifierTrainer, EarlyStopping, VAETrainer
+from csi_vae_gumbel.train import CheckpointManager, ClassifierTrainer, VAETrainer
 
 settings = Settings()
 
@@ -63,7 +63,6 @@ def _train_vae(rank: int, train_dataloader: DataLoader) -> MultiViewCategoricalV
     )
 
     optimizer = torch.optim.Adam(vae.parameters(), lr=settings.learning_rate)
-    early_stopping = EarlyStopping(patience=settings.patience)
     checkpoint_manager = CheckpointManager(Path(settings.checkpoint_dir))
 
     with Progress(
@@ -112,7 +111,6 @@ def _train_vae(rank: int, train_dataloader: DataLoader) -> MultiViewCategoricalV
             vae,
             train_dataloader,
             optimizer,
-            early_stopping,
             checkpoint_manager,
             rank,
             batch_callback=batch_callback,
@@ -210,21 +208,26 @@ def train(rank: int, world_size: int) -> None:
             n_antennas=settings.n_antennas,
         )
 
-    vae = _train_vae(rank, train_dataloader)
+    vae = _train_vae(rank, train_dataloader).module
+    if not isinstance(vae, MultiViewCategoricalVAE):
+        msg = "Trained VAE is not of type MultiViewCategoricalVAE."
+        raise TypeError(msg)
     classifier = _train_classifier(rank, train_dataloader, vae)
 
-    accuracy = 0.0
-
-    for x, y in test_dataloader:
-        _, logits_vae = vae(x.to(rank))
-        logits_vae = logits_vae.view(logits_vae.size(0), -1)
-        logits = classifier(logits_vae)
-        preds = torch.argmax(logits, dim=1)
-        accuracy += (preds == y.to(rank)).float().mean().item()
-
-    accuracy /= len(test_dataloader)
-
     if rank == 0:
+        accuracy = 0.0
+        classifier.eval()
+        vae.eval()
+
+        for x, y in test_dataloader:
+            _, z_hard_vae, _ = vae(x.to(rank))
+            z_hard_vae = z_hard_vae.view(z_hard_vae.size(0), -1)
+            logits = classifier(z_hard_vae)
+            preds = torch.argmax(logits, dim=1)
+            accuracy += (preds == y.to(rank)).float().mean().item()
+
+        accuracy /= len(test_dataloader)
+
         logger.info(
             "Classification accuracy",
             extra={
@@ -232,6 +235,7 @@ def train(rank: int, world_size: int) -> None:
             },
         )
 
+    torch.distributed.barrier()
     destroy_process_group()
 
 
