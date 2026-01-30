@@ -6,7 +6,8 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from csi_vae_gumbel.models.loss import vae_loss
+from csi_vae_gumbel.loss import KLScheduler, vae_loss
+from csi_vae_gumbel.models.gumbel_annealer import GumbelAnnealer
 from csi_vae_gumbel.train.async_callback_worker import AsyncCallbackWorker
 from csi_vae_gumbel.train.checkpoints import CheckpointManager
 
@@ -32,7 +33,6 @@ class VAETrainer:
             checkpoint_manager: CheckpointManager to save model checkpoints.
             gpu_id: GPU ID for Distributed Data Parallel.
             batch_callback: Optional callback function called at the end of each batch.
-            epoch_callback: Optional callback function called at the end of each epoch.
 
         """
         self.__model = DistributedDataParallel(model.to(gpu_id), device_ids=[gpu_id])
@@ -41,14 +41,19 @@ class VAETrainer:
         self.__checkpoint_manager = checkpoint_manager
         self.__gpu_id = gpu_id
         self.__batch_callback = batch_callback
+        self.__kl_scheduler = KLScheduler()
+        self.__gumbel_annealer = GumbelAnnealer()
 
         self.__callback_worker = AsyncCallbackWorker()
 
-    def __run_batch(self, x_true: torch.Tensor) -> tuple[float, float, float]:
+    def __run_batch(self, epoch: int, x_true: torch.Tensor) -> tuple[float, float, float]:
         self.__optimizer.zero_grad()
-        x_recon, _, logits = self.__model(x_true, 0.9)
 
-        loss, recon_loss, kl_loss, _, _ = vae_loss(x_recon, x_true, logits)
+        tau = self.__gumbel_annealer.step(epoch)
+        x_recon, _, logits = self.__model(x_true, tau)
+
+        kl_weight = self.__kl_scheduler.get_weight(epoch)
+        loss, recon_loss, kl_loss, _ = vae_loss(x_recon, x_true, logits, kl_weight=kl_weight)
 
         loss.backward()
         self.__optimizer.step()
@@ -65,7 +70,7 @@ class VAETrainer:
         epoch_kl_loss = 0.0
 
         for i, (x_true, _) in enumerate(self.__dataloader):
-            loss, recon_loss, kl_loss = self.__run_batch(x_true.to(self.__gpu_id))
+            loss, recon_loss, kl_loss = self.__run_batch(epoch, x_true.to(self.__gpu_id))
 
             epoch_loss += loss
             epoch_recon_loss += recon_loss

@@ -10,12 +10,12 @@ def vae_loss(
     x_recon: torch.Tensor,
     x_true: torch.Tensor,
     z: torch.Tensor,
-    kl_weight: float = 1e-3,
+    kl_weight: float,
     free_bits: float = 1.0,
     entropy_weight: float = 0.0,
     entropy_mode: Literal["none", "penalty", "bonus"] = "none",
     eps: float = 1e-12,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Compute the VAE loss with categorical latent variables.
 
     Arguments:
@@ -24,14 +24,13 @@ def vae_loss(
         z (torch.Tensor): Latent variable tensor.
         kl_weight (float): Weight for the KL divergence term.
         free_bits (float): Free bits threshold for KL divergence.
-        prior_prob (float): Prior probability for the categorical distribution.
         entropy_weight (float): Weight for the entropy term.
         entropy_mode (Literal["none", "penalty", "bonus"]): Mode for entropy term.
         eps (float): Small value to avoid numerical issues.
 
     Returns:
-        tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]: Total loss, reconstruction loss,
-            KL divergence, entropy, entropy term.
+        tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]: Total loss, reconstruction loss,
+            KL divergence, entropy term.
 
     """
     # Reconstruction loss
@@ -66,4 +65,4 @@ def vae_loss(
 
     total_loss = recon + kl_weight * kl + ent_term
 
-    return total_loss, recon, kl, entropy, ent_term
+    return total_loss, recon, kl, ent_term
