@@ -21,6 +21,7 @@ class CSIDataset(Dataset):
         window_size: int,
         overlap_size: int,
         n_antennas: int,
+        antenna_select: int,
         normalize: bool = True,
     ) -> None:
         """Initialize the CSI dataset.
@@ -32,12 +33,14 @@ class CSIDataset(Dataset):
             overlap_size: Size of the overlap between two consecutive windows.
             downsample_factor: Factor by which to downsample the window size.
             n_antennas: Total number of antennas used, either a single one or all of them.
+            antenna_select: Specific antenna to select if only one is needed. If None, use all antennas.
             normalize: Whether to normalize the CSI data by the global maximum value.
 
         """
         self.window_size = window_size
         self.overlap_size = overlap_size
         self.n_antennas = n_antennas
+        self.antenna_select = antenna_select
         self.normalize = normalize
 
         self.data = []
@@ -52,7 +55,10 @@ class CSIDataset(Dataset):
             # Shape of csi for now is: [num_samples, n_subcarriers, n_antennas]
             # We will later rearrange it.
             csi = np.array(mat["csi"])
-            csi = csi[:n_samples, ..., :n_antennas]
+            csi = csi[:n_samples, ..., antenna_select] if n_antennas == 1 else csi[:n_samples, ...]
+
+            if n_antennas == 1:
+                csi = csi[:, :, np.newaxis]  # Keep 3D shape for consistency
 
             # 802.11ax has 2048 subcarriers (160 MHz bandwidth), we can keep one data
             # point every 4 subcarriers to reduce input size, make the methodology compatible
@@ -61,7 +67,7 @@ class CSIDataset(Dataset):
 
             # We can further discard the second half of the subcarriers
             # and keep most of the information,
-            csi = csi[:, : csi.shape[1] // 2, :]
+            csi = csi[:, : csi.shape[1] // 2]
 
             # Discard phase information, keep only magnitude.
             # Phase is often very noisy and not very informative.
@@ -109,6 +115,7 @@ def get_splits(
     n_activities: int,
     n_samples: int,
     n_antennas: int,
+    antenna_select: int,
     test_size: float = 0.2,
 ) -> tuple[DataLoader, DataLoader]:
     """Build the CSI dataset train/test dataloaders with DistributedSampler."""
@@ -121,6 +128,7 @@ def get_splits(
         window_size=window_size,
         overlap_size=overlap_size,
         n_antennas=n_antennas,
+        antenna_select=antenna_select,
     )
 
     n_total = len(dataset)

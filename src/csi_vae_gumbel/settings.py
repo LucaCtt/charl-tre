@@ -22,20 +22,21 @@ class Settings(BaseSettings):
     """Size of the window of CSI in a sample, where 150 CSI = 1 second of data."""
     overlap_size: int = 15
     """Size of the overlap between two consecutive windows."""
-    n_antennas: int = 4
+    n_antennas: int = 1
     """Total number of antennas used."""
+    antenna_select: int = 0
+    """Specific antenna to select if only one is needed (0-indexed)."""
     n_subcarriers: int = 2048
     """Number of subcarriers in each CSI sample."""
     hidden_latent_dim: int = 128
     """Dimension of the hidden latent space per antenna."""
 
     # Categorical VAE config
-    categorical_dim: int = 12
+    categorical_dim: int = 2
     vae_name: str = f"vaec_s1a_ls{n_activities * categorical_dim}"
     checkpoint_dir: str = f"out/vaec_models/{dt.now(tz=UTC).strftime('%Y%m%d_%H%M%S')}/{vae_name}"
 
     # Training config
-    batch_size: int = 36 * 3
+    batch_size: int = 12 * 3
     n_epochs: int = 50
-    patience: int = 3
     learning_rate: float = 1e-3

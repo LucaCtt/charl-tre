@@ -3,7 +3,7 @@ from torch import nn
 from torch.nn import functional as func
 
 
-class MultiViewCategoricalVAE(nn.Module):
+class TiedCategoricalVAE(nn.Module):
     """Multi-View Categorical VAE for CSI data from multiple antennas."""
 
     def __init__(

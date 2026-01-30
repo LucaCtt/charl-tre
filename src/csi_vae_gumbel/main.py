@@ -7,12 +7,13 @@ from pythonjsonlogger.json import JsonFormatter
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
+from torch import nn
 from torch.distributed import destroy_process_group, init_process_group
 from torch.multiprocessing.spawn import spawn
 from torch.utils.data import DataLoader
 
 from csi_vae_gumbel.dataset import get_splits
-from csi_vae_gumbel.models import Classifier, MultiViewCategoricalVAE
+from csi_vae_gumbel.models import CategoricalVAE, Classifier
 from csi_vae_gumbel.settings import Settings
 from csi_vae_gumbel.train import CheckpointManager, ClassifierTrainer, VAETrainer
 
@@ -53,13 +54,11 @@ def _ddp_setup(rank: int, world_size: int) -> None:
     init_process_group(backend=backend, rank=rank, world_size=world_size, device_id=rank)
 
 
-def _train_vae(rank: int, train_dataloader: DataLoader) -> MultiViewCategoricalVAE:
-    vae = MultiViewCategoricalVAE(
+def _train_vae(rank: int, train_dataloader: DataLoader) -> nn.Module:
+    vae = CategoricalVAE(
         window_size=settings.window_size,
-        n_antennas=settings.n_antennas,
         n_categories=settings.n_activities,
         categorical_dim=settings.categorical_dim,
-        hidden_latent_dim=settings.hidden_latent_dim,
     )
 
     optimizer = torch.optim.Adam(vae.parameters(), lr=settings.learning_rate)
@@ -120,7 +119,7 @@ def _train_vae(rank: int, train_dataloader: DataLoader) -> MultiViewCategoricalV
     return vae
 
 
-def _train_classifier(rank: int, train_dataloader: DataLoader, vae: MultiViewCategoricalVAE) -> Classifier:
+def _train_classifier(rank: int, train_dataloader: DataLoader, vae: nn.Module) -> Classifier:
     classifier = Classifier(
         input_dim=settings.categorical_dim * settings.n_activities,
         output_dim=settings.n_activities,
@@ -206,6 +205,7 @@ def train(rank: int, world_size: int) -> None:
             n_activities=settings.n_activities,
             n_samples=settings.n_samples,
             n_antennas=settings.n_antennas,
+            antenna_select=settings.antenna_select,
         )
 
     vae = _train_vae(rank, train_dataloader)

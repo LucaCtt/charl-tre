@@ -31,28 +31,63 @@ class ClassifierTrainer:
 
         self.__callback_worker = AsyncCallbackWorker()
 
-    def train(self, epochs: int) -> None:
+    def __run_epoch(self, epoch: int) -> tuple[float, float]:
+        if isinstance(self.__dataloader.sampler, DistributedSampler):
+            self.__dataloader.sampler.set_epoch(epoch)
+
+        epoch_loss = 0.0
+        epoch_accuracy = 0.0
+
+        for i, (x, y) in enumerate(self.__dataloader):
+            self.__optimizer.zero_grad()
+
+            with torch.no_grad():
+                _, z_hard_vae, _ = self.__vae(x.to(self.__gpu_id))
+                z_hard_vae = z_hard_vae.view(z_hard_vae.size(0), -1)
+
+            logits = self.__model(z_hard_vae)
+            loss = self.__criterion(logits, y.to(self.__gpu_id))
+            accuracy = (logits.argmax(dim=1) == y.to(self.__gpu_id)).float().mean()
+
+            epoch_loss += loss.item()
+            epoch_accuracy += accuracy.item()
+
+            loss.backward()
+            self.__optimizer.step()
+
+            if self.__gpu_id == 0 and self.__batch_callback is not None:
+                n_batches = i + 1
+
+                self.__callback_worker.submit(
+                    self.__batch_callback,
+                    epoch,
+                    epoch_loss / n_batches,
+                    epoch_accuracy / n_batches,
+                )
+
+        epoch_loss /= len(self.__dataloader)
+        epoch_accuracy /= len(self.__dataloader)
+
+        return epoch_loss, epoch_accuracy
+
+    def train(self, epochs: int) -> tuple[float, float]:
         """Train the classifier model for a specified number of epochs."""
         self.__model.train()
         self.__vae.eval()
 
+        self.__callback_worker.start()
+
+        total_loss = 0.0
+        total_accuracy = 0.0
+
         for epoch in range(epochs):
-            if isinstance(self.__dataloader.sampler, DistributedSampler):
-                self.__dataloader.sampler.set_epoch(epoch)
+            epoch_loss, epoch_accuracy = self.__run_epoch(epoch)
 
-            for x, y in self.__dataloader:
-                self.__optimizer.zero_grad()
+            total_loss += epoch_loss
+            total_accuracy += epoch_accuracy
 
-                with torch.no_grad():
-                    _, z_hard_vae, _ = self.__vae(x.to(self.__gpu_id))
-                    z_hard_vae = z_hard_vae.view(z_hard_vae.size(0), -1)
+        total_loss /= epochs
+        total_accuracy /= epochs
 
-                logits = self.__model(z_hard_vae)
-                loss = self.__criterion(logits, y.to(self.__gpu_id))
-                accuracy = (logits.argmax(dim=1) == y.to(self.__gpu_id)).float().mean()
-
-                loss.backward()
-                self.__optimizer.step()
-
-                if self.__gpu_id == 0 and self.__batch_callback is not None:
-                    self.__callback_worker.submit(self.__batch_callback, epoch, loss.item(), accuracy.item())
+        self.__callback_worker.stop()
+        return total_loss, total_accuracy
