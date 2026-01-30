@@ -13,6 +13,7 @@ from torch.multiprocessing.spawn import spawn
 from torch.utils.data import DataLoader
 
 from csi_vae_gumbel.dataset import get_splits
+from csi_vae_gumbel.evaluator import Evaluator
 from csi_vae_gumbel.models import CategoricalVAE, Classifier
 from csi_vae_gumbel.settings import Settings
 from csi_vae_gumbel.train import CheckpointManager, ClassifierTrainer, VAETrainer
@@ -211,20 +212,32 @@ def train(rank: int, world_size: int) -> None:
     vae = _train_vae(rank, train_dataloader)
     classifier = _train_classifier(rank, train_dataloader, vae)
 
+    torch.distributed.barrier()
+
+    evaluator = Evaluator(
+        vae=vae,
+        classifier=classifier,
+        dataloader=test_dataloader,
+        classes=[
+            "Walk",
+            "Run",
+            "Jump",
+            "Sit",
+            "Empty",
+            "Stand",
+            "Waving",
+            "Clap",
+            "Lay down",
+            "Wipe",
+            "Squat",
+            "Stretch",
+        ],
+        out_dir=settings.checkpoint_dir,
+        gpu_id=rank,
+    )
+    accuracy = evaluator.evaluate()
+
     if rank == 0:
-        accuracy = 0.0
-        classifier.eval()
-        vae.eval()
-
-        for x, y in test_dataloader:
-            _, z_hard_vae, _ = vae(x.to(rank))
-            z_hard_vae = z_hard_vae.view(z_hard_vae.size(0), -1)
-            logits = classifier(z_hard_vae)
-            preds = torch.argmax(logits, dim=1)
-            accuracy += (preds == y.to(rank)).float().mean().item()
-
-        accuracy /= len(test_dataloader)
-
         logger.info(
             "Classification accuracy",
             extra={
@@ -232,7 +245,6 @@ def train(rank: int, world_size: int) -> None:
             },
         )
 
-    torch.distributed.barrier()
     destroy_process_group()
 
 
