@@ -9,7 +9,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env")
 
-    debug: bool = True
+    debug: bool = False
 
     # Dataset config
     dataset_path: str = "dataset/S1"
@@ -28,8 +28,6 @@ class Settings(BaseSettings):
     """Specific antenna to select if only one is needed (0-indexed)."""
     n_subcarriers: int = 2048
     """Number of subcarriers in each CSI sample."""
-    hidden_latent_dim: int = 128
-    """Dimension of the hidden latent space per antenna."""
 
     # Categorical VAE config
     categorical_dim: int = 2
