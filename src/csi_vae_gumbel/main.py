@@ -58,7 +58,7 @@ def _ddp_setup(rank: int, world_size: int) -> None:
 def _train_vae(rank: int, train_dataloader: DataLoader) -> nn.Module:
     vae = CategoricalVAE(
         window_size=settings.window_size,
-        n_categories=settings.n_activities,
+        n_categories=settings.n_categories,
         categorical_dim=settings.categorical_dim,
     )
 
@@ -122,8 +122,8 @@ def _train_vae(rank: int, train_dataloader: DataLoader) -> nn.Module:
 
 def _train_classifier(rank: int, train_dataloader: DataLoader, vae: nn.Module) -> Classifier:
     classifier = Classifier(
-        input_dim=settings.categorical_dim * settings.n_activities,
-        output_dim=settings.n_activities,
+        input_dim=settings.categorical_dim * settings.n_categories,
+        output_dim=settings.n_categories,
         hidden_dim=128,
     )
     optimizer = torch.optim.Adam(classifier.parameters(), lr=settings.learning_rate)
