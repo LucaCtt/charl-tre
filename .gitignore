@@ -11,7 +11,7 @@ wheels/
 .venv
 
 # Dataset
-dataset/
+/dataset/
 
 # Logs and checkpoints
-out/
+/out/

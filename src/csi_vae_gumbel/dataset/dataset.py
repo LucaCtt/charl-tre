@@ -1,11 +1,11 @@
 from pathlib import Path
-from string import ascii_uppercase
 
 import numpy as np
 import scipy.io as sio
 import torch
-from torch.utils.data import DataLoader, Dataset
-from torch.utils.data.distributed import DistributedSampler
+from torch.utils.data import Dataset
+
+from csi_vae_gumbel.dataset.augmenter import CSIAugmenter
 
 
 class CSIDataset(Dataset):
@@ -22,6 +22,7 @@ class CSIDataset(Dataset):
         overlap_size: int,
         n_antennas: int,
         antenna_select: int,
+        augmenter: CSIAugmenter,
         normalize: bool = True,
     ) -> None:
         """Initialize the CSI dataset.
@@ -34,18 +35,17 @@ class CSIDataset(Dataset):
             downsample_factor: Factor by which to downsample the window size.
             n_antennas: Total number of antennas used, either a single one or all of them.
             antenna_select: Specific antenna to select if only one is needed. If None, use all antennas.
+            augmenter: CSIAugmenter instance for data augmentation.
             normalize: Whether to normalize the CSI data by the global maximum value.
 
         """
-        self.window_size = window_size
-        self.overlap_size = overlap_size
-        self.n_antennas = n_antennas
-        self.antenna_select = antenna_select
-        self.normalize = normalize
+        self.__window_size = window_size
+        self.__augmenter = augmenter
+        self.__normalize = normalize
 
-        self.data = []
-        self.labels = []
-        self.index_map = []
+        self.__data = []
+        self.__labels = []
+        self.__index_map = []
 
         # Load files once, build index map
         for label, file in enumerate(files):
@@ -73,88 +73,40 @@ class CSIDataset(Dataset):
             # Phase is often very noisy and not very informative.
             csi = np.round(np.abs(csi)).astype(np.float32)
 
-            file_id = len(self.data)
-            self.data.append(csi)
-            self.labels.append(label)
+            file_id = len(self.__data)
+            self.__data.append(csi)
+            self.__labels.append(label)
 
             # Build lazy sliding-window index
             step_size = window_size - overlap_size
             for start in range(0, n_samples - window_size, step_size):
-                self.index_map.append((file_id, start))
+                self.__index_map.append((file_id, start, False))
+                self.__index_map.append((file_id, start, True))  # Augmented version
 
     def __len__(self) -> int:
-        return len(self.index_map)
+        return len(self.__index_map)
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, int]:
-        file_id, start = self.index_map[idx]
-        csi = self.data[file_id]
+        file_id, start, augmented = self.__index_map[idx]
+        csi = self.__data[file_id]
 
-        window = csi[start : start + self.window_size]
+        window = csi[start : start + self.__window_size]
 
         # (window_size, n_subcarriers, n_antennas) → (n_antennas, window_size, n_subcarriers)
         # The window_size represents the time dimension
         window = np.transpose(window, (2, 0, 1))
 
+        # Apply augmentation if needed
+        if augmented:
+            window = self.__augmenter.apply(window.copy())
+
         # Min-max normalization per window, not global to avoid outliers issues
-        if self.normalize:
+        if self.__normalize:
             win_min = window.min()
             win_max = window.max()
             window = (window - win_min) / (win_max - win_min + 1e-8)
 
         x = torch.from_numpy(window)
-        y = self.labels[file_id]
+        y = self.__labels[file_id]
 
         return x, y
-
-
-def get_splits(
-    dataset_path: Path,
-    batch_size: int,
-    window_size: int,
-    overlap_size: int,
-    n_activities: int,
-    n_samples: int,
-    n_antennas: int,
-    antenna_select: int,
-    test_size: float = 0.2,
-) -> tuple[DataLoader, DataLoader]:
-    """Build the CSI dataset train/test dataloaders with DistributedSampler."""
-    files = [dataset_path / f"S1a_{x}.mat" for x in ascii_uppercase[:n_activities]]
-
-    # Shape of dataset samples: (n_antennas, window_size, n_subcarriers)
-    dataset = CSIDataset(
-        files=files,
-        n_samples=n_samples,
-        window_size=window_size,
-        overlap_size=overlap_size,
-        n_antennas=n_antennas,
-        antenna_select=antenna_select,
-    )
-
-    n_total = len(dataset)
-    n_test = int(n_total * test_size)
-    n_train = n_total - n_test
-
-    train_dataset, test_dataset = torch.utils.data.random_split(
-        dataset,
-        [n_train, n_test],
-    )
-
-    # Split train data over gpus
-    train_dataloader = DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        pin_memory=True,
-        shuffle=False,  # DistributedSampler already shuffles the data
-        sampler=DistributedSampler(train_dataset),
-    )
-
-    # Keep test data on cpu, no need to distribute it
-    test_dataloader = DataLoader(
-        test_dataset,
-        batch_size=batch_size,
-        pin_memory=True,
-        shuffle=True,
-    )
-
-    return train_dataloader, test_dataloader
