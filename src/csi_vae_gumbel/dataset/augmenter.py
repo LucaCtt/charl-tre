@@ -9,9 +9,9 @@ class CSIAugmenter:
         self,
         noise_std: float = 0.01,
         mask_prob: float = 0.1,
-        antenna_drop_prob: float = 0.2,
+        antenna_drop_prob: float = 0.1,
         apply_prob: float = 0.5,
-        augmentation_prob: float = 0.5,
+        augmentation_prob: float = 0.3,
     ) -> None:
         """Initialize the augmenter with specified probabilities and parameters.
 
@@ -33,11 +33,12 @@ class CSIAugmenter:
     def add_gaussian_noise(self, x: np.ndarray) -> np.ndarray:
         """Simulate thermal noise in the WiFi hardware."""
         noise = self.rng.normal(0, self.noise_std, x.shape)
-        return x + noise
+        noisy = x + noise
+        return np.clip(noisy, 0.0, 1.0).astype(np.float32)
 
     def subcarrier_masking(self, x: np.ndarray) -> np.ndarray:
         """Randomly masks frequency subcarriers (columns) to simulate interference."""
-        mask = self.rng.random(x.shape[-1]) > self.mask_prob
+        mask = self.rng.random(x.shape[-1]) < self.mask_prob
         # Broadcast mask across antennas and time
         return x * mask[np.newaxis, np.newaxis, :]
 

@@ -10,21 +10,21 @@ class CategoricalVAE(nn.Module):
         self,
         window_size: int,
         n_categories: int,
-        categorical_dim: int,
+        latent_dim: int,
     ) -> None:
         """Initialize Categorical VAE.
 
         Arguments:
             window_size (int): Size of the time window.
             n_categories (int): Number of latent categorical variables.
-            categorical_dim (int): Number of classes per categorical variable.
+            latent_dim (int): Number of classes per categorical variable.
 
         """
         super().__init__()
 
         self.window_size = window_size
         self.n_categories = n_categories
-        self.categorical_dim = categorical_dim
+        self.latent_dim = latent_dim
 
         # Encoder: Convolutional layers
         self.encoder_conv_1 = nn.Conv2d(1, 8, kernel_size=3, stride=2, padding=1)
@@ -32,10 +32,10 @@ class CategoricalVAE(nn.Module):
 
         # Latent space: 16 * 38 * 64 is the flattened size after strides
         self.flat_dim = 16 * 38 * 64
-        self.encoder_fc = nn.Linear(self.flat_dim, n_categories * categorical_dim)
+        self.encoder_fc = nn.Linear(self.flat_dim, n_categories * latent_dim)
 
         # Decoder: Mirror of encoder
-        self.decoder_fc = nn.Linear(n_categories * categorical_dim, self.flat_dim)
+        self.decoder_fc = nn.Linear(n_categories * latent_dim, self.flat_dim)
         self.decoder_deconv_1 = nn.ConvTranspose2d(16, 8, kernel_size=3, stride=2, padding=1, output_padding=(0, 1))
         self.decoder_deconv_2 = nn.ConvTranspose2d(8, 1, kernel_size=3, stride=2, padding=1, output_padding=(1, 1))
 
@@ -90,7 +90,7 @@ class CategoricalVAE(nn.Module):
 
         # 2. Reshape to (Batch, N_Latents, Classes_Per_Latent)
         # PyTorch Gumbel Softmax expects classes on the LAST dimension
-        logits = logits_flat.view(-1, self.n_categories, self.categorical_dim)
+        logits = logits_flat.view(-1, self.latent_dim, self.n_categories)
 
         # 3. Gumbel-Softmax Reparameterization
         # hard=True returns one-hot during forward, but keeps grads via relaxation

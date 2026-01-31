@@ -11,7 +11,7 @@ class TiedCategoricalVAE(nn.Module):
         window_size: int,
         n_antennas: int,
         n_categories: int,
-        categorical_dim: int,
+        latent_dim: int,
         hidden_latent_dim: int,
     ) -> None:
         """Initialize the Multi-View Categorical VAE.
@@ -20,7 +20,7 @@ class TiedCategoricalVAE(nn.Module):
             window_size (int): Size of the time window.
             n_antennas (int): Number of antennas (views).
             n_categories (int): Number of categories for the categorical latent variables.
-            categorical_dim (int): Dimension of each categorical variable.
+            latent_dim (int): Dimension of each categorical variable.
             hidden_latent_dim (int): Dimension of the hidden latent space per antenna.
 
         """
@@ -29,7 +29,7 @@ class TiedCategoricalVAE(nn.Module):
         self.window_size = window_size
         self.n_antennas = n_antennas
         self.n_categories = n_categories
-        self.categorical_dim = categorical_dim
+        self.latent_dim = latent_dim
 
         # Tied convulutional weights for each antenna
         # Weight shape: [out_channels, in_channels, kernel_h, kernel_w]
@@ -57,9 +57,9 @@ class TiedCategoricalVAE(nn.Module):
         # Central bottleneck weights, maps n_antennas latents -> Categorical Logits)
         # Total input to bottleneck = latent_dim * n_antennas
         self.bottleneck_weight = nn.Parameter(
-            torch.empty(n_categories * categorical_dim, hidden_latent_dim * n_antennas),
+            torch.empty(n_categories * latent_dim, hidden_latent_dim * n_antennas),
         )
-        self.bottleneck_bias = nn.Parameter(torch.zeros(n_categories * categorical_dim))
+        self.bottleneck_bias = nn.Parameter(torch.zeros(n_categories * latent_dim))
 
         # Learnable scale for the tied decoder,
         # because the optimal magnitude for decoding may differ from encoding.
@@ -168,7 +168,7 @@ class TiedCategoricalVAE(nn.Module):
 
         # Map to categorical logits
         logits = func.linear(combined_z, self.bottleneck_weight, self.bottleneck_bias)
-        logits = logits.view(-1, self.categorical_dim, self.n_categories)
+        logits = logits.view(-1, self.latent_dim, self.n_categories)
 
         # Gumbel-Softmax sampling
         z_hard = func.gumbel_softmax(logits, tau=tau, hard=True)

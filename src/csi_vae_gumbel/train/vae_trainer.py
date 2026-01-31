@@ -46,13 +46,11 @@ class VAETrainer:
 
         self.__callback_worker = AsyncCallbackWorker()
 
-    def __run_batch(self, epoch: int, x_true: torch.Tensor) -> tuple[float, float, float]:
+    def __run_batch(self, x_true: torch.Tensor, tau: float, kl_weight: float) -> tuple[float, float, float]:
         self.__optimizer.zero_grad()
 
-        tau = self.__gumbel_annealer.step(epoch)
         x_recon, _, logits = self.__model(x_true, tau)
 
-        kl_weight = self.__kl_scheduler.get_weight(epoch)
         loss, recon_loss, kl_loss, _ = vae_loss(x_recon, x_true, logits, kl_weight=kl_weight)
 
         loss.backward()
@@ -69,8 +67,11 @@ class VAETrainer:
         epoch_recon_loss = 0.0
         epoch_kl_loss = 0.0
 
+        tau = self.__gumbel_annealer.step(epoch)
+        kl_weight = self.__kl_scheduler.get_weight(epoch)
+
         for i, (x_true, _) in enumerate(self.__dataloader):
-            loss, recon_loss, kl_loss = self.__run_batch(epoch, x_true.to(self.__gpu_id))
+            loss, recon_loss, kl_loss = self.__run_batch(x_true.to(self.__gpu_id), tau, kl_weight)
 
             epoch_loss += loss
             epoch_recon_loss += recon_loss

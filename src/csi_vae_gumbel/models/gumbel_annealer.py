@@ -6,10 +6,9 @@ class GumbelAnnealer:
 
     def __init__(
         self,
-        start_tau: float = 1.0,
-        min_tau: float = 0.1,
-        decay_rate: float = 0.013,  # Controls how fast it drops
-        step_interval: int = 1,  # Usually decay every epoch
+        start_tau: float = 1.6,
+        min_tau: float = 0.6,
+        decay_rate: float = 0.9,  # Controls how fast it drops
     ) -> None:
         """Initialize the Gumbel-Softmax temperature annealer.
 
@@ -20,10 +19,9 @@ class GumbelAnnealer:
             step_interval: How often to update the temperature.
 
         """
-        self.__tau = start_tau
+        self.__start_tau = start_tau
         self.__min_tau = min_tau
         self.__decay_rate = decay_rate
-        self.__step_interval = step_interval
 
     def step(self, epoch: int) -> float:
         """Calculate the temperature for the current epoch.
@@ -37,8 +35,5 @@ class GumbelAnnealer:
             The updated temperature for the Gumbel-Softmax distribution.
 
         """
-        if epoch % self.__step_interval == 0:
-            new_tau = self.__tau * np.exp(-self.__decay_rate * epoch)
-            self.__tau = max(self.__min_tau, new_tau)
-
-        return self.__tau
+        tau = self.__start_tau * np.exp(-self.__decay_rate * epoch)
+        return max(self.__min_tau, tau)

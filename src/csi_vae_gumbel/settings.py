@@ -31,8 +31,8 @@ class Settings(BaseSettings):
 
     # Categorical VAE config
     n_categories: int = n_activities
-    categorical_dim: int = 2
-    vae_name: str = f"vaec_s1a_ls{n_activities * categorical_dim}"
+    latent_dim: int = 2
+    vae_name: str = f"vaec_s1a_ls{n_activities * latent_dim}"
     checkpoint_dir: str = f"out/vaec_models/{dt.now(tz=UTC).strftime('%Y%m%d_%H%M%S')}/{vae_name}"
 
     # Training config

@@ -59,7 +59,7 @@ def _train_vae(rank: int, train_dataloader: DataLoader) -> nn.Module:
     vae = CategoricalVAE(
         window_size=settings.window_size,
         n_categories=settings.n_categories,
-        categorical_dim=settings.categorical_dim,
+        latent_dim=settings.latent_dim,
     )
 
     optimizer = torch.optim.Adam(vae.parameters(), lr=settings.learning_rate)
@@ -122,7 +122,7 @@ def _train_vae(rank: int, train_dataloader: DataLoader) -> nn.Module:
 
 def _train_classifier(rank: int, train_dataloader: DataLoader, vae: nn.Module) -> Classifier:
     classifier = Classifier(
-        input_dim=settings.categorical_dim * settings.n_categories,
+        input_dim=settings.latent_dim * settings.n_categories,
         output_dim=settings.n_categories,
         hidden_dim=128,
     )
@@ -210,8 +210,13 @@ def train(rank: int, world_size: int) -> None:
         )
 
     vae = _train_vae(rank, train_dataloader)
+
+    # Wait for all processes to finish VAE training
+    torch.distributed.barrier()
+
     classifier = _train_classifier(rank, train_dataloader, vae)
 
+    # Wait for all processes to finish Classifier training
     torch.distributed.barrier()
 
     evaluator = Evaluator(

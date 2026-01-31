@@ -11,7 +11,7 @@ def vae_loss(
     x_true: torch.Tensor,
     z: torch.Tensor,
     kl_weight: float,
-    free_bits: float = 1.0,
+    free_bits: float = 2.0,
     entropy_weight: float = 0.0,
     entropy_mode: Literal["none", "penalty", "bonus"] = "none",
     eps: float = 1e-12,
