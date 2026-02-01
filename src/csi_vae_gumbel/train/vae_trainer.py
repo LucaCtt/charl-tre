@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from typing import Literal
 
 import torch
 from torch import nn
@@ -6,8 +7,10 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from csi_vae_gumbel.loss import KLScheduler, vae_loss
-from csi_vae_gumbel.models.gumbel_annealer import GumbelAnnealer
+from csi_vae_gumbel.loss import KLWeightScheduler, vae_loss
+from csi_vae_gumbel.loss.capacity_scheduler import CapacityScheduler
+from csi_vae_gumbel.loss.entropy_scheduler import EntropyScheduler
+from csi_vae_gumbel.loss.gumbel_scheduler import GumbelTemperatureScheduler
 from csi_vae_gumbel.train.async_callback_worker import AsyncCallbackWorker
 from csi_vae_gumbel.train.checkpoints import CheckpointManager
 
@@ -19,8 +22,13 @@ class VAETrainer:
         self,
         model: nn.Module,
         dataloader: DataLoader,
-        optimizer: torch.optim.Optimizer,
         checkpoint_manager: CheckpointManager,
+        optimizer: torch.optim.Optimizer,
+        lr_scheduler: torch.optim.lr_scheduler.ReduceLROnPlateau,
+        kl_weight_scheduler: KLWeightScheduler,
+        temperature_scheduler: GumbelTemperatureScheduler,
+        entropy_scheduler: EntropyScheduler,
+        capacity_scheduler: CapacityScheduler,
         gpu_id: int,
         batch_callback: Callable | None = None,
     ) -> None:
@@ -30,6 +38,11 @@ class VAETrainer:
             model: VAE model to be trained.
             dataloader: DataLoader for training data.
             optimizer: Optimizer for training.
+            lr_scheduler: Learning rate scheduler.
+            kl_weight_scheduler: Scheduler for KL divergence weight.
+            temperature_scheduler: Scheduler for Gumbel temperature.
+            entropy_scheduler: Scheduler for entropy weight.
+            capacity_scheduler: Scheduler for KL capacity.
             checkpoint_manager: CheckpointManager to save model checkpoints.
             gpu_id: GPU ID for Distributed Data Parallel.
             batch_callback: Optional callback function called at the end of each batch.
@@ -37,21 +50,41 @@ class VAETrainer:
         """
         self.__model = DistributedDataParallel(model.to(gpu_id), device_ids=[gpu_id])
         self.__dataloader = dataloader
-        self.__optimizer = optimizer
         self.__checkpoint_manager = checkpoint_manager
         self.__gpu_id = gpu_id
         self.__batch_callback = batch_callback
-        self.__kl_scheduler = KLScheduler()
-        self.__gumbel_annealer = GumbelAnnealer()
+        self.__optimizer = optimizer
+        self.__lr_scheduler = lr_scheduler
+        self.__kl_scheduler = kl_weight_scheduler
+        self.__temperature_scheduler = temperature_scheduler
+        self.__entropy_scheduler = entropy_scheduler
+        self.__capacity_scheduler = capacity_scheduler
 
         self.__callback_worker = AsyncCallbackWorker()
 
-    def __run_batch(self, x_true: torch.Tensor, tau: float, kl_weight: float) -> tuple[float, float, float]:
+    def __run_batch(
+        self,
+        x_true: torch.Tensor,
+        tau: float,
+        kl_weight: float,
+        entropy_weight: float,
+        entropy_mode: Literal["none", "penalty", "bonus"],
+        capacity: float,
+    ) -> tuple[float, float, float]:
         self.__optimizer.zero_grad()
 
         x_recon, _, logits = self.__model(x_true, tau)
 
-        loss, recon_loss, kl_loss, _ = vae_loss(x_recon, x_true, logits, kl_weight=kl_weight)
+        loss, recon_loss, kl_loss, _ = vae_loss(
+            x_recon,
+            x_true,
+            logits,
+            kl_weight=kl_weight,
+            entropy_mode=entropy_mode,
+            entropy_weight=entropy_weight,
+            capacity=capacity,
+            loss_type="bce",
+        )
 
         loss.backward()
         self.__optimizer.step()
@@ -67,11 +100,20 @@ class VAETrainer:
         epoch_recon_loss = 0.0
         epoch_kl_loss = 0.0
 
-        tau = self.__gumbel_annealer.step(epoch)
-        kl_weight = self.__kl_scheduler.get_weight(epoch)
+        tau = self.__temperature_scheduler.step(epoch)
+        kl_weight = self.__kl_scheduler.step(epoch)
+        entropy_weight, entropy_mode = self.__entropy_scheduler.step(epoch)
+        capacity = self.__capacity_scheduler.step(epoch)
 
         for i, (x_true, _) in enumerate(self.__dataloader):
-            loss, recon_loss, kl_loss = self.__run_batch(x_true.to(self.__gpu_id), tau, kl_weight)
+            loss, recon_loss, kl_loss = self.__run_batch(
+                x_true.to(self.__gpu_id),
+                tau,
+                kl_weight,
+                entropy_weight,
+                entropy_mode,
+                capacity,
+            )
 
             epoch_loss += loss
             epoch_recon_loss += recon_loss
@@ -91,15 +133,18 @@ class VAETrainer:
         epoch_recon_loss /= len(self.__dataloader)
         epoch_kl_loss /= len(self.__dataloader)
 
+        # This has to be called after each epoch
+        self.__lr_scheduler.step(epoch_loss)
+
         return epoch_loss, epoch_recon_loss, epoch_kl_loss
 
-    def train(self, max_epochs: int) -> tuple[float, float, float]:
+    def train(self, epochs: int) -> tuple[float, float, float]:
         """Train the VAE model for a specified number of epochs.
 
         Will resume from the latest checkpoint if available.
 
         Arguments:
-            max_epochs: Number of epochs to train, including any previously completed epochs.
+            epochs: Number of epochs to train.
 
         Returns:
             Tuple containing average total loss, reconstruction loss, and KL divergence loss over all epochs.
@@ -109,19 +154,11 @@ class VAETrainer:
 
         self.__callback_worker.start()
 
-        latest_checkpoint = self.__checkpoint_manager.load_latest_checkpoint()
-        if latest_checkpoint is not None:
-            model_state, optimizer_state, start_epoch = latest_checkpoint
-            self.__model.module.load_state_dict(model_state)
-            self.__optimizer.load_state_dict(optimizer_state)
-        else:
-            start_epoch = 0
-
         total_loss = 0.0
         total_recon_loss = 0.0
         total_kl_loss = 0.0
 
-        for epoch in range(start_epoch, max_epochs):
+        for epoch in range(epochs):
             epoch_loss, epoch_recon_loss, epoch_kl_loss = self.__run_epoch(epoch)
 
             total_loss += epoch_loss
@@ -135,9 +172,9 @@ class VAETrainer:
                     epoch + 1,
                 )
 
-        total_loss /= max_epochs - start_epoch
-        total_recon_loss /= max_epochs - start_epoch
-        total_kl_loss /= max_epochs - start_epoch
+        total_loss /= epochs
+        total_recon_loss /= epochs
+        total_kl_loss /= epochs
 
         self.__callback_worker.stop()
         return total_loss, total_recon_loss, total_kl_loss

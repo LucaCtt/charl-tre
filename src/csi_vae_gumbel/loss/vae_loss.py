@@ -11,9 +11,10 @@ def vae_loss(
     x_true: torch.Tensor,
     z: torch.Tensor,
     kl_weight: float,
-    free_bits: float = 2.0,
-    entropy_weight: float = 0.0,
-    entropy_mode: Literal["none", "penalty", "bonus"] = "none",
+    capacity: float,
+    entropy_weight: float,
+    entropy_mode: Literal["none", "penalty", "bonus"],
+    loss_type: Literal["bce", "mse"],
     eps: float = 1e-12,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Compute the VAE loss with categorical latent variables.
@@ -23,9 +24,10 @@ def vae_loss(
         x_true (torch.Tensor): True input.
         z (torch.Tensor): Latent variable tensor.
         kl_weight (float): Weight for the KL divergence term.
-        free_bits (float): Free bits threshold for KL divergence.
+        capacity (float): Capacity threshold for KL divergence.
         entropy_weight (float): Weight for the entropy term.
         entropy_mode (Literal["none", "penalty", "bonus"]): Mode for entropy term.
+        loss_type (Literal["bce", "mse"]): Type of reconstruction loss to use.
         eps (float): Small value to avoid numerical issues.
 
     Returns:
@@ -34,7 +36,10 @@ def vae_loss(
 
     """
     # Reconstruction loss
-    recon = func.binary_cross_entropy(x_recon.clamp(eps, 1 - eps), x_true, reduction="mean")
+    if loss_type == "mse":
+        recon = func.mse_loss(x_recon, x_true, reduction="mean")
+    else:
+        recon = func.binary_cross_entropy(x_recon.clamp(eps, 1 - eps), x_true, reduction="mean")
 
     # Posterior q(y|x)
     q = dist.Categorical(logits=z)
@@ -46,8 +51,8 @@ def vae_loss(
     # KL(q || p), per sample
     kl_per_sample = dist.kl_divergence(q, p)
     kl_per_sample = kl_per_sample.view(z.size(0), -1).sum(dim=1)
-    if free_bits > 0.0:
-        kl_per_sample = nn.functional.relu(kl_per_sample - free_bits)
+    if capacity > 0.0:
+        kl_per_sample = nn.functional.relu(kl_per_sample - capacity)
     kl = kl_per_sample.mean()
 
     # Entropy H(q)

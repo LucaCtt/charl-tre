@@ -1,7 +1,7 @@
 import numpy as np
 
 
-class GumbelAnnealer:
+class GumbelTemperatureScheduler:
     """Handles the exponential decay of the Gumbel-Softmax temperature (tau)."""
 
     def __init__(

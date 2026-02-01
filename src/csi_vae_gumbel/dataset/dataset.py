@@ -1,7 +1,4 @@
-from pathlib import Path
-
 import numpy as np
-import scipy.io as sio
 import torch
 from torch.utils.data import Dataset
 
@@ -16,7 +13,7 @@ class CSIDataset(Dataset):
 
     def __init__(
         self,
-        files: list[Path],
+        csi_mats: list[np.ndarray],
         samples_start: int,
         n_samples: int,
         window_size: int,
@@ -28,7 +25,8 @@ class CSIDataset(Dataset):
         """Initialize the CSI dataset.
 
         Arguments:
-            files: List of paths to the .mat files containing the CSI data.
+            csi_mats: List of CSI matrices loaded from .mat files. Each matrix should have shape
+                [num_samples, n_subcarriers, n_antennas].
             samples_start: Starting index to extract samples from each CSI matrix file.
             n_samples: Number of samples to extract from each CSI matrix file, starting from samples_start.
             window_size: Size of the sliding window to extract from each sample.
@@ -43,26 +41,21 @@ class CSIDataset(Dataset):
         self.__augmenter = CSIAugmenter()
         self.__normalize = normalize
 
-        self.__data = []
-        self.__labels = []
-        self.__index_map = []
+        self.__data: list[np.ndarray] = []
+        self.__labels: list[int] = []
+        self.__index_map: list[tuple[int, int, bool]] = []
 
         self.__global_min = float("inf")
         self.__global_max = 0.0
 
         # Load files once, build index map
-        for label, file in enumerate(files):
-            # num_samples, n_subcarriers, n_antennas
-            mat = sio.loadmat(file)
-
+        for label, csi_mat in enumerate(csi_mats):
             # Shape of csi for now is: [num_samples, n_subcarriers, n_antennas]
             # We will later rearrange it.
-            csi = np.array(mat["csi"])
-            csi = (
-                csi[samples_start : samples_start + n_samples, ..., antenna_select]
-                if n_antennas == 1
-                else csi[samples_start : samples_start + n_samples, ...]
-            )
+            csi = csi_mat[samples_start : samples_start + n_samples, :, :]
+
+            if n_antennas == 1:
+                csi = csi[..., antenna_select]
 
             if n_antennas == 1:
                 csi = csi[:, :, np.newaxis]  # Keep 3D shape for consistency

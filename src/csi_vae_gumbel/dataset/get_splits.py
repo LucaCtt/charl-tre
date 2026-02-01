@@ -1,6 +1,8 @@
 from pathlib import Path
 from string import ascii_uppercase
 
+import numpy as np
+import scipy.io as sio
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
@@ -20,10 +22,11 @@ def get_splits(
 ) -> tuple[DataLoader, DataLoader]:
     """Build the CSI dataset train/test dataloaders with DistributedSampler."""
     files = [dataset_path / f"S1a_{x}.mat" for x in ascii_uppercase[:n_activities]]
+    mats = [np.array(sio.loadmat(file)["csi"]) for file in files]
 
     # Shape of dataset samples: (n_antennas, window_size, n_subcarriers)
     train_dataset = CSIDataset(
-        files=files,
+        csi_mats=mats,
         samples_start=0,
         n_samples=int(n_samples * (1 - test_size)),
         window_size=window_size,
@@ -40,7 +43,7 @@ def get_splits(
     )
 
     test_dataset = CSIDataset(
-        files=files,
+        csi_mats=mats,
         samples_start=int(n_samples * (1 - test_size)),
         n_samples=int(n_samples * test_size),
         window_size=window_size,

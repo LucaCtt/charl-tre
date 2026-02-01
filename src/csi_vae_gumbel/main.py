@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader
 
 from csi_vae_gumbel.dataset import get_splits
 from csi_vae_gumbel.evaluator import Evaluator
+from csi_vae_gumbel.loss import CapacityScheduler, EntropyScheduler, GumbelTemperatureScheduler, KLWeightScheduler
 from csi_vae_gumbel.models import CategoricalVAE, Classifier
 from csi_vae_gumbel.settings import Settings
 from csi_vae_gumbel.train import CheckpointManager, ClassifierTrainer, VAETrainer
@@ -62,8 +63,18 @@ def _train_vae(rank: int, train_dataloader: DataLoader) -> nn.Module:
         latent_dim=settings.latent_dim,
     )
 
-    optimizer = torch.optim.Adam(vae.parameters(), lr=settings.learning_rate)
     checkpoint_manager = CheckpointManager(Path(settings.checkpoint_dir))
+    optimizer = torch.optim.Adam(vae.parameters(), lr=settings.learning_rate)
+    lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode="min",
+        factor=0.5,
+        patience=10,
+    )
+    capacity_scheduler = CapacityScheduler()
+    entropy_scheduler = EntropyScheduler()
+    temperature_scheduler = GumbelTemperatureScheduler()
+    kl_weight_scheduler = KLWeightScheduler()
 
     with Progress(
         BarColumn(),
@@ -108,11 +119,16 @@ def _train_vae(rank: int, train_dataloader: DataLoader) -> nn.Module:
                 progress.reset(epoch_task)
 
         vae_trainer = VAETrainer(
-            vae,
-            train_dataloader,
-            optimizer,
-            checkpoint_manager,
-            rank,
+            model=vae,
+            dataloader=train_dataloader,
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
+            checkpoint_manager=checkpoint_manager,
+            capacity_scheduler=capacity_scheduler,
+            entropy_scheduler=entropy_scheduler,
+            temperature_scheduler=temperature_scheduler,
+            kl_weight_scheduler=kl_weight_scheduler,
+            gpu_id=rank,
             batch_callback=batch_callback,
         )
         vae_trainer.train(settings.n_epochs)
@@ -123,8 +139,8 @@ def _train_vae(rank: int, train_dataloader: DataLoader) -> nn.Module:
 def _train_classifier(rank: int, train_dataloader: DataLoader, vae: nn.Module) -> Classifier:
     classifier = Classifier(
         input_dim=settings.latent_dim * settings.n_categories,
-        output_dim=settings.n_categories,
-        hidden_dim=128,
+        output_dim=settings.n_activities,
+        hidden_dim=settings.n_activities * 3 // 2,
     )
     optimizer = torch.optim.Adam(classifier.parameters(), lr=settings.learning_rate)
 

@@ -1,5 +1,5 @@
-class KLScheduler:
-    """Handles the warming up of the KL divergence weight (beta)."""
+class KLWeightScheduler:
+    """Handles the warming up of the KL divergence weight."""
 
     def __init__(
         self,
@@ -19,7 +19,7 @@ class KLScheduler:
         self.__ramp_epochs = ramp_epochs
         self.__max_weight = max_weight
 
-    def get_weight(self, epoch: int) -> float:
+    def step(self, epoch: int) -> float:
         """Get the KL weight for the given epoch.
 
         Arguments:
