@@ -7,10 +7,10 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from csi_vae_gumbel.loss import KLWeightScheduler, vae_loss
-from csi_vae_gumbel.loss.capacity_scheduler import CapacityScheduler
-from csi_vae_gumbel.loss.entropy_scheduler import EntropyScheduler
-from csi_vae_gumbel.loss.gumbel_scheduler import GumbelTemperatureScheduler
+from csi_vae_gumbel.loss import KLWeightAnnealer, vae_loss
+from csi_vae_gumbel.loss.capacity_annealer import CapacityAnnealer
+from csi_vae_gumbel.loss.entropy_annealer import EntropyAnnealer
+from csi_vae_gumbel.loss.gumbel_annealer import GumbelTemperatureAnnealer
 from csi_vae_gumbel.train.async_callback_worker import AsyncCallbackWorker
 from csi_vae_gumbel.train.checkpoints import CheckpointManager
 
@@ -25,10 +25,11 @@ class VAETrainer:
         checkpoint_manager: CheckpointManager,
         optimizer: torch.optim.Optimizer,
         lr_scheduler: torch.optim.lr_scheduler.ReduceLROnPlateau,
-        kl_weight_scheduler: KLWeightScheduler,
-        temperature_scheduler: GumbelTemperatureScheduler,
-        entropy_scheduler: EntropyScheduler,
-        capacity_scheduler: CapacityScheduler,
+        kl_weight_annealer: KLWeightAnnealer,
+        temperature_annealer: GumbelTemperatureAnnealer,
+        entropy_annealer: EntropyAnnealer,
+        capacity_annealer: CapacityAnnealer,
+        loss_type: Literal["bce", "mse"],
         gpu_id: int,
         batch_callback: Callable | None = None,
     ) -> None:
@@ -38,12 +39,13 @@ class VAETrainer:
             model: VAE model to be trained.
             dataloader: DataLoader for training data.
             optimizer: Optimizer for training.
-            lr_scheduler: Learning rate scheduler.
-            kl_weight_scheduler: Scheduler for KL divergence weight.
-            temperature_scheduler: Scheduler for Gumbel temperature.
-            entropy_scheduler: Scheduler for entropy weight.
-            capacity_scheduler: Scheduler for KL capacity.
             checkpoint_manager: CheckpointManager to save model checkpoints.
+            lr_scheduler: Learning rate scheduler.
+            kl_weight_annealer: Scheduler for KL divergence weight.
+            temperature_annealer: Scheduler for Gumbel temperature.
+            entropy_annealer: Scheduler for entropy weight.
+            capacity_annealer: Scheduler for KL capacity.
+            loss_type: Type of reconstruction loss ("bce" or "mse").
             gpu_id: GPU ID for Distributed Data Parallel.
             batch_callback: Optional callback function called at the end of each batch.
 
@@ -55,10 +57,11 @@ class VAETrainer:
         self.__batch_callback = batch_callback
         self.__optimizer = optimizer
         self.__lr_scheduler = lr_scheduler
-        self.__kl_scheduler = kl_weight_scheduler
-        self.__temperature_scheduler = temperature_scheduler
-        self.__entropy_scheduler = entropy_scheduler
-        self.__capacity_scheduler = capacity_scheduler
+        self.__kl_annealer = kl_weight_annealer
+        self.__temperature_annealer = temperature_annealer
+        self.__entropy_annealer = entropy_annealer
+        self.__capacity_annealer = capacity_annealer
+        self.__loss_type: Literal["bce", "mse"] = loss_type
 
         self.__callback_worker = AsyncCallbackWorker()
 
@@ -83,7 +86,7 @@ class VAETrainer:
             entropy_mode=entropy_mode,
             entropy_weight=entropy_weight,
             capacity=capacity,
-            loss_type="bce",
+            loss_type=self.__loss_type,
         )
 
         loss.backward()
@@ -100,10 +103,10 @@ class VAETrainer:
         epoch_recon_loss = 0.0
         epoch_kl_loss = 0.0
 
-        tau = self.__temperature_scheduler.step(epoch)
-        kl_weight = self.__kl_scheduler.step(epoch)
-        entropy_weight, entropy_mode = self.__entropy_scheduler.step(epoch)
-        capacity = self.__capacity_scheduler.step(epoch)
+        tau = self.__temperature_annealer.step(epoch)
+        kl_weight = self.__kl_annealer.step(epoch)
+        entropy_weight, entropy_mode = self.__entropy_annealer.step(epoch)
+        capacity = self.__capacity_annealer.step(epoch)
 
         for i, (x_true, _) in enumerate(self.__dataloader):
             loss, recon_loss, kl_loss = self.__run_batch(

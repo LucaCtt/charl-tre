@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 
 from csi_vae_gumbel.dataset import get_splits
 from csi_vae_gumbel.evaluator import Evaluator
-from csi_vae_gumbel.loss import CapacityScheduler, EntropyScheduler, GumbelTemperatureScheduler, KLWeightScheduler
+from csi_vae_gumbel.loss import CapacityAnnealer, EntropyAnnealer, GumbelTemperatureAnnealer, KLWeightAnnealer
 from csi_vae_gumbel.models import CategoricalVAE, Classifier
 from csi_vae_gumbel.settings import Settings
 from csi_vae_gumbel.train import CheckpointManager, ClassifierTrainer, VAETrainer
@@ -71,10 +71,10 @@ def _train_vae(rank: int, train_dataloader: DataLoader) -> nn.Module:
         factor=0.5,
         patience=10,
     )
-    capacity_scheduler = CapacityScheduler()
-    entropy_scheduler = EntropyScheduler()
-    temperature_scheduler = GumbelTemperatureScheduler()
-    kl_weight_scheduler = KLWeightScheduler()
+    capacity_scheduler = CapacityAnnealer()
+    entropy_scheduler = EntropyAnnealer()
+    temperature_scheduler = GumbelTemperatureAnnealer()
+    kl_weight_scheduler = KLWeightAnnealer()
 
     with Progress(
         BarColumn(),
@@ -124,10 +124,11 @@ def _train_vae(rank: int, train_dataloader: DataLoader) -> nn.Module:
             optimizer=optimizer,
             lr_scheduler=lr_scheduler,
             checkpoint_manager=checkpoint_manager,
-            capacity_scheduler=capacity_scheduler,
-            entropy_scheduler=entropy_scheduler,
-            temperature_scheduler=temperature_scheduler,
-            kl_weight_scheduler=kl_weight_scheduler,
+            capacity_annealer=capacity_scheduler,
+            entropy_annealer=entropy_scheduler,
+            temperature_annealer=temperature_scheduler,
+            kl_weight_annealer=kl_weight_scheduler,
+            loss_type="bce",
             gpu_id=rank,
             batch_callback=batch_callback,
         )

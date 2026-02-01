@@ -1,7 +1,7 @@
 from typing import Literal
 
 
-class EntropyScheduler:
+class EntropyAnnealer:
     """Entropy annealing with mode switching.
 
     Entropy term in VAE loss:

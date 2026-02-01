@@ -1,7 +1,7 @@
-from csi_vae_gumbel.loss.capacity_scheduler import CapacityScheduler
-from csi_vae_gumbel.loss.entropy_scheduler import EntropyScheduler
-from csi_vae_gumbel.loss.gumbel_scheduler import GumbelTemperatureScheduler
-from csi_vae_gumbel.loss.kl_weight_scheduler import KLWeightScheduler
+from csi_vae_gumbel.loss.capacity_annealer import CapacityAnnealer
+from csi_vae_gumbel.loss.entropy_annealer import EntropyAnnealer
+from csi_vae_gumbel.loss.gumbel_annealer import GumbelTemperatureAnnealer
+from csi_vae_gumbel.loss.kl_weight_annealer import KLWeightAnnealer
 from csi_vae_gumbel.loss.vae_loss import vae_loss
 
-__all__ = ["CapacityScheduler", "EntropyScheduler", "GumbelTemperatureScheduler", "KLWeightScheduler", "vae_loss"]
+__all__ = ["CapacityAnnealer", "EntropyAnnealer", "GumbelTemperatureAnnealer", "KLWeightAnnealer", "vae_loss"]

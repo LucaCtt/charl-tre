@@ -1,10 +1,10 @@
-class KLWeightScheduler:
+class KLWeightAnnealer:
     """Handles the warming up of the KL divergence weight."""
 
     def __init__(
         self,
-        start_epoch: int = 0,
-        ramp_epochs: int = 10,
+        start_epoch: int = 15,
+        ramp_epochs: int = 30,
         max_weight: float = 9e-4,
     ) -> None:
         """Set up the KL weight scheduler.
