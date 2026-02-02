@@ -7,13 +7,14 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from csi_vae_gumbel.loss import KLWeightAnnealer, vae_loss
-from csi_vae_gumbel.loss.capacity_annealer import CapacityAnnealer
-from csi_vae_gumbel.loss.entropy_annealer import EntropyAnnealer
-from csi_vae_gumbel.loss.gumbel_annealer import GumbelTemperatureAnnealer
-
-_EPS = 1e-6
-_MAX_ZERO_KL_EPOCHS = 3
+from csi_vae_gumbel.train.annealers import (
+    CapacityAnnealer,
+    EntropyAnnealer,
+    GumbelTemperatureAnnealer,
+    KLWeightAnnealer,
+)
+from csi_vae_gumbel.train.vae_loss import vae_loss
+from csi_vae_gumbel.train.vae_parameters import VAEParameters
 
 
 class VAETrainer:
@@ -23,13 +24,7 @@ class VAETrainer:
         self,
         model: nn.Module,
         dataloader: DataLoader,
-        optimizer: torch.optim.Optimizer,
-        lr_scheduler: torch.optim.lr_scheduler.ReduceLROnPlateau,
-        kl_weight_annealer: KLWeightAnnealer,
-        temperature_annealer: GumbelTemperatureAnnealer,
-        entropy_annealer: EntropyAnnealer,
-        capacity_annealer: CapacityAnnealer,
-        loss_type: Literal["bce", "mse"],
+        parameters: VAEParameters,
         gpu_id: int,
         trial: optuna.integration.TorchDistributedTrial,
     ) -> None:
@@ -38,13 +33,7 @@ class VAETrainer:
         Arguments:
             model: VAE model to be trained.
             dataloader: DataLoader for training data.
-            optimizer: Optimizer for training.
-            lr_scheduler: Learning rate scheduler.
-            kl_weight_annealer: Scheduler for KL divergence weight.
-            temperature_annealer: Scheduler for Gumbel temperature.
-            entropy_annealer: Scheduler for entropy weight.
-            capacity_annealer: Scheduler for KL capacity.
-            loss_type: Type of reconstruction loss ("bce" or "mse").
+            parameters: VAE training parameters.
             gpu_id: GPU ID for Distributed Data Parallel.
             trial: Optuna trial for hyperparameter optimization (optional).
             callback: Optional callback function to be called after each epoch.
@@ -52,13 +41,28 @@ class VAETrainer:
         """
         self.__model = DistributedDataParallel(model.to(gpu_id), device_ids=[gpu_id])
         self.__dataloader = dataloader
-        self.__optimizer = optimizer
-        self.__lr_scheduler = lr_scheduler
-        self.__kl_annealer = kl_weight_annealer
-        self.__temperature_annealer = temperature_annealer
-        self.__entropy_annealer = entropy_annealer
-        self.__capacity_annealer = capacity_annealer
-        self.__loss_type: Literal["bce", "mse"] = loss_type
+        self.__optimizer = torch.optim.Adam(
+            model.parameters(),
+            lr=parameters.start_learning_rate,
+        )
+        self.__lr_annealer = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            self.__optimizer,
+            mode="min",
+        )
+        self.__capacity_annealer = CapacityAnnealer(
+            final_capacity=parameters.final_capacity,
+        )
+        self.__entropy_annealer = EntropyAnnealer(
+            final_weight=parameters.final_entropy_weight,
+        )
+        self.__temperature_annealer = GumbelTemperatureAnnealer(
+            start_tau=parameters.gumbel_temp,
+            min_tau=parameters.gumbel_temp / 10,
+        )
+        self.__kl_weight_annealer = KLWeightAnnealer(
+            max_weight=parameters.final_kl_weight,
+        )
+        self.__loss_type: Literal["bce", "mse"] = parameters.loss_type
 
         self.__gpu_id = gpu_id
         self.__trial = trial
@@ -102,7 +106,7 @@ class VAETrainer:
         epoch_kl_loss = 0.0
 
         tau = self.__temperature_annealer.step(epoch)
-        kl_weight = self.__kl_annealer.step(epoch)
+        kl_weight = self.__kl_weight_annealer.step(epoch)
         entropy_weight, entropy_mode = self.__entropy_annealer.step(epoch)
         capacity = self.__capacity_annealer.step(epoch)
 
@@ -125,7 +129,7 @@ class VAETrainer:
         epoch_kl_loss /= len(self.__dataloader)
 
         # This has to be called after each epoch
-        self.__lr_scheduler.step(epoch_loss)
+        self.__lr_annealer.step(epoch_loss)
 
         self.__trial.report(epoch_loss, step=epoch)
 
@@ -134,11 +138,13 @@ class VAETrainer:
 
         return epoch_loss, epoch_recon_loss, epoch_kl_loss
 
-    def train(self, epochs: int) -> tuple[float, float, float]:
+    def train(self, epochs: int, max_epochs_zero_kl: int = 3, eps: float = 1e-6) -> tuple[float, float, float]:
         """Train the VAE model for a specified number of epochs.
 
         Arguments:
             epochs: Number of epochs to train.
+            max_epochs_zero_kl: Maximum number of consecutive epochs with near-zero KL divergence before pruning.
+            eps: Threshold to consider KL divergence as near-zero.
 
         Returns:
             Tuple containing average total loss, reconstruction loss, and KL divergence loss over all epochs.
@@ -158,12 +164,12 @@ class VAETrainer:
             total_recon_loss += epoch_recon_loss
             total_kl_loss += epoch_kl_loss
 
-            if epoch_kl_loss < _EPS:
+            if epoch_kl_loss < eps:
                 zero_kl_epochs += 1
             else:
                 zero_kl_epochs = 0
 
-        if zero_kl_epochs >= _MAX_ZERO_KL_EPOCHS:
+        if zero_kl_epochs >= max_epochs_zero_kl:
             msg = f"KL collapse detected for {zero_kl_epochs} consecutive epochs"
             raise optuna.TrialPruned(msg)
 

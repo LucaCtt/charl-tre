@@ -12,16 +12,16 @@ class CapacityAnnealer:
 
     """
 
-    def __init__(self, max_capacity: float = 2, ramp_epochs: int = 30, start_epoch: int = 10) -> None:
+    def __init__(self, final_capacity: float = 2, ramp_epochs: int = 30, start_epoch: int = 10) -> None:
         """Initialize the capacity annealer.
 
         Arguments:
-            max_capacity: maximum capacity (C_max).
+            final_capacity: maximum capacity (C_max).
             ramp_epochs: number of steps (or epochs) to linearly ramp to C_max.
             start_epoch: epoch index at which annealing begins (default 0).
 
         """
-        self.__c_max = max_capacity
+        self.__c_max = final_capacity
         self.__t_ramp = ramp_epochs
         self.__start_epoch = start_epoch
 

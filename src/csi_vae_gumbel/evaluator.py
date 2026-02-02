@@ -76,8 +76,8 @@ class Evaluator:
         classifier: torch.nn.Module,
         dataloader: DataLoader,
         classes: list[str],
-        out_dir: str,
         gpu_id: int,
+        out_dir: str | None = None,
     ) -> None:
         """Initialize the evaluator.
 
@@ -88,6 +88,7 @@ class Evaluator:
             classes: List of class names.
             out_dir: Output directory for saving results.
             gpu_id: GPU identifier for computation.
+            out_dir: Output directory for saving plots.
 
         """
         self.__vae = vae
@@ -95,8 +96,8 @@ class Evaluator:
         self.__dataloader = dataloader
         self.__classes = classes
         self.__n_classes = len(classes)
-        self.__out_dir = out_dir
         self.__gpu_id = gpu_id
+        self.__out_dir = out_dir
 
     @torch.no_grad()
     def evaluate(self) -> float:
@@ -129,7 +130,7 @@ class Evaluator:
         latent_array = np.concatenate(all_latents, axis=0)
         label_array = np.concatenate(all_labels, axis=0)
 
-        if self.__gpu_id == 0:
+        if self.__out_dir is not None and self.__gpu_id == 0:
             _plot_confusion_matrix(conf_matrix, self.__classes, self.__out_dir)
             _plot_latent_tsne(latent_array, label_array, self.__classes, self.__out_dir)
 

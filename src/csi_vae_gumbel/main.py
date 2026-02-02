@@ -1,7 +1,8 @@
+import contextlib
 import logging
 import os
+import random
 import warnings
-from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 
@@ -14,10 +15,10 @@ from torch import multiprocessing as mp
 from torch.multiprocessing.spawn import spawn
 
 from csi_vae_gumbel.dataset import get_splits
-from csi_vae_gumbel.loss import CapacityAnnealer, EntropyAnnealer, GumbelTemperatureAnnealer, KLWeightAnnealer
-from csi_vae_gumbel.models import CategoricalVAE
+from csi_vae_gumbel.evaluator import Evaluator
+from csi_vae_gumbel.models import CategoricalVAE, Classifier
 from csi_vae_gumbel.settings import Settings
-from csi_vae_gumbel.train import VAETrainer
+from csi_vae_gumbel.train import ClassifierTrainer, VAEParameters, VAETrainer
 
 settings = Settings()
 
@@ -28,22 +29,14 @@ logger = logging.getLogger("rich")
 
 warnings.filterwarnings("ignore", module="optuna_integration.pytorch_distributed")
 
-
-@dataclass
-class TrialParameters:
-    """Parameters for a single Optuna trial."""
-
-    learning_rate: float
-    kl_weight: float
-    entropy_weight: float
-    n_categories: int
-    latent_dim: int
-    capacity: float
-    gumbel_temp: float
+# Reproducible seeds
+os.environ.setdefault("PYTHONHASHSEED", str(settings.seed))
+random.seed(settings.seed)
+torch.manual_seed(settings.seed)
 
 
 def _ddp_setup(rank: int, world_size: int) -> None:
-    """Initialize the distributed environment.
+    """Initialize the distributed environment. Must be called by every process.
 
     Arguments:
         rank: Unique identifier of each process
@@ -67,9 +60,10 @@ def _ddp_setup(rank: int, world_size: int) -> None:
 
 
 def _objective(single_trial: BaseTrial | None, rank: int, world_size: int) -> float:
+    """Objective function for Optuna hyperparameter optimization."""
     trial = optuna.integration.TorchDistributedTrial(single_trial)
 
-    train_dataloader, _ = get_splits(
+    train_dataloader, val_dataloader = get_splits(
         dataset_path=Path(settings.dataset_path),
         batch_size=settings.batch_size // world_size,
         window_size=settings.window_size,
@@ -80,20 +74,20 @@ def _objective(single_trial: BaseTrial | None, rank: int, world_size: int) -> fl
         antenna_select=settings.antenna_select,
     )
 
-    params = TrialParameters(
-        learning_rate=trial.suggest_float(
+    parameters = VAEParameters(
+        start_learning_rate=trial.suggest_float(
             "learning_rate",
             settings.min_learning_rate,
             settings.max_learning_rate,
             log=True,
         ),
-        kl_weight=trial.suggest_float(
+        final_kl_weight=trial.suggest_float(
             "kl_weight",
             settings.min_kl_weight,
             settings.max_kl_weight,
             log=True,
         ),
-        entropy_weight=trial.suggest_float(
+        final_entropy_weight=trial.suggest_float(
             "entropy_weight",
             settings.min_entropy_weight,
             settings.max_entropy_weight,
@@ -111,7 +105,7 @@ def _objective(single_trial: BaseTrial | None, rank: int, world_size: int) -> fl
             settings.max_latent_dim,
             step=1,
         ),
-        capacity=trial.suggest_float(
+        final_capacity=trial.suggest_float(
             "final_capacity",
             settings.min_final_capacity,
             settings.max_final_capacity,
@@ -121,78 +115,68 @@ def _objective(single_trial: BaseTrial | None, rank: int, world_size: int) -> fl
             settings.min_gumbel_temp,
             settings.max_gumbel_temp,
         ),
+        loss_type="bce",
     )
 
+    # Build and train VAE
     vae = CategoricalVAE(
         window_size=settings.window_size,
-        n_categories=params.n_categories,
-        latent_dim=params.latent_dim,
+        n_categories=parameters.n_categories,
+        latent_dim=parameters.latent_dim,
     )
-
-    optimizer = torch.optim.Adam(
-        vae.parameters(),
-        lr=params.learning_rate,
-    )
-
-    lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer,
-        mode="min",
-    )
-
-    capacity_scheduler = CapacityAnnealer(
-        max_capacity=params.capacity,
-        ramp_epochs=settings.n_epochs // 3,
-        start_epoch=settings.n_epochs // 10,
-    )
-    entropy_scheduler = EntropyAnnealer(
-        max_weight=params.entropy_weight,
-        n_epochs=settings.n_epochs,
-        switch_epoch=settings.n_epochs // 2,
-    )
-    temperature_scheduler = GumbelTemperatureAnnealer(
-        start_tau=params.gumbel_temp,
-        min_tau=params.gumbel_temp / 10,
-    )
-    kl_weight_scheduler = KLWeightAnnealer(
-        max_weight=params.kl_weight,
-        start_epoch=settings.n_epochs // 10,
-        ramp_epochs=settings.n_epochs // 3,
-    )
-
     vae_trainer = VAETrainer(
         model=vae,
         dataloader=train_dataloader,
-        optimizer=optimizer,
-        lr_scheduler=lr_scheduler,
-        capacity_annealer=capacity_scheduler,
-        entropy_annealer=entropy_scheduler,
-        temperature_annealer=temperature_scheduler,
-        kl_weight_annealer=kl_weight_scheduler,
-        loss_type="bce",
+        parameters=parameters,
         gpu_id=rank,
         trial=trial,
     )
+    vae_trainer.train(settings.n_epochs)
 
-    total_loss, _, _ = vae_trainer.train(settings.n_epochs)
+    # Build and train classifier on frozen VAE latent space
+    classifier = Classifier(
+        input_dim=parameters.n_categories * parameters.latent_dim,
+        output_dim=settings.n_activities,
+        hidden_dim=parameters.n_categories * settings.n_activities // 2,
+    )
+    classifier_trainer = ClassifierTrainer(
+        model=classifier,
+        dataloader=train_dataloader,
+        vae=vae,
+        optimizer=torch.optim.Adam(classifier.parameters()),
+        gpu_id=rank,
+    )
+    classifier_trainer.train(settings.n_epochs)
 
-    return total_loss
+    # Evaluate on validation set
+    evaluator = Evaluator(
+        vae=vae,
+        classifier=classifier,
+        dataloader=val_dataloader,
+        classes=settings.activities_labels,
+        gpu_id=rank,
+    )
+    return evaluator.evaluate()
 
 
 def _run_optimize(rank: int, world_size: int, return_dict: dict) -> None:
     _ddp_setup(rank, world_size)
 
-    if rank == 0:
-        study = optuna.create_study(direction="minimize")
-        study.optimize(partial(_objective, rank=rank, world_size=world_size), n_trials=settings.n_trials)
-        return_dict["study"] = study
-    else:
-        for _ in range(settings.n_trials):
-            try:
-                _objective(None, rank, world_size)
-            except optuna.TrialPruned:
-                logger.exception("Trial pruned.")
-
-    dist.destroy_process_group()
+    try:
+        if rank == 0:
+            study = optuna.create_study(
+                direction="maximize",  # Optimize for classification accuracy
+                study_name=settings.vae_name,
+                sampler=optuna.samplers.TPESampler(seed=settings.seed),
+            )
+            study.optimize(partial(_objective, rank=rank, world_size=world_size), n_trials=settings.n_trials)
+            return_dict["study"] = study
+        else:
+            for _ in range(settings.n_trials):
+                with contextlib.suppress(optuna.TrialPruned):
+                    _objective(None, rank, world_size)
+    finally:
+        dist.destroy_process_group()
 
 
 def main() -> None:
@@ -204,6 +188,7 @@ def main() -> None:
 
     world_size = torch.cuda.device_count() if torch.cuda.is_available() else 1
 
+    # Multiprocessing manager to collect results from different processes
     return_dict = mp.Manager().dict()
     spawn(_run_optimize, args=(world_size, return_dict), nprocs=world_size, join=True)
 

@@ -13,20 +13,20 @@ class EntropyAnnealer:
 
     def __init__(
         self,
-        max_weight: float = 1e-5,
+        final_weight: float = 1e-5,
         n_epochs: int = 100,
         switch_epoch: int = 60,
     ) -> None:
         """Initialize the entropy annealer.
 
         Arguments:
-            max_weight: Final |λ| value.
+            final_weight: Final |λ| value.
             n_epochs: Total number of epochs.
             switch_epoch: Epoch at which bonus → penalty.
             schedule: Annealing schedule for |λ|.
 
         """
-        self.__max_weight = max_weight
+        self.__final_weight = final_weight
         self.__n_epochs = n_epochs
         self.__switch_epoch = switch_epoch
 
@@ -41,7 +41,7 @@ class EntropyAnnealer:
 
         """
         progress = min(epoch / self.__n_epochs, 1.0)
-        weight = self.__max_weight * progress
+        weight = self.__final_weight * progress
 
         if epoch < self.__switch_epoch:
             # Entropy bonus: -λ H(q)
