@@ -56,8 +56,6 @@ class CSIDataset(Dataset):
 
             if n_antennas == 1:
                 csi = csi[..., antenna_select]
-
-            if n_antennas == 1:
                 csi = csi[:, :, np.newaxis]  # Keep 3D shape for consistency
 
             # 802.11ax has 2048 subcarriers (160 MHz bandwidth), we can keep one data
@@ -67,7 +65,7 @@ class CSIDataset(Dataset):
 
             # We can further discard the second half of the subcarriers
             # and keep most of the information,
-            csi = csi[:, : csi.shape[1] // 2]
+            csi = csi[:, : csi.shape[1] // 2, :]
 
             # Discard phase information, keep only magnitude.
             # Phase is often very noisy and not very informative.

@@ -1,11 +1,7 @@
-from collections.abc import Callable
-
 import torch
 from torch import nn, optim
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader, DistributedSampler
-
-from csi_vae_gumbel.train.async_callback_worker import AsyncCallbackWorker
 
 
 class ClassifierTrainer:
@@ -17,7 +13,6 @@ class ClassifierTrainer:
         dataloader: DataLoader,
         vae: nn.Module,
         optimizer: optim.Optimizer,
-        batch_callback: Callable | None,
         gpu_id: int,
     ) -> None:
         """Initialize the Classifier Trainer."""
@@ -25,11 +20,8 @@ class ClassifierTrainer:
         self.__dataloader = dataloader
         self.__vae = vae.to(gpu_id)  # No need to DDP the VAE as it's frozen
         self.__optimizer = optimizer
-        self.__batch_callback = batch_callback
         self.__gpu_id = gpu_id
         self.__criterion = nn.CrossEntropyLoss()
-
-        self.__callback_worker = AsyncCallbackWorker()
 
     def __run_epoch(self, epoch: int) -> tuple[float, float]:
         if isinstance(self.__dataloader.sampler, DistributedSampler):
@@ -38,7 +30,7 @@ class ClassifierTrainer:
         epoch_loss = 0.0
         epoch_accuracy = 0.0
 
-        for i, (x, y) in enumerate(self.__dataloader):
+        for x, y in self.__dataloader:
             self.__optimizer.zero_grad()
 
             with torch.no_grad():
@@ -55,16 +47,6 @@ class ClassifierTrainer:
             loss.backward()
             self.__optimizer.step()
 
-            if self.__gpu_id == 0 and self.__batch_callback is not None:
-                n_batches = i + 1
-
-                self.__callback_worker.submit(
-                    self.__batch_callback,
-                    epoch,
-                    epoch_loss / n_batches,
-                    epoch_accuracy / n_batches,
-                )
-
         epoch_loss /= len(self.__dataloader)
         epoch_accuracy /= len(self.__dataloader)
 
@@ -74,8 +56,6 @@ class ClassifierTrainer:
         """Train the classifier model for a specified number of epochs."""
         self.__model.train()
         self.__vae.eval()
-
-        self.__callback_worker.start()
 
         total_loss = 0.0
         total_accuracy = 0.0
@@ -89,5 +69,4 @@ class ClassifierTrainer:
         total_loss /= epochs
         total_accuracy /= epochs
 
-        self.__callback_worker.stop()
         return total_loss, total_accuracy

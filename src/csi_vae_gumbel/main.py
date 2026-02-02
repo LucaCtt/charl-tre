@@ -1,35 +1,45 @@
 import logging
 import os
+import warnings
+from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 
+import optuna
 import torch
-from pythonjsonlogger.json import JsonFormatter
-from rich.console import Console
+from optuna.trial import BaseTrial, TrialState
 from rich.logging import RichHandler
-from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
-from torch import nn
-from torch.distributed import destroy_process_group, init_process_group
+from torch import distributed as dist
+from torch import multiprocessing as mp
 from torch.multiprocessing.spawn import spawn
-from torch.utils.data import DataLoader
 
 from csi_vae_gumbel.dataset import get_splits
-from csi_vae_gumbel.evaluator import Evaluator
 from csi_vae_gumbel.loss import CapacityAnnealer, EntropyAnnealer, GumbelTemperatureAnnealer, KLWeightAnnealer
-from csi_vae_gumbel.models import CategoricalVAE, Classifier
+from csi_vae_gumbel.models import CategoricalVAE
 from csi_vae_gumbel.settings import Settings
-from csi_vae_gumbel.train import CheckpointManager, ClassifierTrainer, VAETrainer
+from csi_vae_gumbel.train import VAETrainer
 
 settings = Settings()
 
 level = logging.DEBUG if settings.debug else logging.INFO
-console = Console()
-handler = RichHandler(level=level, show_path=False, console=console)
-formatter = JsonFormatter()
-handler.setFormatter(formatter)
-
+handler = RichHandler(level=level, show_path=False)
 logging.basicConfig(level=level, handlers=[handler])
-
 logger = logging.getLogger("rich")
+
+warnings.filterwarnings("ignore", module="optuna_integration.pytorch_distributed")
+
+
+@dataclass
+class TrialParameters:
+    """Parameters for a single Optuna trial."""
+
+    learning_rate: float
+    kl_weight: float
+    entropy_weight: float
+    n_categories: int
+    latent_dim: int
+    capacity: float
+    gumbel_temp: float
 
 
 def _ddp_setup(rank: int, world_size: int) -> None:
@@ -53,232 +63,158 @@ def _ddp_setup(rank: int, world_size: int) -> None:
 
     backend = torch.distributed.get_default_backend_for_device(acc)
 
-    init_process_group(backend=backend, rank=rank, world_size=world_size, device_id=rank)
+    dist.init_process_group(backend=backend, rank=rank, world_size=world_size, device_id=rank)
 
 
-def _train_vae(rank: int, train_dataloader: DataLoader) -> nn.Module:
-    vae = CategoricalVAE(
+def _objective(single_trial: BaseTrial | None, rank: int, world_size: int) -> float:
+    trial = optuna.integration.TorchDistributedTrial(single_trial)
+
+    train_dataloader, _ = get_splits(
+        dataset_path=Path(settings.dataset_path),
+        batch_size=settings.batch_size // world_size,
         window_size=settings.window_size,
-        n_categories=settings.n_categories,
-        latent_dim=settings.latent_dim,
+        overlap_size=settings.overlap_size,
+        n_activities=settings.n_activities,
+        n_samples=settings.n_samples,
+        n_antennas=settings.n_antennas,
+        antenna_select=settings.antenna_select,
     )
 
-    checkpoint_manager = CheckpointManager(Path(settings.checkpoint_dir))
-    optimizer = torch.optim.Adam(vae.parameters(), lr=settings.learning_rate)
+    params = TrialParameters(
+        learning_rate=trial.suggest_float(
+            "learning_rate",
+            settings.min_learning_rate,
+            settings.max_learning_rate,
+            log=True,
+        ),
+        kl_weight=trial.suggest_float(
+            "kl_weight",
+            settings.min_kl_weight,
+            settings.max_kl_weight,
+            log=True,
+        ),
+        entropy_weight=trial.suggest_float(
+            "entropy_weight",
+            settings.min_entropy_weight,
+            settings.max_entropy_weight,
+            log=True,
+        ),
+        n_categories=trial.suggest_int(
+            "n_categories",
+            settings.min_n_categories,
+            settings.max_n_categories,
+            step=1,
+        ),
+        latent_dim=trial.suggest_int(
+            "latent_dim",
+            settings.min_latent_dim,
+            settings.max_latent_dim,
+            step=1,
+        ),
+        capacity=trial.suggest_float(
+            "final_capacity",
+            settings.min_final_capacity,
+            settings.max_final_capacity,
+        ),
+        gumbel_temp=trial.suggest_float(
+            "gumbel_temp",
+            settings.min_gumbel_temp,
+            settings.max_gumbel_temp,
+        ),
+    )
+
+    vae = CategoricalVAE(
+        window_size=settings.window_size,
+        n_categories=params.n_categories,
+        latent_dim=params.latent_dim,
+    )
+
+    optimizer = torch.optim.Adam(
+        vae.parameters(),
+        lr=params.learning_rate,
+    )
+
     lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
         mode="min",
-        factor=0.5,
-        patience=10,
     )
-    capacity_scheduler = CapacityAnnealer()
-    entropy_scheduler = EntropyAnnealer()
-    temperature_scheduler = GumbelTemperatureAnnealer()
-    kl_weight_scheduler = KLWeightAnnealer()
 
-    with Progress(
-        BarColumn(),
-        TimeRemainingColumn(compact=True),
-        TextColumn("Epoch: {task.fields[epoch]}/{task.fields[total_epochs]}"),
-        TextColumn("Batch: {task.fields[batch]}/{task.total}"),
-        TextColumn("Loss: {task.fields[loss]:.4f}  Recon: {task.fields[recon]:.4f}  KL: {task.fields[kl]:.4f}"),
-        disable=rank != 0,
-        console=console,
-    ) as progress:
-        epoch_task = progress.add_task(
-            "Training",
-            total=len(train_dataloader),
-            total_epochs=settings.n_epochs,
-            epoch=1,
-            batch=0,
-            loss=0.0,
-            recon=0.0,
-            kl=0.0,
-        )
-
-        def batch_callback(epoch: int, epoch_loss: float, epoch_recon: float, epoch_kl: float) -> None:
-            logger.debug(
-                "VAE epoch progress",
-                extra={
-                    "epoch": epoch + 1,
-                    "loss": epoch_loss,
-                    "recon_loss": epoch_recon,
-                    "kl_loss": epoch_kl,
-                },
-            )
-            progress.update(
-                epoch_task,
-                advance=1,
-                epoch=epoch + 1,
-                batch=progress.tasks[0].completed + 1,
-                loss=epoch_loss,
-                recon=epoch_recon,
-                kl=epoch_kl,
-            )
-            if progress.finished and epoch + 1 < settings.n_epochs:
-                progress.reset(epoch_task)
-
-        vae_trainer = VAETrainer(
-            model=vae,
-            dataloader=train_dataloader,
-            optimizer=optimizer,
-            lr_scheduler=lr_scheduler,
-            checkpoint_manager=checkpoint_manager,
-            capacity_annealer=capacity_scheduler,
-            entropy_annealer=entropy_scheduler,
-            temperature_annealer=temperature_scheduler,
-            kl_weight_annealer=kl_weight_scheduler,
-            loss_type="bce",
-            gpu_id=rank,
-            batch_callback=batch_callback,
-        )
-        vae_trainer.train(settings.n_epochs)
-
-    return vae
-
-
-def _train_classifier(rank: int, train_dataloader: DataLoader, vae: nn.Module) -> Classifier:
-    classifier = Classifier(
-        input_dim=settings.latent_dim * settings.n_categories,
-        output_dim=settings.n_activities,
-        hidden_dim=settings.n_activities * 3 // 2,
+    capacity_scheduler = CapacityAnnealer(
+        max_capacity=params.capacity,
+        ramp_epochs=settings.n_epochs // 3,
+        start_epoch=settings.n_epochs // 10,
     )
-    optimizer = torch.optim.Adam(classifier.parameters(), lr=settings.learning_rate)
+    entropy_scheduler = EntropyAnnealer(
+        max_weight=params.entropy_weight,
+        n_epochs=settings.n_epochs,
+        switch_epoch=settings.n_epochs // 2,
+    )
+    temperature_scheduler = GumbelTemperatureAnnealer(
+        start_tau=params.gumbel_temp,
+        min_tau=params.gumbel_temp / 10,
+    )
+    kl_weight_scheduler = KLWeightAnnealer(
+        max_weight=params.kl_weight,
+        start_epoch=settings.n_epochs // 10,
+        ramp_epochs=settings.n_epochs // 3,
+    )
 
-    with Progress(
-        BarColumn(),
-        TimeRemainingColumn(compact=True),
-        TextColumn("Epoch: {task.fields[epoch]}/{task.fields[total_epochs]}"),
-        TextColumn("Batch: {task.fields[batch]}/{task.total}"),
-        TextColumn("Loss: {task.fields[loss]:.4f}  Accuracy: {task.fields[accuracy]:.4f}"),
-        disable=rank != 0,
-        console=console,
-    ) as progress:
-        epoch_task = progress.add_task(
-            "Training Classifier",
-            total=len(train_dataloader),
-            total_epochs=settings.n_epochs,
-            epoch=1,
-            batch=0,
-            loss=0.0,
-            accuracy=0.0,
-        )
+    vae_trainer = VAETrainer(
+        model=vae,
+        dataloader=train_dataloader,
+        optimizer=optimizer,
+        lr_scheduler=lr_scheduler,
+        capacity_annealer=capacity_scheduler,
+        entropy_annealer=entropy_scheduler,
+        temperature_annealer=temperature_scheduler,
+        kl_weight_annealer=kl_weight_scheduler,
+        loss_type="bce",
+        gpu_id=rank,
+        trial=trial,
+    )
 
-        def batch_callback(epoch: int, epoch_loss: float, epoch_accuracy: float) -> None:
-            logger.debug(
-                "Classifier epoch progress",
-                extra={
-                    "epoch": epoch + 1,
-                    "loss": epoch_loss,
-                    "accuracy": epoch_accuracy,
-                },
-            )
-            progress.update(
-                epoch_task,
-                advance=1,
-                epoch=epoch + 1,
-                batch=progress.tasks[0].completed + 1,
-                loss=epoch_loss,
-                accuracy=epoch_accuracy,
-            )
-            if progress.finished and epoch + 1 < settings.n_epochs:
-                progress.reset(epoch_task)
+    total_loss, _, _ = vae_trainer.train(settings.n_epochs)
 
-        class_trainer = ClassifierTrainer(
-            classifier,
-            train_dataloader,
-            vae,
-            optimizer,
-            batch_callback=batch_callback,
-            gpu_id=rank,
-        )
-        class_trainer.train(settings.n_epochs)
-
-    return classifier
+    return total_loss
 
 
-def train(rank: int, world_size: int) -> None:
-    """Train the VAE model using Distributed Data Parallel (DDP).
-
-    Arguments:
-        rank: Unique identifier of the process.
-        world_size: Total number of processes.
-
-    """
+def _run_optimize(rank: int, world_size: int, return_dict: dict) -> None:
     _ddp_setup(rank, world_size)
 
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("Loading CSI data..."),
-        console=console,
-        disable=rank != 0,
-    ) as progress:
-        progress.add_task("load_data", total=None)
-
-        train_dataloader, test_dataloader = get_splits(
-            dataset_path=Path(settings.dataset_path),
-            batch_size=settings.batch_size // world_size,
-            window_size=settings.window_size,
-            overlap_size=settings.overlap_size,
-            n_activities=settings.n_activities,
-            n_samples=settings.n_samples,
-            n_antennas=settings.n_antennas,
-            antenna_select=settings.antenna_select,
-        )
-
-    vae = _train_vae(rank, train_dataloader)
-
-    # Wait for all processes to finish VAE training
-    torch.distributed.barrier()
-
-    classifier = _train_classifier(rank, train_dataloader, vae)
-
-    # Wait for all processes to finish Classifier training
-    torch.distributed.barrier()
-
-    evaluator = Evaluator(
-        vae=vae,
-        classifier=classifier,
-        dataloader=test_dataloader,
-        classes=[
-            "Walk",
-            "Run",
-            "Jump",
-            "Sit",
-            "Empty",
-            "Stand",
-            "Waving",
-            "Clap",
-            "Lay down",
-            "Wipe",
-            "Squat",
-            "Stretch",
-        ],
-        out_dir=settings.checkpoint_dir,
-        gpu_id=rank,
-    )
-    accuracy = evaluator.evaluate()
-
     if rank == 0:
-        logger.info(
-            "Classification accuracy",
-            extra={
-                "accuracy": accuracy,
-            },
-        )
+        study = optuna.create_study(direction="minimize")
+        study.optimize(partial(_objective, rank=rank, world_size=world_size), n_trials=settings.n_trials)
+        return_dict["study"] = study
+    else:
+        for _ in range(settings.n_trials):
+            try:
+                _objective(None, rank, world_size)
+            except optuna.TrialPruned:
+                logger.exception("Trial pruned.")
 
-    destroy_process_group()
+    dist.destroy_process_group()
 
 
 def main() -> None:
-    """Spawn multiple propocesses for distributed training."""
+    """Run the hyperparameter optimization using Optuna."""
     if settings.debug:
         os.environ["TORCH_NCCL_ASYNC_ERROR_HANDLING"] = "1"
         os.environ["TORCH_DISTRIBUTED_DEBUG"] = "DETAIL"
         os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
     world_size = torch.cuda.device_count() if torch.cuda.is_available() else 1
-    spawn(train, args=(world_size,), nprocs=world_size)
+
+    return_dict = mp.Manager().dict()
+    spawn(_run_optimize, args=(world_size, return_dict), nprocs=world_size, join=True)
+
+    study = return_dict["study"]
+    pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
+    complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])
+
+    logger.info("Number of finished trials: %d", len(study.trials))
+    logger.info("Number of pruned trials: %d", len(pruned_trials))
+    logger.info("Number of complete trials: %d", len(complete_trials))
+    logger.info("Best trial params: %s", study.best_trial.params)
 
 
 if __name__ == "__main__":

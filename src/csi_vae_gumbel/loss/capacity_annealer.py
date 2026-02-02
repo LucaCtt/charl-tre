@@ -12,33 +12,34 @@ class CapacityAnnealer:
 
     """
 
-    def __init__(self, c_max: float = 2, t_ramp: int = 30, start_epoch: int = 10) -> None:
+    def __init__(self, max_capacity: float = 2, ramp_epochs: int = 30, start_epoch: int = 10) -> None:
         """Initialize the capacity annealer.
 
         Arguments:
-            c_max: maximum capacity (C_max).
-            t_ramp: number of steps (or epochs) to linearly ramp to C_max.
+            max_capacity: maximum capacity (C_max).
+            ramp_epochs: number of steps (or epochs) to linearly ramp to C_max.
             start_epoch: epoch index at which annealing begins (default 0).
 
         """
-        self.c_max = c_max
-        self.t_ramp = t_ramp
-        self.start_epoch = start_epoch
+        self.__c_max = max_capacity
+        self.__t_ramp = ramp_epochs
+        self.__start_epoch = start_epoch
 
     def step(self, epoch: int) -> float:
         """Compute capacity at given epoch.
 
         Arguments:
-            epoch: current integer epoch.
+            epoch: current epoch index.
 
         Returns:
             Current capacity value.
 
         """
-        t = max(0, epoch - self.start_epoch)
+        epoch += 1
 
-        if self.t_ramp == 0:
-            return self.c_max
+        t = max(0, epoch - self.__start_epoch)
+        if self.__t_ramp == 0:
+            return self.__c_max
 
-        frac = t / float(self.t_ramp)
-        return min(self.c_max, frac * self.c_max)
+        frac = t / float(self.__t_ramp)
+        return min(self.__c_max, frac * self.__c_max)

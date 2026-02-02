@@ -13,7 +13,7 @@ class EntropyAnnealer:
 
     def __init__(
         self,
-        max_weight: float = 0.05,
+        max_weight: float = 1e-5,
         n_epochs: int = 100,
         switch_epoch: int = 60,
     ) -> None:
@@ -26,9 +26,9 @@ class EntropyAnnealer:
             schedule: Annealing schedule for |λ|.
 
         """
-        self.max_weight = max_weight
-        self.n_epochs = n_epochs
-        self.switch_epoch = switch_epoch
+        self.__max_weight = max_weight
+        self.__n_epochs = n_epochs
+        self.__switch_epoch = switch_epoch
 
     def step(self, epoch: int) -> tuple[float, Literal["bonus", "penalty"]]:
         """Get entropy weight and mode for the given epoch.
@@ -40,10 +40,10 @@ class EntropyAnnealer:
             Tuple of (entropy weight, entropy mode).
 
         """
-        progress = min(epoch / self.n_epochs, 1.0)
-        weight = self.max_weight * progress
+        progress = min(epoch / self.__n_epochs, 1.0)
+        weight = self.__max_weight * progress
 
-        if epoch < self.switch_epoch:
+        if epoch < self.__switch_epoch:
             # Entropy bonus: -λ H(q)
             return weight, "bonus"
 

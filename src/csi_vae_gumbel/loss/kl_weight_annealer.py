@@ -29,6 +29,8 @@ class KLWeightAnnealer:
             The KL weight for the current epoch.
 
         """
+        epoch += 1
+
         if epoch < self.__start_epoch:
             return 0.0
 

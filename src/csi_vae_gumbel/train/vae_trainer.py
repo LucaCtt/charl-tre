@@ -1,6 +1,6 @@
-from collections.abc import Callable
 from typing import Literal
 
+import optuna
 import torch
 from torch import nn
 from torch.nn.parallel import DistributedDataParallel
@@ -11,8 +11,9 @@ from csi_vae_gumbel.loss import KLWeightAnnealer, vae_loss
 from csi_vae_gumbel.loss.capacity_annealer import CapacityAnnealer
 from csi_vae_gumbel.loss.entropy_annealer import EntropyAnnealer
 from csi_vae_gumbel.loss.gumbel_annealer import GumbelTemperatureAnnealer
-from csi_vae_gumbel.train.async_callback_worker import AsyncCallbackWorker
-from csi_vae_gumbel.train.checkpoints import CheckpointManager
+
+_EPS = 1e-6
+_MAX_ZERO_KL_EPOCHS = 3
 
 
 class VAETrainer:
@@ -22,7 +23,6 @@ class VAETrainer:
         self,
         model: nn.Module,
         dataloader: DataLoader,
-        checkpoint_manager: CheckpointManager,
         optimizer: torch.optim.Optimizer,
         lr_scheduler: torch.optim.lr_scheduler.ReduceLROnPlateau,
         kl_weight_annealer: KLWeightAnnealer,
@@ -31,7 +31,7 @@ class VAETrainer:
         capacity_annealer: CapacityAnnealer,
         loss_type: Literal["bce", "mse"],
         gpu_id: int,
-        batch_callback: Callable | None = None,
+        trial: optuna.integration.TorchDistributedTrial,
     ) -> None:
         """Initialize the Trainer.
 
@@ -39,7 +39,6 @@ class VAETrainer:
             model: VAE model to be trained.
             dataloader: DataLoader for training data.
             optimizer: Optimizer for training.
-            checkpoint_manager: CheckpointManager to save model checkpoints.
             lr_scheduler: Learning rate scheduler.
             kl_weight_annealer: Scheduler for KL divergence weight.
             temperature_annealer: Scheduler for Gumbel temperature.
@@ -47,14 +46,12 @@ class VAETrainer:
             capacity_annealer: Scheduler for KL capacity.
             loss_type: Type of reconstruction loss ("bce" or "mse").
             gpu_id: GPU ID for Distributed Data Parallel.
-            batch_callback: Optional callback function called at the end of each batch.
+            trial: Optuna trial for hyperparameter optimization (optional).
+            callback: Optional callback function to be called after each epoch.
 
         """
         self.__model = DistributedDataParallel(model.to(gpu_id), device_ids=[gpu_id])
         self.__dataloader = dataloader
-        self.__checkpoint_manager = checkpoint_manager
-        self.__gpu_id = gpu_id
-        self.__batch_callback = batch_callback
         self.__optimizer = optimizer
         self.__lr_scheduler = lr_scheduler
         self.__kl_annealer = kl_weight_annealer
@@ -63,7 +60,8 @@ class VAETrainer:
         self.__capacity_annealer = capacity_annealer
         self.__loss_type: Literal["bce", "mse"] = loss_type
 
-        self.__callback_worker = AsyncCallbackWorker()
+        self.__gpu_id = gpu_id
+        self.__trial = trial
 
     def __run_batch(
         self,
@@ -108,7 +106,7 @@ class VAETrainer:
         entropy_weight, entropy_mode = self.__entropy_annealer.step(epoch)
         capacity = self.__capacity_annealer.step(epoch)
 
-        for i, (x_true, _) in enumerate(self.__dataloader):
+        for x_true, _ in self.__dataloader:
             loss, recon_loss, kl_loss = self.__run_batch(
                 x_true.to(self.__gpu_id),
                 tau,
@@ -122,16 +120,6 @@ class VAETrainer:
             epoch_recon_loss += recon_loss
             epoch_kl_loss += kl_loss
 
-            if self.__gpu_id == 0 and self.__batch_callback is not None:
-                done_batches = i + 1
-                self.__callback_worker.submit(
-                    self.__batch_callback,
-                    epoch,
-                    epoch_loss / done_batches,
-                    epoch_recon_loss / done_batches,
-                    epoch_kl_loss / done_batches,
-                )
-
         epoch_loss /= len(self.__dataloader)
         epoch_recon_loss /= len(self.__dataloader)
         epoch_kl_loss /= len(self.__dataloader)
@@ -139,12 +127,15 @@ class VAETrainer:
         # This has to be called after each epoch
         self.__lr_scheduler.step(epoch_loss)
 
+        self.__trial.report(epoch_loss, step=epoch)
+
+        if self.__trial.should_prune():
+            raise optuna.TrialPruned
+
         return epoch_loss, epoch_recon_loss, epoch_kl_loss
 
     def train(self, epochs: int) -> tuple[float, float, float]:
         """Train the VAE model for a specified number of epochs.
-
-        Will resume from the latest checkpoint if available.
 
         Arguments:
             epochs: Number of epochs to train.
@@ -155,11 +146,10 @@ class VAETrainer:
         """
         self.__model.train()
 
-        self.__callback_worker.start()
-
         total_loss = 0.0
         total_recon_loss = 0.0
         total_kl_loss = 0.0
+        zero_kl_epochs = 0
 
         for epoch in range(epochs):
             epoch_loss, epoch_recon_loss, epoch_kl_loss = self.__run_epoch(epoch)
@@ -168,16 +158,17 @@ class VAETrainer:
             total_recon_loss += epoch_recon_loss
             total_kl_loss += epoch_kl_loss
 
-            if self.__gpu_id == 0:
-                self.__checkpoint_manager.save_checkpoint(
-                    self.__model.module.state_dict(),
-                    self.__optimizer.state_dict(),
-                    epoch + 1,
-                )
+            if epoch_kl_loss < _EPS:
+                zero_kl_epochs += 1
+            else:
+                zero_kl_epochs = 0
+
+        if zero_kl_epochs >= _MAX_ZERO_KL_EPOCHS:
+            msg = f"KL collapse detected for {zero_kl_epochs} consecutive epochs"
+            raise optuna.TrialPruned(msg)
 
         total_loss /= epochs
         total_recon_loss /= epochs
         total_kl_loss /= epochs
 
-        self.__callback_worker.stop()
         return total_loss, total_recon_loss, total_kl_loss

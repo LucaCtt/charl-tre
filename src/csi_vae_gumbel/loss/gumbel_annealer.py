@@ -35,5 +35,7 @@ class GumbelTemperatureAnnealer:
             The updated temperature for the Gumbel-Softmax distribution.
 
         """
+        epoch += 1
+
         tau = self.__start_tau * np.exp(-self.__decay_rate * epoch)
         return max(self.__min_tau, tau)
