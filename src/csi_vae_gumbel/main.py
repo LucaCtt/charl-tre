@@ -18,7 +18,7 @@ from csi_vae_gumbel.dataset import get_splits
 from csi_vae_gumbel.evaluator import Evaluator
 from csi_vae_gumbel.models import CategoricalVAE, Classifier
 from csi_vae_gumbel.settings import Settings
-from csi_vae_gumbel.train import ClassifierTrainer, VAEParameters, VAETrainer
+from csi_vae_gumbel.train import ClassifierTrainer, KLCollapsePruner, VAEParameters, VAETrainer
 
 settings = Settings()
 
@@ -127,7 +127,10 @@ def _objective(single_trial: BaseTrial | None, rank: int, world_size: int) -> fl
             settings.gumbel_temp_min,
             settings.gumbel_temp_max,
         ),
-        loss_type="bce",
+        loss_type=trial.suggest_categorical(
+            "loss_type",
+            ["bce", "mse"],
+        ), # pyright: ignore[reportArgumentType]
     )
 
     # Build and train VAE
@@ -202,6 +205,7 @@ def _run_optimize(rank: int, world_size: int, return_dict: dict) -> None:
                 direction="maximize",  # Optimize for classification accuracy
                 study_name=settings.vae_name,
                 sampler=optuna.samplers.TPESampler(seed=settings.seed),
+                pruner=KLCollapsePruner(),
             )
             study.optimize(partial(_objective, rank=rank, world_size=world_size), n_trials=settings.n_trials)
             return_dict["study"] = study

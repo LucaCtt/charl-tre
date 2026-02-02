@@ -13,7 +13,6 @@ from csi_vae_gumbel.train.annealers import (
     GumbelTemperatureAnnealer,
     KLWeightAnnealer,
 )
-from csi_vae_gumbel.train.early_stopping import EarlyStopping
 from csi_vae_gumbel.train.vae_loss import vae_loss
 from csi_vae_gumbel.train.vae_parameters import VAEParameters
 
@@ -64,7 +63,6 @@ class VAETrainer:
             max_weight=parameters.final_kl_weight,
         )
         self.__loss_type: Literal["bce", "mse"] = parameters.loss_type
-        self.__early_stopping = EarlyStopping()
 
         self.__gpu_id = gpu_id
         self.__trial = trial
@@ -136,11 +134,6 @@ class VAETrainer:
         # This has to be called after each epoch
         self.__lr_annealer.step(epoch_loss)
 
-        self.__trial.report(epoch_loss, step=epoch)
-
-        if self.__trial.should_prune():
-            raise optuna.TrialPruned
-
         return epoch_loss, epoch_recon_loss, epoch_kl_loss, epoch_entropy_loss
 
     def train(self, epochs: int) -> tuple[float, float, float, float]:
@@ -171,10 +164,12 @@ class VAETrainer:
             total_kl_loss += epoch_kl_loss
             total_entropy_loss += epoch_entropy_loss
 
-            should_stop = self.__early_stopping.step(epoch_loss, epoch_kl_loss)
-            if should_stop:
-                msg = f"Early stopping triggered at epoch {epoch}."
-                raise optuna.TrialPruned(msg)
+            self.__trial.report(epoch_loss, step=epoch)
+            self.__trial.set_user_attr("epoch_loss", epoch_loss)
+            self.__trial.set_user_attr("epoch_kl_loss", epoch_kl_loss)
+
+            if self.__trial.should_prune():
+                raise optuna.TrialPruned
 
         total_loss /= epochs
         total_recon_loss /= epochs
