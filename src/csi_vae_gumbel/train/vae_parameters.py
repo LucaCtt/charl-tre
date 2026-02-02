@@ -6,12 +6,11 @@ from typing import Literal
 class VAEParameters:
     """Parameters for the VAE training."""
 
-    start_learning_rate: float
+    start_lr: float
     final_kl_weight: float
-    final_entropy_weight: float
-    n_categories: int
+    final_entr_weight: float
+    n_cats: int
     latent_dim: int
-
-    final_capacity: float
+    final_cap: float
     gumbel_temp: float
     loss_type: Literal["bce", "mse"]

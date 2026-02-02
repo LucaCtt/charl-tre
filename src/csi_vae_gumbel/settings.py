@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env")
 
     # General training config
-    debug: bool = False
+    debug: bool = True
     """Enable debug mode with more verbose logging and synchronous multi-GPU training."""
     seed: int = 42
     """Random seed for reproducibility."""
@@ -61,17 +61,17 @@ class Settings(BaseSettings):
     """Directory to save model checkpoints."""
 
     # Optuna hyperparameter search space
-    min_n_categories: int = int(log2(n_activities))
-    max_n_categories: int = int(log2(n_activities) * 4)
-    min_latent_dim: int = 1
-    max_latent_dim: int = 16
-    min_learning_rate: float = 1e-4
-    max_learning_rate: float = 3e-3
-    min_entropy_weight: float = 1e-5
-    max_entropy_weight: float = 1e-2
-    min_kl_weight: float = 1e-5
-    max_kl_weight: float = 1e-2
-    min_final_capacity: float = 1e-1
-    max_final_capacity: float = 2
-    min_gumbel_temp: float = 1e-2
-    max_gumbel_temp: float = 2
+    n_cats_min: int = int(log2(n_activities))
+    n_cats_max: int = int(log2(n_activities) * 4)
+    latent_dim_min: int = 1
+    latent_dim_max: int = 16
+    start_lr_min: float = 1e-4
+    start_lr_max: float = 3e-3
+    final_entr_weight_min: float = 1e-5
+    final_entr_weight_max: float = 1e-2
+    final_kl_weight_min: float = 1e-5
+    final_kl_weight_max: float = 1e-2
+    final_cap_min: float = 1e-1
+    final_cap_max: float = 2
+    gumbel_temp_min: float = 1e-2
+    gumbel_temp_max: float = 2

@@ -43,17 +43,17 @@ class VAETrainer:
         self.__dataloader = dataloader
         self.__optimizer = torch.optim.Adam(
             model.parameters(),
-            lr=parameters.start_learning_rate,
+            lr=parameters.start_lr,
         )
         self.__lr_annealer = torch.optim.lr_scheduler.ReduceLROnPlateau(
             self.__optimizer,
             mode="min",
         )
         self.__capacity_annealer = CapacityAnnealer(
-            final_capacity=parameters.final_capacity,
+            final_capacity=parameters.final_cap,
         )
         self.__entropy_annealer = EntropyAnnealer(
-            final_weight=parameters.final_entropy_weight,
+            final_weight=parameters.final_entr_weight,
         )
         self.__temperature_annealer = GumbelTemperatureAnnealer(
             start_tau=parameters.gumbel_temp,
@@ -75,12 +75,12 @@ class VAETrainer:
         entropy_weight: float,
         entropy_mode: Literal["none", "penalty", "bonus"],
         capacity: float,
-    ) -> tuple[float, float, float]:
+    ) -> tuple[float, float, float, float]:
         self.__optimizer.zero_grad()
 
         x_recon, _, logits = self.__model(x_true, tau)
 
-        loss, recon_loss, kl_loss, _ = vae_loss(
+        loss, recon_loss, kl_loss, entropy_loss = vae_loss(
             x_recon,
             x_true,
             logits,
@@ -94,9 +94,9 @@ class VAETrainer:
         loss.backward()
         self.__optimizer.step()
 
-        return loss.item(), recon_loss.item(), kl_loss.item()
+        return loss.item(), recon_loss.item(), kl_loss.item(), entropy_loss.item()
 
-    def __run_epoch(self, epoch: int) -> tuple[float, float, float]:
+    def __run_epoch(self, epoch: int) -> tuple[float, float, float, float]:
         # Set the epoch for shuffling if using DistributedSampler
         if isinstance(self.__dataloader.sampler, DistributedSampler):
             self.__dataloader.sampler.set_epoch(epoch)
@@ -104,6 +104,7 @@ class VAETrainer:
         epoch_loss = 0.0
         epoch_recon_loss = 0.0
         epoch_kl_loss = 0.0
+        epoch_entropy_loss = 0.0
 
         tau = self.__temperature_annealer.step(epoch)
         kl_weight = self.__kl_weight_annealer.step(epoch)
@@ -111,7 +112,7 @@ class VAETrainer:
         capacity = self.__capacity_annealer.step(epoch)
 
         for x_true, _ in self.__dataloader:
-            loss, recon_loss, kl_loss = self.__run_batch(
+            loss, recon_loss, kl_loss, entropy_loss = self.__run_batch(
                 x_true.to(self.__gpu_id),
                 tau,
                 kl_weight,
@@ -123,10 +124,12 @@ class VAETrainer:
             epoch_loss += loss
             epoch_recon_loss += recon_loss
             epoch_kl_loss += kl_loss
+            epoch_entropy_loss += entropy_loss
 
         epoch_loss /= len(self.__dataloader)
         epoch_recon_loss /= len(self.__dataloader)
         epoch_kl_loss /= len(self.__dataloader)
+        epoch_entropy_loss /= len(self.__dataloader)
 
         # This has to be called after each epoch
         self.__lr_annealer.step(epoch_loss)
@@ -136,9 +139,9 @@ class VAETrainer:
         if self.__trial.should_prune():
             raise optuna.TrialPruned
 
-        return epoch_loss, epoch_recon_loss, epoch_kl_loss
+        return epoch_loss, epoch_recon_loss, epoch_kl_loss, epoch_entropy_loss
 
-    def train(self, epochs: int, max_epochs_zero_kl: int = 3, eps: float = 1e-6) -> tuple[float, float, float]:
+    def train(self, epochs: int, max_epochs_zero_kl: int = 3, eps: float = 1e-6) -> tuple[float, float, float, float]:
         """Train the VAE model for a specified number of epochs.
 
         Arguments:
@@ -147,7 +150,8 @@ class VAETrainer:
             eps: Threshold to consider KL divergence as near-zero.
 
         Returns:
-            Tuple containing average total loss, reconstruction loss, and KL divergence loss over all epochs.
+            Tuple containing average total loss, reconstruction loss,
+            KL divergence loss, and entropy loss over all epochs.
 
         """
         self.__model.train()
@@ -155,14 +159,16 @@ class VAETrainer:
         total_loss = 0.0
         total_recon_loss = 0.0
         total_kl_loss = 0.0
+        total_entropy_loss = 0.0
         zero_kl_epochs = 0
 
         for epoch in range(epochs):
-            epoch_loss, epoch_recon_loss, epoch_kl_loss = self.__run_epoch(epoch)
+            epoch_loss, epoch_recon_loss, epoch_kl_loss, epoch_entropy_loss = self.__run_epoch(epoch)
 
             total_loss += epoch_loss
             total_recon_loss += epoch_recon_loss
             total_kl_loss += epoch_kl_loss
+            total_entropy_loss += epoch_entropy_loss
 
             if epoch_kl_loss < eps:
                 zero_kl_epochs += 1
@@ -176,5 +182,6 @@ class VAETrainer:
         total_loss /= epochs
         total_recon_loss /= epochs
         total_kl_loss /= epochs
+        total_entropy_loss /= epochs
 
-        return total_loss, total_recon_loss, total_kl_loss
+        return total_loss, total_recon_loss, total_kl_loss, total_entropy_loss

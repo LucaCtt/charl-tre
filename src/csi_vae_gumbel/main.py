@@ -24,10 +24,14 @@ settings = Settings()
 
 level = logging.DEBUG if settings.debug else logging.INFO
 handler = RichHandler(level=level, show_path=False)
-logging.basicConfig(level=level, handlers=[handler])
+logging.basicConfig(level=level, handlers=[handler], format="%(message)s")
+optuna.logging.enable_propagation()
+optuna.logging.disable_default_handler()
 logger = logging.getLogger("rich")
 
+# Suppress Optuna warnings
 warnings.filterwarnings("ignore", module="optuna_integration.pytorch_distributed")
+warnings.filterwarnings("ignore", category=optuna.exceptions.ExperimentalWarning)
 
 # Reproducible seeds
 os.environ.setdefault("PYTHONHASHSEED", str(settings.seed))
@@ -61,7 +65,14 @@ def _ddp_setup(rank: int, world_size: int) -> None:
 
 def _objective(single_trial: BaseTrial | None, rank: int, world_size: int) -> float:
     """Objective function for Optuna hyperparameter optimization."""
+
+    def log_progress(msg: str, *args: float | str) -> None:
+        """Log message only from the main process."""
+        if rank == 0:
+            logger.debug(msg, *args)
+
     trial = optuna.integration.TorchDistributedTrial(single_trial)
+    log_progress("Starting trial %s", trial.number)
 
     train_dataloader, val_dataloader = get_splits(
         dataset_path=Path(settings.dataset_path),
@@ -73,47 +84,48 @@ def _objective(single_trial: BaseTrial | None, rank: int, world_size: int) -> fl
         n_antennas=settings.n_antennas,
         antenna_select=settings.antenna_select,
     )
+    log_progress("Data loaders created for trial %s", trial.number)
 
     parameters = VAEParameters(
-        start_learning_rate=trial.suggest_float(
-            "learning_rate",
-            settings.min_learning_rate,
-            settings.max_learning_rate,
+        start_lr=trial.suggest_float(
+            "lr",
+            settings.start_lr_min,
+            settings.start_lr_max,
             log=True,
         ),
         final_kl_weight=trial.suggest_float(
             "kl_weight",
-            settings.min_kl_weight,
-            settings.max_kl_weight,
+            settings.final_kl_weight_min,
+            settings.final_kl_weight_max,
             log=True,
         ),
-        final_entropy_weight=trial.suggest_float(
-            "entropy_weight",
-            settings.min_entropy_weight,
-            settings.max_entropy_weight,
+        final_entr_weight=trial.suggest_float(
+            "entr_weight",
+            settings.final_entr_weight_min,
+            settings.final_entr_weight_max,
             log=True,
         ),
-        n_categories=trial.suggest_int(
-            "n_categories",
-            settings.min_n_categories,
-            settings.max_n_categories,
+        n_cats=trial.suggest_int(
+            "n_cats",
+            settings.n_cats_min,
+            settings.n_cats_max,
             step=1,
         ),
         latent_dim=trial.suggest_int(
             "latent_dim",
-            settings.min_latent_dim,
-            settings.max_latent_dim,
+            settings.latent_dim_min,
+            settings.latent_dim_max,
             step=1,
         ),
-        final_capacity=trial.suggest_float(
-            "final_capacity",
-            settings.min_final_capacity,
-            settings.max_final_capacity,
+        final_cap=trial.suggest_float(
+            "final_cap",
+            settings.final_cap_min,
+            settings.final_cap_max,
         ),
         gumbel_temp=trial.suggest_float(
             "gumbel_temp",
-            settings.min_gumbel_temp,
-            settings.max_gumbel_temp,
+            settings.gumbel_temp_min,
+            settings.gumbel_temp_max,
         ),
         loss_type="bce",
     )
@@ -121,7 +133,7 @@ def _objective(single_trial: BaseTrial | None, rank: int, world_size: int) -> fl
     # Build and train VAE
     vae = CategoricalVAE(
         window_size=settings.window_size,
-        n_categories=parameters.n_categories,
+        n_categories=parameters.n_cats,
         latent_dim=parameters.latent_dim,
     )
     vae_trainer = VAETrainer(
@@ -131,13 +143,21 @@ def _objective(single_trial: BaseTrial | None, rank: int, world_size: int) -> fl
         gpu_id=rank,
         trial=trial,
     )
-    vae_trainer.train(settings.n_epochs)
+    loss, recon_loss, kl_loss, entropy_loss = vae_trainer.train(settings.n_epochs)
+    log_progress(
+        "VAE training completed for trial %s with loss %.4f, recon_loss %.4f, kl_loss %.4f, entropy_loss %.4f",
+        trial.number,
+        loss,
+        recon_loss,
+        kl_loss,
+        entropy_loss,
+    )
 
     # Build and train classifier on frozen VAE latent space
     classifier = Classifier(
-        input_dim=parameters.n_categories * parameters.latent_dim,
+        input_dim=parameters.n_cats * parameters.latent_dim,
         output_dim=settings.n_activities,
-        hidden_dim=parameters.n_categories * settings.n_activities // 2,
+        hidden_dim=parameters.n_cats * settings.n_activities // 2,
     )
     classifier_trainer = ClassifierTrainer(
         model=classifier,
@@ -146,7 +166,13 @@ def _objective(single_trial: BaseTrial | None, rank: int, world_size: int) -> fl
         optimizer=torch.optim.Adam(classifier.parameters()),
         gpu_id=rank,
     )
-    classifier_trainer.train(settings.n_epochs)
+    loss, accuracy = classifier_trainer.train(settings.n_epochs)
+    log_progress(
+        "Classifier training completed for trial %s with loss %.4f, accuracy %.4f",
+        trial.number,
+        loss,
+        accuracy,
+    )
 
     # Evaluate on validation set
     evaluator = Evaluator(
@@ -156,10 +182,18 @@ def _objective(single_trial: BaseTrial | None, rank: int, world_size: int) -> fl
         classes=settings.activities_labels,
         gpu_id=rank,
     )
-    return evaluator.evaluate()
+    accuracy = evaluator.evaluate()
+    log_progress(
+        "Trial %s completed with accuracy %.4f",
+        trial.number,
+        accuracy,
+    )
+
+    return accuracy
 
 
 def _run_optimize(rank: int, world_size: int, return_dict: dict) -> None:
+    """Run the Optuna hyperparameter optimization in a distributed manner."""
     _ddp_setup(rank, world_size)
 
     try:
@@ -181,11 +215,6 @@ def _run_optimize(rank: int, world_size: int, return_dict: dict) -> None:
 
 def main() -> None:
     """Run the hyperparameter optimization using Optuna."""
-    if settings.debug:
-        os.environ["TORCH_NCCL_ASYNC_ERROR_HANDLING"] = "1"
-        os.environ["TORCH_DISTRIBUTED_DEBUG"] = "DETAIL"
-        os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
-
     world_size = torch.cuda.device_count() if torch.cuda.is_available() else 1
 
     # Multiprocessing manager to collect results from different processes
@@ -193,13 +222,22 @@ def main() -> None:
     spawn(_run_optimize, args=(world_size, return_dict), nprocs=world_size, join=True)
 
     study = return_dict["study"]
+
     pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
     complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])
 
-    logger.info("Number of finished trials: %d", len(study.trials))
-    logger.info("Number of pruned trials: %d", len(pruned_trials))
-    logger.info("Number of complete trials: %d", len(complete_trials))
-    logger.info("Best trial params: %s", study.best_trial.params)
+    logger.info(
+        "Study done with %d trials: %d pruned, %d complete.",
+        len(study.trials),
+        len(pruned_trials),
+        len(complete_trials),
+    )
+    logger.info(
+        "Best trial #%d: value=%.4f, params=%s",
+        study.best_trial.number,
+        study.best_trial.value,
+        study.best_trial.params,
+    )
 
 
 if __name__ == "__main__":
