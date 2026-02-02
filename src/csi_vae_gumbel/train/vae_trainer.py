@@ -13,6 +13,7 @@ from csi_vae_gumbel.train.annealers import (
     GumbelTemperatureAnnealer,
     KLWeightAnnealer,
 )
+from csi_vae_gumbel.train.early_stopping import EarlyStopping
 from csi_vae_gumbel.train.vae_loss import vae_loss
 from csi_vae_gumbel.train.vae_parameters import VAEParameters
 
@@ -63,6 +64,7 @@ class VAETrainer:
             max_weight=parameters.final_kl_weight,
         )
         self.__loss_type: Literal["bce", "mse"] = parameters.loss_type
+        self.__early_stopping = EarlyStopping()
 
         self.__gpu_id = gpu_id
         self.__trial = trial
@@ -141,7 +143,7 @@ class VAETrainer:
 
         return epoch_loss, epoch_recon_loss, epoch_kl_loss, epoch_entropy_loss
 
-    def train(self, epochs: int, max_epochs_zero_kl: int = 3, eps: float = 1e-6) -> tuple[float, float, float, float]:
+    def train(self, epochs: int) -> tuple[float, float, float, float]:
         """Train the VAE model for a specified number of epochs.
 
         Arguments:
@@ -160,7 +162,6 @@ class VAETrainer:
         total_recon_loss = 0.0
         total_kl_loss = 0.0
         total_entropy_loss = 0.0
-        zero_kl_epochs = 0
 
         for epoch in range(epochs):
             epoch_loss, epoch_recon_loss, epoch_kl_loss, epoch_entropy_loss = self.__run_epoch(epoch)
@@ -170,14 +171,10 @@ class VAETrainer:
             total_kl_loss += epoch_kl_loss
             total_entropy_loss += epoch_entropy_loss
 
-            if epoch_kl_loss < eps:
-                zero_kl_epochs += 1
-            else:
-                zero_kl_epochs = 0
-
-        if zero_kl_epochs >= max_epochs_zero_kl:
-            msg = f"KL collapse detected for {zero_kl_epochs} consecutive epochs"
-            raise optuna.TrialPruned(msg)
+            should_stop = self.__early_stopping.step(epoch_loss, epoch_kl_loss)
+            if should_stop:
+                msg = f"Early stopping triggered at epoch {epoch}."
+                raise optuna.TrialPruned(msg)
 
         total_loss /= epochs
         total_recon_loss /= epochs
