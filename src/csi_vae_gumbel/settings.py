@@ -54,24 +54,38 @@ class Settings(BaseSettings):
     n_subcarriers: int = 2048
     """Number of subcarriers in each CSI sample."""
 
-    # Checkpointing config
-    vae_name: str = f"vaec_s1a_ls{n_activities}"
+    # Optuna study config
+    study_name: str = f"vaec_{dt.now(tz=UTC).strftime('%Y%m%d_%H%M%S')}"
     """Name of the VAE model, used for checkpointing."""
-    checkpoint_dir: str = f"out/vaec_models/{dt.now(tz=UTC).strftime('%Y%m%d_%H%M%S')}/{vae_name}"
+    study_dir: str = f"out/vaec_studies/{study_name}"
     """Directory to save model checkpoints."""
 
     # Optuna hyperparameter search space
     n_cats_min: int = int(log2(n_activities))
+    """Minimum number of categories in the Gumbel-Softmax latent space."""
     n_cats_max: int = int(log2(n_activities) * 4)
+    """Maximum number of categories in the Gumbel-Softmax latent space."""
     latent_dim_min: int = 1
+    """Minimum latent dimension size."""
     latent_dim_max: int = 16
+    """Maximum latent dimension size."""
     start_lr_min: float = 1e-4
+    """Minimum starting learning rate."""
     start_lr_max: float = 3e-3
+    """Maximum starting learning rate."""
     final_entr_weight_min: float = 1e-5
+    """Minimum final entropy weight in loss computation."""
     final_entr_weight_max: float = 1e-2
+    """Maximum final entropy weight in loss computation."""
     final_kl_weight_min: float = 1e-5
+    """Minimum final KL divergence weight in loss computation."""
     final_kl_weight_max: float = 1e-2
+    """Maximum final KL divergence weight in loss computation."""
     final_cap_min: float = 1e-1
+    """Minimum final capacity in loss computation."""
     final_cap_max: float = 2
+    """Maximum final capacity in loss computation."""
     gumbel_temp_min: float = 1e-2
+    """Minimum Gumbel-Softmax temperature."""
     gumbel_temp_max: float = 2
+    """Maximum Gumbel-Softmax temperature."""

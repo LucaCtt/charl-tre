@@ -22,12 +22,13 @@ from csi_vae_gumbel.train import ClassifierTrainer, KLCollapsePruner, VAEParamet
 
 settings = Settings()
 
-level = logging.DEBUG if settings.debug else logging.INFO
-handler = RichHandler(level=level, show_path=False)
-logging.basicConfig(level=level, handlers=[handler], format="%(message)s")
+handler = RichHandler(level=logging.INFO, show_path=False)
+logging.basicConfig(level=logging.INFO, handlers=[handler], format="%(message)s")
 optuna.logging.enable_propagation()
 optuna.logging.disable_default_handler()
 logger = logging.getLogger("rich")
+# Set log level to INFO for external libraries, DEBUG for local if in debug mode
+logger.setLevel(logging.DEBUG if settings.debug else logging.INFO)
 
 # Suppress Optuna warnings
 warnings.filterwarnings("ignore", module="optuna_integration.pytorch_distributed")
@@ -130,7 +131,7 @@ def _objective(single_trial: BaseTrial | None, rank: int, world_size: int) -> fl
         loss_type=trial.suggest_categorical(
             "loss_type",
             ["bce", "mse"],
-        ), # pyright: ignore[reportArgumentType]
+        ),  # pyright: ignore[reportArgumentType]
     )
 
     # Build and train VAE
@@ -177,6 +178,9 @@ def _objective(single_trial: BaseTrial | None, rank: int, world_size: int) -> fl
         accuracy,
     )
 
+    trial_dir = Path(settings.study_dir) / f"trial_{trial.number}"
+    trial_dir.mkdir(parents=True, exist_ok=True)
+
     # Evaluate on validation set
     evaluator = Evaluator(
         vae=vae,
@@ -184,6 +188,7 @@ def _objective(single_trial: BaseTrial | None, rank: int, world_size: int) -> fl
         dataloader=val_dataloader,
         classes=settings.activities_labels,
         gpu_id=rank,
+        out_dir=trial_dir,
     )
     accuracy = evaluator.evaluate()
     log_progress(
@@ -203,7 +208,7 @@ def _run_optimize(rank: int, world_size: int, return_dict: dict) -> None:
         if rank == 0:
             study = optuna.create_study(
                 direction="maximize",  # Optimize for classification accuracy
-                study_name=settings.vae_name,
+                study_name=settings.study_name,
                 sampler=optuna.samplers.TPESampler(seed=settings.seed),
                 pruner=KLCollapsePruner(),
             )
@@ -219,6 +224,9 @@ def _run_optimize(rank: int, world_size: int, return_dict: dict) -> None:
 
 def main() -> None:
     """Run the hyperparameter optimization using Optuna."""
+    # Create study directory
+    Path(settings.study_dir).mkdir(parents=True, exist_ok=True)
+
     world_size = torch.cuda.device_count() if torch.cuda.is_available() else 1
 
     # Multiprocessing manager to collect results from different processes

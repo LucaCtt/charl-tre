@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
@@ -7,7 +9,7 @@ from torch.utils.data import DataLoader
 from torchmetrics.classification import MulticlassAccuracy, MulticlassConfusionMatrix
 
 
-def _plot_confusion_matrix(matrix: np.ndarray, class_names: list[str], out_dir: str) -> None:
+def _plot_confusion_matrix(matrix: np.ndarray, class_names: list[str], out_dir: Path) -> None:
     plt.figure(figsize=(10, 8))
     # Normalize by row (True Labels) to see percentages
     matrix_perc = matrix.astype("float") / matrix.sum(axis=1)[:, np.newaxis]
@@ -26,11 +28,11 @@ def _plot_confusion_matrix(matrix: np.ndarray, class_names: list[str], out_dir: 
     plt.xticks(rotation=45, ha="right")
     plt.yticks(rotation=0)
     plt.tight_layout()
-    plt.savefig(f"{out_dir}/confusion_matrix.png")
+    plt.savefig(out_dir / "confusion_matrix.png")
     plt.show()
 
 
-def _plot_latent_tsne(latent_array: np.ndarray, label_array: np.ndarray, class_names: list[str], out_dir: str) -> None:
+def _plot_latent_tsne(latent_array: np.ndarray, label_array: np.ndarray, class_names: list[str], out_dir: Path) -> None:
     """Plot t-SNE visualization of the VAE categorical latent space.
 
     Arguments:
@@ -77,7 +79,7 @@ class Evaluator:
         dataloader: DataLoader,
         classes: list[str],
         gpu_id: int,
-        out_dir: str | None = None,
+        out_dir: Path | None = None,
     ) -> None:
         """Initialize the evaluator.
 
