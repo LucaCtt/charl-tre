@@ -1,4 +1,5 @@
 import torch
+from torch import distributed as dist
 from torch import nn, optim
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader, DistributedSampler
@@ -63,8 +64,12 @@ class ClassifierTrainer:
         for epoch in range(epochs):
             epoch_loss, epoch_accuracy = self.__run_epoch(epoch)
 
-            total_loss += epoch_loss
-            total_accuracy += epoch_accuracy
+            metrics = torch.tensor([epoch_loss, epoch_accuracy], device=self.__gpu_id)
+            dist.all_reduce(metrics, op=dist.ReduceOp.SUM)
+            metrics /= dist.get_world_size()
+
+            total_loss += metrics[0].item()
+            total_accuracy += metrics[1].item()
 
         total_loss /= epochs
         total_accuracy /= epochs

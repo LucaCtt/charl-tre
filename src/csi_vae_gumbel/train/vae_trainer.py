@@ -2,6 +2,7 @@ from typing import Literal
 
 import optuna
 import torch
+from torch import distributed as dist
 from torch import nn
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
@@ -158,6 +159,14 @@ class VAETrainer:
 
         for epoch in range(epochs):
             epoch_loss, epoch_recon_loss, epoch_kl_loss, epoch_entropy_loss = self.__run_epoch(epoch)
+
+            # Distributed averaging of metrics
+            metrics = torch.tensor(
+                [epoch_loss, epoch_recon_loss, epoch_kl_loss, epoch_entropy_loss],
+                device=self.__gpu_id,
+            )
+            dist.all_reduce(metrics, op=dist.ReduceOp.SUM)
+            epoch_loss, epoch_recon_loss, epoch_kl_loss, epoch_entropy_loss = (metrics / dist.get_world_size()).tolist()
 
             total_loss += epoch_loss
             total_recon_loss += epoch_recon_loss

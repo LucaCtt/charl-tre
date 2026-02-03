@@ -22,13 +22,12 @@ from csi_vae_gumbel.train import ClassifierTrainer, KLCollapsePruner, VAEParamet
 
 settings = Settings()
 
-handler = RichHandler(level=logging.INFO, show_path=False)
-logging.basicConfig(level=logging.INFO, handlers=[handler], format="%(message)s")
+level = logging.DEBUG if settings.debug else logging.INFO
+handler = RichHandler(level=level, show_path=False)
+logging.basicConfig(level=level, handlers=[handler], format="%(message)s")
 optuna.logging.enable_propagation()
 optuna.logging.disable_default_handler()
 logger = logging.getLogger("rich")
-# Set log level to INFO for external libraries, DEBUG for local if in debug mode
-logger.setLevel(logging.DEBUG if settings.debug else logging.INFO)
 
 # Suppress Optuna warnings
 warnings.filterwarnings("ignore", module="optuna_integration.pytorch_distributed")
