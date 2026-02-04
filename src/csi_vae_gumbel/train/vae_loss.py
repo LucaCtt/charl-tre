@@ -1,5 +1,3 @@
-from typing import Literal
-
 import torch
 from torch import distributions as dist
 from torch import nn
@@ -12,11 +10,8 @@ def vae_loss(
     z: torch.Tensor,
     kl_weight: float,
     capacity: float,
-    entropy_weight: float,
-    entropy_mode: Literal["none", "penalty", "bonus"],
-    loss_type: Literal["bce", "mse"],
     eps: float = 1e-12,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Compute the VAE loss with categorical latent variables.
 
     Arguments:
@@ -27,19 +22,15 @@ def vae_loss(
         capacity (float): Capacity threshold for KL divergence.
         entropy_weight (float): Weight for the entropy term.
         entropy_mode (Literal["none", "penalty", "bonus"]): Mode for entropy term.
-        loss_type (Literal["bce", "mse"]): Type of reconstruction loss to use.
         eps (float): Small value to avoid numerical issues.
 
     Returns:
         tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]: Total loss, reconstruction loss,
-            KL divergence, entropy term.
+            KL divergence.
 
     """
     # Reconstruction loss
-    if loss_type == "mse":
-        recon = func.mse_loss(x_recon, x_true, reduction="mean")
-    else:
-        recon = func.binary_cross_entropy(x_recon.clamp(eps, 1 - eps), x_true, reduction="mean")
+    recon = func.binary_cross_entropy(x_recon.clamp(eps, 1 - eps), x_true, reduction="mean")
 
     # Posterior q(y|x)
     q = dist.Categorical(logits=z)
@@ -55,19 +46,6 @@ def vae_loss(
         kl_per_sample = nn.functional.relu(kl_per_sample - capacity)
     kl = kl_per_sample.mean()
 
-    # Entropy H(q)
-    entropy_per_sample = q.entropy()
-    entropy_per_sample = entropy_per_sample.view(z.size(0), -1).sum(dim=1)
-    entropy = entropy_per_sample.mean()
+    total_loss = recon + kl_weight * kl
 
-    # Entropy term
-    if entropy_mode == "penalty":
-        ent_term = +entropy_weight * entropy
-    elif entropy_mode == "bonus":
-        ent_term = -entropy_weight * entropy
-    else:
-        ent_term = torch.zeros((), device=x_recon.device)
-
-    total_loss = recon + kl_weight * kl + ent_term
-
-    return total_loss, recon, kl, ent_term
+    return total_loss, recon, kl

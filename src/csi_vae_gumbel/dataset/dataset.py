@@ -14,12 +14,11 @@ class CSIDataset(Dataset):
     def __init__(
         self,
         csi_mats: list[np.ndarray],
-        samples_start: int,
-        n_samples: int,
         window_size: int,
         overlap_size: int,
         n_antennas: int,
         antenna_select: int,
+        augment_probability: float = 0.5,
         normalize: bool = True,
     ) -> None:
         """Initialize the CSI dataset.
@@ -27,19 +26,19 @@ class CSIDataset(Dataset):
         Arguments:
             csi_mats: List of CSI matrices loaded from .mat files. Each matrix should have shape
                 [num_samples, n_subcarriers, n_antennas].
-            samples_start: Starting index to extract samples from each CSI matrix file.
-            n_samples: Number of samples to extract from each CSI matrix file, starting from samples_start.
             window_size: Size of the sliding window to extract from each sample.
             overlap_size: Size of the overlap between two consecutive windows.
             downsample_factor: Factor by which to downsample the window size.
             n_antennas: Total number of antennas used, either a single one or all of them.
             antenna_select: Specific antenna to select if only one is needed. If None, use all antennas.
+            augment_probability: Probability of applying data augmentation to the CSI data.
             normalize: Whether to normalize the CSI data by the global maximum value.
 
         """
         self.__window_size = window_size
         self.__augmenter = CSIAugmenter()
         self.__normalize = normalize
+        self.__augment_probability = augment_probability
 
         self.__data: list[np.ndarray] = []
         self.__labels: list[int] = []
@@ -48,24 +47,23 @@ class CSIDataset(Dataset):
         self.__global_min = float("inf")
         self.__global_max = 0.0
 
+
         # Load files once, build index map
         for label, csi_mat in enumerate(csi_mats):
-            # Shape of csi for now is: [num_samples, n_subcarriers, n_antennas]
-            # We will later rearrange it.
-            csi = csi_mat[samples_start : samples_start + n_samples, :, :]
-
-            if n_antennas == 1:
-                csi = csi[..., antenna_select]
-                csi = csi[:, :, np.newaxis]  # Keep 3D shape for consistency
-
             # 802.11ax has 2048 subcarriers (160 MHz bandwidth), we can keep one data
             # point every 4 subcarriers to reduce input size, make the methodology compatible
             # with 802.11ac (popular in literature) while still keeping most of the information.
-            csi = csi[:, ::4, :]
+            # Shape of csi for now is: [num_samples, n_subcarriers, n_antennas]
+            # We will later rearrange it.
+            csi = csi_mat[:, ::4, :]
 
             # We can further discard the second half of the subcarriers
             # and keep most of the information,
             csi = csi[:, : csi.shape[1] // 2, :]
+
+            if n_antennas == 1:
+                csi = csi[..., antenna_select]
+                csi = csi[:, :, np.newaxis]  # Keep 3D shape for consistency
 
             # Discard phase information, keep only magnitude.
             # Phase is often very noisy and not very informative.
@@ -82,9 +80,11 @@ class CSIDataset(Dataset):
 
             # Build lazy sliding-window index
             step_size = window_size - overlap_size
-            for start in range(0, n_samples - window_size + 1, step_size):
+            for start in range(0, csi.shape[0] - window_size + 1, step_size):
                 self.__index_map.append((file_id, start, False))
-                self.__index_map.append((file_id, start, True))  # Augmented version
+
+                if torch.rand(1).item() < self.__augment_probability:
+                    self.__index_map.append((file_id, start, True))
 
     def __len__(self) -> int:
         return len(self.__index_map)

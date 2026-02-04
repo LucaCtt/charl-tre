@@ -1,7 +1,5 @@
-from datetime import UTC
-from datetime import datetime as dt
+import math
 
-from numpy import log2
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,16 +9,14 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env")
 
     # General training config
-    debug: bool = True
+    debug: bool = False
     """Enable debug mode with more verbose logging and synchronous multi-GPU training."""
     seed: int = 42
     """Random seed for reproducibility."""
-    n_trials: int = 30
-    """Number of Optuna trials for hyperparameter optimization."""
     n_epochs: int = 50
-    """Number of training epochs for each Optuna trial, for both VAE and classifier."""
-    batch_size: int = 12 * 3
-    """Batch size for training both VAE and classifier."""
+    """Number of training epochs for both VAE and classifier."""
+    batch_size: int = 30 * 3
+    """Batch size for training both VAE and classifier. Will be divided by the number of GPUs used."""
 
     # Dataset config
     dataset_path: str = "dataset/S1"
@@ -55,28 +51,23 @@ class Settings(BaseSettings):
     """Number of subcarriers in each CSI sample."""
 
     # Optuna study config
-    study_name: str = f"vaec_{dt.now(tz=UTC).strftime('%Y%m%d_%H%M%S')}"
+    study_name: str = f"vae_gumbel_a{n_antennas}"
     """Name of the VAE model, used for checkpointing."""
-    study_dir: str = f"out/vaec_studies/{study_name}"
+    study_dir: str = f"out/{study_name}"
     """Directory to save model checkpoints."""
+    n_trials: int = 1
+    """Number of Optuna trials for hyperparameter optimization."""
+    n_categories: int = math.ceil(math.log2(n_activities))
 
     # Optuna hyperparameter search space
-    n_cats_min: int = int(log2(n_activities))
-    """Minimum number of categories in the Gumbel-Softmax latent space."""
-    n_cats_max: int = int(log2(n_activities) * 4)
-    """Maximum number of categories in the Gumbel-Softmax latent space."""
     latent_dim_min: int = 1
     """Minimum latent dimension size."""
-    latent_dim_max: int = 16
+    latent_dim_max: int = 10
     """Maximum latent dimension size."""
     start_lr_min: float = 1e-4
     """Minimum starting learning rate."""
     start_lr_max: float = 3e-3
     """Maximum starting learning rate."""
-    final_entr_weight_min: float = 1e-5
-    """Minimum final entropy weight in loss computation."""
-    final_entr_weight_max: float = 1e-2
-    """Maximum final entropy weight in loss computation."""
     final_kl_weight_min: float = 1e-5
     """Minimum final KL divergence weight in loss computation."""
     final_kl_weight_max: float = 1e-2

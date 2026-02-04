@@ -13,16 +13,16 @@ class ClassifierTrainer:
         model: nn.Module,
         dataloader: DataLoader,
         vae: nn.Module,
-        optimizer: optim.Optimizer,
         gpu_id: int,
     ) -> None:
         """Initialize the Classifier Trainer."""
         self.__model = DistributedDataParallel(model.to(gpu_id), device_ids=[gpu_id])
         self.__dataloader = dataloader
         self.__vae = vae.to(gpu_id)  # No need to DDP the VAE as it's frozen
-        self.__optimizer = optimizer
         self.__gpu_id = gpu_id
         self.__criterion = nn.CrossEntropyLoss()
+
+        self.__optimizer = optim.Adam(self.__model.parameters())
 
     def __run_epoch(self, epoch: int) -> tuple[float, float]:
         if isinstance(self.__dataloader.sampler, DistributedSampler):
@@ -35,8 +35,21 @@ class ClassifierTrainer:
             self.__optimizer.zero_grad()
 
             with torch.no_grad():
-                _, z_hard_vae, _ = self.__vae(x.to(self.__gpu_id))
-                z_hard_vae = z_hard_vae.view(z_hard_vae.size(0), -1)
+                # Split x into three windows for VAE encoding
+                print(x.size())
+                window_size = x.size(1) // 3
+                print(window_size)
+                xs = torch.split(x, window_size, dim=1)
+                z_hard_vae = []
+
+                # Predict z_hard for each window
+                for x_window in xs:
+                    _, z_hard_window, _ = self.__vae(x_window.to(self.__gpu_id))
+                    z_hard_window = z_hard_window.view(z_hard_window.size(0), -1)
+                    z_hard_vae.append(z_hard_window)
+
+                # Concatenate z_hard from all three windows
+                z_hard_vae = torch.cat(z_hard_vae, dim=1)
 
             logits = self.__model(z_hard_vae)
             loss = self.__criterion(logits, y.to(self.__gpu_id))

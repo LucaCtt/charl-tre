@@ -1,5 +1,3 @@
-from typing import Literal
-
 import optuna
 import torch
 from torch import distributed as dist
@@ -10,7 +8,6 @@ from torch.utils.data.distributed import DistributedSampler
 
 from csi_vae_gumbel.train.annealers import (
     CapacityAnnealer,
-    EntropyAnnealer,
     GumbelTemperatureAnnealer,
     KLWeightAnnealer,
 )
@@ -27,7 +24,7 @@ class VAETrainer:
         dataloader: DataLoader,
         parameters: VAEParameters,
         gpu_id: int,
-        trial: optuna.integration.TorchDistributedTrial,
+        trial: optuna.integration.TorchDistributedTrial | None = None,
     ) -> None:
         """Initialize the Trainer.
 
@@ -53,9 +50,6 @@ class VAETrainer:
         self.__capacity_annealer = CapacityAnnealer(
             final_capacity=parameters.final_cap,
         )
-        self.__entropy_annealer = EntropyAnnealer(
-            final_weight=parameters.final_entr_weight,
-        )
         self.__temperature_annealer = GumbelTemperatureAnnealer(
             start_tau=parameters.gumbel_temp,
             min_tau=parameters.gumbel_temp / 10,
@@ -63,7 +57,6 @@ class VAETrainer:
         self.__kl_weight_annealer = KLWeightAnnealer(
             max_weight=parameters.final_kl_weight,
         )
-        self.__loss_type: Literal["bce", "mse"] = parameters.loss_type
 
         self.__gpu_id = gpu_id
         self.__trial = trial
@@ -73,31 +66,26 @@ class VAETrainer:
         x_true: torch.Tensor,
         tau: float,
         kl_weight: float,
-        entropy_weight: float,
-        entropy_mode: Literal["none", "penalty", "bonus"],
         capacity: float,
-    ) -> tuple[float, float, float, float]:
+    ) -> tuple[float, float, float]:
         self.__optimizer.zero_grad()
 
         x_recon, _, logits = self.__model(x_true, tau)
 
-        loss, recon_loss, kl_loss, entropy_loss = vae_loss(
+        loss, recon_loss, kl_loss = vae_loss(
             x_recon,
             x_true,
             logits,
             kl_weight=kl_weight,
-            entropy_mode=entropy_mode,
-            entropy_weight=entropy_weight,
             capacity=capacity,
-            loss_type=self.__loss_type,
         )
 
         loss.backward()
         self.__optimizer.step()
 
-        return loss.item(), recon_loss.item(), kl_loss.item(), entropy_loss.item()
+        return loss.item(), recon_loss.item(), kl_loss.item()
 
-    def __run_epoch(self, epoch: int) -> tuple[float, float, float, float]:
+    def __run_epoch(self, epoch: int) -> tuple[float, float, float]:
         # Set the epoch for shuffling if using DistributedSampler
         if isinstance(self.__dataloader.sampler, DistributedSampler):
             self.__dataloader.sampler.set_epoch(epoch)
@@ -105,39 +93,33 @@ class VAETrainer:
         epoch_loss = 0.0
         epoch_recon_loss = 0.0
         epoch_kl_loss = 0.0
-        epoch_entropy_loss = 0.0
 
         tau = self.__temperature_annealer.step(epoch)
         kl_weight = self.__kl_weight_annealer.step(epoch)
-        entropy_weight, entropy_mode = self.__entropy_annealer.step(epoch)
         capacity = self.__capacity_annealer.step(epoch)
 
         for x_true, _ in self.__dataloader:
-            loss, recon_loss, kl_loss, entropy_loss = self.__run_batch(
+            loss, recon_loss, kl_loss = self.__run_batch(
                 x_true.to(self.__gpu_id),
                 tau,
                 kl_weight,
-                entropy_weight,
-                entropy_mode,
                 capacity,
             )
 
             epoch_loss += loss
             epoch_recon_loss += recon_loss
             epoch_kl_loss += kl_loss
-            epoch_entropy_loss += entropy_loss
 
         epoch_loss /= len(self.__dataloader)
         epoch_recon_loss /= len(self.__dataloader)
         epoch_kl_loss /= len(self.__dataloader)
-        epoch_entropy_loss /= len(self.__dataloader)
 
         # This has to be called after each epoch
         self.__lr_annealer.step(epoch_loss)
 
-        return epoch_loss, epoch_recon_loss, epoch_kl_loss, epoch_entropy_loss
+        return epoch_loss, epoch_recon_loss, epoch_kl_loss
 
-    def train(self, epochs: int) -> tuple[float, float, float, float]:
+    def train(self, epochs: int) -> tuple[float, float, float]:
         """Train the VAE model for a specified number of epochs.
 
         Arguments:
@@ -147,7 +129,7 @@ class VAETrainer:
 
         Returns:
             Tuple containing average total loss, reconstruction loss,
-            KL divergence loss, and entropy loss over all epochs.
+            and KL divergence loss over all epochs.
 
         """
         self.__model.train()
@@ -155,34 +137,32 @@ class VAETrainer:
         total_loss = 0.0
         total_recon_loss = 0.0
         total_kl_loss = 0.0
-        total_entropy_loss = 0.0
 
         for epoch in range(epochs):
-            epoch_loss, epoch_recon_loss, epoch_kl_loss, epoch_entropy_loss = self.__run_epoch(epoch)
+            epoch_loss, epoch_recon_loss, epoch_kl_loss = self.__run_epoch(epoch)
 
             # Distributed averaging of metrics
             metrics = torch.tensor(
-                [epoch_loss, epoch_recon_loss, epoch_kl_loss, epoch_entropy_loss],
+                [epoch_loss, epoch_recon_loss, epoch_kl_loss],
                 device=self.__gpu_id,
             )
             dist.all_reduce(metrics, op=dist.ReduceOp.SUM)
-            epoch_loss, epoch_recon_loss, epoch_kl_loss, epoch_entropy_loss = (metrics / dist.get_world_size()).tolist()
-
+            epoch_loss, epoch_recon_loss, epoch_kl_loss = (metrics / dist.get_world_size()).tolist()
             total_loss += epoch_loss
             total_recon_loss += epoch_recon_loss
             total_kl_loss += epoch_kl_loss
-            total_entropy_loss += epoch_entropy_loss
 
-            self.__trial.report(epoch_loss, step=epoch)
-            self.__trial.set_user_attr("epoch_loss", epoch_loss)
-            self.__trial.set_user_attr("epoch_kl_loss", epoch_kl_loss)
+            if self.__trial is not None:
+                self.__trial.report(epoch_loss, step=epoch)
+                self.__trial.set_user_attr("epoch_loss", epoch_loss)
+                self.__trial.set_user_attr("epoch_kl_loss", epoch_kl_loss)
 
-            if self.__trial.should_prune():
-                raise optuna.TrialPruned
+                if self.__trial.should_prune():
+                    msg = f"Trial was pruned at epoch {epoch}."
+                    raise optuna.TrialPruned(msg)
 
         total_loss /= epochs
         total_recon_loss /= epochs
         total_kl_loss /= epochs
-        total_entropy_loss /= epochs
 
-        return total_loss, total_recon_loss, total_kl_loss, total_entropy_loss
+        return total_loss, total_recon_loss, total_kl_loss

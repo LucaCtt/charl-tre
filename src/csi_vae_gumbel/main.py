@@ -16,9 +16,11 @@ from torch.multiprocessing.spawn import spawn
 
 from csi_vae_gumbel.dataset import get_splits
 from csi_vae_gumbel.evaluator import Evaluator
-from csi_vae_gumbel.models import CategoricalVAE, Classifier
+from csi_vae_gumbel.models import CategoricalVAE
+from csi_vae_gumbel.models.classifier import Classifier
 from csi_vae_gumbel.settings import Settings
-from csi_vae_gumbel.train import ClassifierTrainer, KLCollapsePruner, VAEParameters, VAETrainer
+from csi_vae_gumbel.train import KLCollapsePruner, VAEParameters, VAETrainer
+from csi_vae_gumbel.train.classifier_trainer import ClassifierTrainer
 
 settings = Settings()
 
@@ -65,51 +67,34 @@ def _ddp_setup(rank: int, world_size: int) -> None:
 
 def _objective(single_trial: BaseTrial | None, rank: int, world_size: int) -> float:
     """Objective function for Optuna hyperparameter optimization."""
-
-    def log_progress(msg: str, *args: float | str) -> None:
-        """Log message only from the main process."""
-        if rank == 0:
-            logger.debug(msg, *args)
-
     trial = optuna.integration.TorchDistributedTrial(single_trial)
-    log_progress("Starting trial %s", trial.number)
+    if rank == 0:
+        logger.info("Starting trial %s", trial.number)
 
-    train_dataloader, val_dataloader = get_splits(
+    train_dl, _ = get_splits(
         dataset_path=Path(settings.dataset_path),
         batch_size=settings.batch_size // world_size,
         window_size=settings.window_size,
         overlap_size=settings.overlap_size,
         n_activities=settings.n_activities,
-        n_samples=settings.n_samples,
         n_antennas=settings.n_antennas,
         antenna_select=settings.antenna_select,
     )
-    log_progress("Data loaders created for trial %s", trial.number)
+    if rank == 0:
+        logger.info("Data loaders created for trial %s", trial.number)
 
     parameters = VAEParameters(
         start_lr=trial.suggest_float(
-            "lr",
+            "start_lr",
             settings.start_lr_min,
             settings.start_lr_max,
             log=True,
         ),
         final_kl_weight=trial.suggest_float(
-            "kl_weight",
+            "final_kl_weight",
             settings.final_kl_weight_min,
             settings.final_kl_weight_max,
             log=True,
-        ),
-        final_entr_weight=trial.suggest_float(
-            "entr_weight",
-            settings.final_entr_weight_min,
-            settings.final_entr_weight_max,
-            log=True,
-        ),
-        n_cats=trial.suggest_int(
-            "n_cats",
-            settings.n_cats_min,
-            settings.n_cats_max,
-            step=1,
         ),
         latent_dim=trial.suggest_int(
             "latent_dim",
@@ -127,76 +112,87 @@ def _objective(single_trial: BaseTrial | None, rank: int, world_size: int) -> fl
             settings.gumbel_temp_min,
             settings.gumbel_temp_max,
         ),
-        loss_type=trial.suggest_categorical(
-            "loss_type",
-            ["bce", "mse"],
-        ),  # pyright: ignore[reportArgumentType]
     )
 
     # Build and train VAE
     vae = CategoricalVAE(
         window_size=settings.window_size,
-        n_categories=parameters.n_cats,
+        n_categories=settings.n_categories,
         latent_dim=parameters.latent_dim,
     )
     vae_trainer = VAETrainer(
         model=vae,
-        dataloader=train_dataloader,
+        dataloader=train_dl,
         parameters=parameters,
         gpu_id=rank,
         trial=trial,
     )
-    loss, recon_loss, kl_loss, entropy_loss = vae_trainer.train(settings.n_epochs)
-    log_progress(
-        "VAE training completed for trial %s with loss %.4f, recon_loss %.4f, kl_loss %.4f, entropy_loss %.4f",
-        trial.number,
-        loss,
-        recon_loss,
-        kl_loss,
-        entropy_loss,
+    loss, recon_loss, kl_loss = vae_trainer.train(settings.n_epochs)
+    if rank == 0:
+        logger.info(
+            "VAE training completed for trial %s with loss %.4f, recon_loss %.4f, kl_loss %.4f",
+            trial.number,
+            loss,
+            recon_loss,
+            kl_loss,
+        )
+        save_path = Path(settings.study_dir) / f"trial_{trial.number}"
+        save_path.mkdir(parents=True, exist_ok=True)
+        torch.save(vae.state_dict(), save_path / "model.pt")
+
+    return recon_loss
+
+
+def _eval_best_model(rank: int, world_size: int, return_dict: dict) -> None:
+    """Evaluate the best model found by Optuna on the test set."""
+    _ddp_setup(rank, world_size)
+
+    best_trial = return_dict["study"].best_trial
+
+    if rank == 0:
+        logger.info("Evaluating best trial %d", best_trial.number)
+
+    _, test_dl = get_splits(
+        dataset_path=Path(settings.dataset_path),
+        batch_size=settings.batch_size // world_size,
+        window_size=settings.window_size * 3,
+        overlap_size=settings.overlap_size,
+        n_activities=settings.n_activities,
+        n_antennas=settings.n_antennas,
+        antenna_select=settings.antenna_select,
     )
 
-    # Build and train classifier on frozen VAE latent space
+    params = VAEParameters(**best_trial.params)
+
+    vae = CategoricalVAE(
+        window_size=settings.window_size,
+        n_categories=settings.n_categories,
+        latent_dim=params.latent_dim,
+    )
+    load_path = Path(settings.study_dir) / f"trial_{best_trial.number}" / "model.pt"
+    vae.load_state_dict(torch.load(load_path))
+    if rank == 0:
+        logger.info("Loaded best VAE model for evaluation.")
+
     classifier = Classifier(
-        input_dim=parameters.n_cats * parameters.latent_dim,
-        output_dim=settings.n_activities,
-        hidden_dim=parameters.n_cats * settings.n_activities // 2,
+        params.latent_dim * 3,
+        settings.n_activities,
+        params.latent_dim * settings.n_activities // 2,
     )
     classifier_trainer = ClassifierTrainer(
         model=classifier,
-        dataloader=train_dataloader,
+        dataloader=test_dl,
         vae=vae,
-        optimizer=torch.optim.Adam(classifier.parameters()),
         gpu_id=rank,
     )
-    loss, accuracy = classifier_trainer.train(settings.n_epochs)
-    log_progress(
-        "Classifier training completed for trial %s with loss %.4f, accuracy %.4f",
-        trial.number,
-        loss,
-        accuracy,
-    )
+    classifier_trainer.train(settings.n_epochs)
+    if rank == 0:
+        logger.info("Classifier training completed for evaluation.")
 
-    trial_dir = Path(settings.study_dir) / f"trial_{trial.number}"
-    trial_dir.mkdir(parents=True, exist_ok=True)
+    evaluator = Evaluator(vae, classifier, test_dl, settings.activities_labels, rank, Path(settings.study_dir))
+    evaluator.evaluate()
 
-    # Evaluate on validation set
-    evaluator = Evaluator(
-        vae=vae,
-        classifier=classifier,
-        dataloader=val_dataloader,
-        classes=settings.activities_labels,
-        gpu_id=rank,
-        out_dir=trial_dir,
-    )
-    accuracy = evaluator.evaluate()
-    log_progress(
-        "Trial %s completed with accuracy %.4f",
-        trial.number,
-        accuracy,
-    )
-
-    return accuracy
+    dist.destroy_process_group()
 
 
 def _run_optimize(rank: int, world_size: int, return_dict: dict) -> None:
@@ -206,7 +202,7 @@ def _run_optimize(rank: int, world_size: int, return_dict: dict) -> None:
     try:
         if rank == 0:
             study = optuna.create_study(
-                direction="maximize",  # Optimize for classification accuracy
+                direction="minimize",
                 study_name=settings.study_name,
                 sampler=optuna.samplers.TPESampler(seed=settings.seed),
                 pruner=KLCollapsePruner(),
@@ -217,23 +213,30 @@ def _run_optimize(rank: int, world_size: int, return_dict: dict) -> None:
             for _ in range(settings.n_trials):
                 with contextlib.suppress(optuna.TrialPruned):
                     _objective(None, rank, world_size)
+
     finally:
         dist.destroy_process_group()
 
 
 def main() -> None:
     """Run the hyperparameter optimization using Optuna."""
-    # Create study directory
-    Path(settings.study_dir).mkdir(parents=True, exist_ok=True)
+    if settings.debug:
+        os.environ["TORCH_NCCL_ASYNC_ERROR_HANDLING"] = "1"
+        os.environ["TORCH_DISTRIBUTED_DEBUG"] = "DETAIL"
+        os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
     world_size = torch.cuda.device_count() if torch.cuda.is_available() else 1
 
     # Multiprocessing manager to collect results from different processes
     return_dict = mp.Manager().dict()
+
+    # Run Optuna optimization
     spawn(_run_optimize, args=(world_size, return_dict), nprocs=world_size, join=True)
 
-    study = return_dict["study"]
+    # Evaluate the best model
+    spawn(_eval_best_model, args=(world_size, return_dict), nprocs=world_size, join=True)
 
+    study = return_dict["study"]
     pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
     complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])
 

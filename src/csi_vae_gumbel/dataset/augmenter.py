@@ -10,7 +10,6 @@ class CSIAugmenter:
         noise_std: float = 0.01,
         mask_prob: float = 0.1,
         antenna_drop_prob: float = 0.1,
-        apply_prob: float = 0.5,
         augmentation_prob: float = 0.3,
     ) -> None:
         """Initialize the augmenter with specified probabilities and parameters.
@@ -26,7 +25,6 @@ class CSIAugmenter:
         self.noise_std = noise_std
         self.mask_prob = mask_prob
         self.antenna_drop_prob = antenna_drop_prob
-        self.apply_prob = apply_prob
         self.augmentation_prob = augmentation_prob
         self.rng = np.random.default_rng()
 
@@ -41,13 +39,6 @@ class CSIAugmenter:
         mask = self.rng.random(x.shape[-1]) < self.mask_prob
         # Broadcast mask across antennas and time
         return x * mask[np.newaxis, np.newaxis, :]
-
-    def antenna_dropout(self, x: np.ndarray) -> np.ndarray:
-        """Randomly zeroes out an entire antenna's signal (spatial shadowing)."""
-        if x.shape[0] > 1 and self.rng.random() < self.antenna_drop_prob:
-            ant_idx = self.rng.integers(0, x.shape[0])
-            x[ant_idx, :, :] = 0
-        return x
 
     def time_warp(self, x: np.ndarray) -> np.ndarray:
         """Randomly stretches or compresses the time dimension."""
@@ -88,16 +79,11 @@ class CSIAugmenter:
 
     def apply(self, x: np.ndarray) -> np.ndarray:
         """Apply a random suite of augmentations to the input window."""
-        if self.rng.random() > self.apply_prob:
-            return x
-
         # Randomly apply a selection of transforms
         if self.rng.random() < self.augmentation_prob:
             x = self.add_gaussian_noise(x)
         if self.rng.random() < self.augmentation_prob:
             x = self.subcarrier_masking(x)
-        if self.rng.random() < self.augmentation_prob:
-            x = self.antenna_dropout(x)
         if self.rng.random() < self.augmentation_prob:
             x = self.time_warp(x)
         if self.rng.random() < self.augmentation_prob:
