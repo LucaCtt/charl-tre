@@ -13,14 +13,13 @@ from rich.logging import RichHandler
 from torch import distributed as dist
 from torch import multiprocessing as mp
 from torch.multiprocessing.spawn import spawn
+from torch.utils.data import DataLoader, DistributedSampler
 
-from csi_vae_gumbel.dataset import get_splits
+from csi_vae_gumbel.dataset import CSIDataset, load_datasets
 from csi_vae_gumbel.evaluator import Evaluator
-from csi_vae_gumbel.models import CategoricalVAE
-from csi_vae_gumbel.models.classifier import Classifier
+from csi_vae_gumbel.models import CategoricalVAE, Classifier
 from csi_vae_gumbel.settings import Settings
-from csi_vae_gumbel.train import KLCollapsePruner, VAEParameters, VAETrainer
-from csi_vae_gumbel.train.classifier_trainer import ClassifierTrainer
+from csi_vae_gumbel.train import ClassifierTrainer, KLCollapsePruner, VAEParameters, VAETrainer
 
 settings = Settings()
 
@@ -51,7 +50,6 @@ def _ddp_setup(rank: int, world_size: int) -> None:
     """
     if "MASTER_ADDR" not in os.environ:
         os.environ["MASTER_ADDR"] = "localhost"
-
     if "MASTER_PORT" not in os.environ:
         os.environ["MASTER_PORT"] = "12355"
 
@@ -59,29 +57,26 @@ def _ddp_setup(rank: int, world_size: int) -> None:
     if acc is None:
         msg = "No accelerator found for DDP setup."
         raise RuntimeError(msg)
-
     backend = torch.distributed.get_default_backend_for_device(acc)
 
     dist.init_process_group(backend=backend, rank=rank, world_size=world_size, device_id=rank)
 
 
-def _objective(single_trial: BaseTrial | None, rank: int, world_size: int) -> float:
-    """Objective function for Optuna hyperparameter optimization."""
+def _objective(single_trial: BaseTrial | None, rank: int, train_dl: DataLoader) -> float:
+    """Objective function for Optuna hyperparameter optimization.
+
+    Arguments:
+        single_trial: The Optuna trial object
+        rank: Unique identifier of each process
+        train_dl: DataLoader for training data
+
+    Returns:
+        The reconstruction loss after training
+
+    """
     trial = optuna.integration.TorchDistributedTrial(single_trial)
     if rank == 0:
         logger.info("Starting trial %s", trial.number)
-
-    train_dl, _ = get_splits(
-        dataset_path=Path(settings.dataset_path),
-        batch_size=settings.batch_size // world_size,
-        window_size=settings.window_size,
-        overlap_size=settings.overlap_size,
-        n_activities=settings.n_activities,
-        n_antennas=settings.n_antennas,
-        antenna_select=settings.antenna_select,
-    )
-    if rank == 0:
-        logger.info("Data loaders created for trial %s", trial.number)
 
     parameters = VAEParameters(
         start_lr=trial.suggest_float(
@@ -115,19 +110,10 @@ def _objective(single_trial: BaseTrial | None, rank: int, world_size: int) -> fl
     )
 
     # Build and train VAE
-    vae = CategoricalVAE(
-        window_size=settings.window_size,
-        n_categories=settings.n_categories,
-        latent_dim=parameters.latent_dim,
-    )
-    vae_trainer = VAETrainer(
-        model=vae,
-        dataloader=train_dl,
-        parameters=parameters,
-        gpu_id=rank,
-        trial=trial,
-    )
+    vae = CategoricalVAE(settings.window_size, settings.n_categories, parameters.latent_dim)
+    vae_trainer = VAETrainer(vae, train_dl, parameters, rank, trial)
     loss, recon_loss, kl_loss = vae_trainer.train(settings.n_epochs)
+
     if rank == 0:
         logger.info(
             "VAE training completed for trial %s with loss %.4f, recon_loss %.4f, kl_loss %.4f",
@@ -143,115 +129,111 @@ def _objective(single_trial: BaseTrial | None, rank: int, world_size: int) -> fl
     return recon_loss
 
 
-def _eval_best_model(rank: int, world_size: int, return_dict: dict) -> None:
-    """Evaluate the best model found by Optuna on the test set."""
+def _run_optimize(rank: int, world_size: int, shared_dict: dict, train_ds: CSIDataset) -> None:
     _ddp_setup(rank, world_size)
 
-    best_trial = return_dict["study"].best_trial
+    sampler = DistributedSampler(train_ds, num_replicas=world_size, rank=rank, shuffle=True)
+    train_dl = DataLoader(train_ds, batch_size=settings.train_batch_size, sampler=sampler, pin_memory=True)
 
     if rank == 0:
-        logger.info("Evaluating best trial %d", best_trial.number)
+        study = optuna.create_study(
+            direction="minimize",
+            study_name=settings.study_name,
+            sampler=optuna.samplers.TPESampler(seed=settings.seed),
+            pruner=KLCollapsePruner(),
+        )
+        study.optimize(partial(_objective, rank=rank, train_dl=train_dl), n_trials=settings.n_trials)
+        shared_dict["study"] = study
+    else:
+        for _ in range(settings.n_trials):
+            with contextlib.suppress(optuna.TrialPruned):
+                _objective(None, rank, train_dl)
 
-    _, test_dl = get_splits(
-        dataset_path=Path(settings.dataset_path),
-        batch_size=settings.batch_size // world_size,
-        window_size=settings.window_size * 3,
-        overlap_size=settings.overlap_size,
-        n_activities=settings.n_activities,
-        n_antennas=settings.n_antennas,
-        antenna_select=settings.antenna_select,
-    )
+    dist.barrier()
 
-    params = VAEParameters(**best_trial.params)
+    if rank == 0:
+        study = shared_dict["study"]
+        pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
+        complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])
+
+        logger.info(
+            "Study done with %d trials: %d pruned, %d complete.",
+            len(study.trials),
+            len(pruned_trials),
+            len(complete_trials),
+        )
+        logger.info(
+            "Best trial #%d: value=%.4f, params=%s",
+            study.best_trial.number,
+            study.best_trial.value,
+            study.best_trial.params,
+        )
+
+    dist.destroy_process_group()
+
+
+def _run_eval(study: optuna.study.Study, train_ds: CSIDataset, test_ds: CSIDataset) -> None:
+    params = VAEParameters(**study.best_trial.params)
+    train_dl = DataLoader(train_ds, batch_size=settings.train_batch_size, shuffle=True, pin_memory=True)
+    test_dl = DataLoader(test_ds, batch_size=len(test_ds), shuffle=False, pin_memory=True)
 
     vae = CategoricalVAE(
         window_size=settings.window_size,
         n_categories=settings.n_categories,
         latent_dim=params.latent_dim,
     )
-    load_path = Path(settings.study_dir) / f"trial_{best_trial.number}" / "model.pt"
+    load_path = Path(settings.study_dir) / f"trial_{study.best_trial.number}" / "model.pt"
     vae.load_state_dict(torch.load(load_path))
-    if rank == 0:
-        logger.info("Loaded best VAE model for evaluation.")
+    logger.info("Loaded best VAE model for evaluation.")
 
     classifier = Classifier(
-        params.latent_dim * 3,
+        params.latent_dim * settings.n_categories,
         settings.n_activities,
         params.latent_dim * settings.n_activities // 2,
     )
     classifier_trainer = ClassifierTrainer(
         model=classifier,
-        dataloader=test_dl,
+        dataloader=train_dl,
         vae=vae,
-        gpu_id=rank,
+        gpu_id=0,
     )
     classifier_trainer.train(settings.n_epochs)
-    if rank == 0:
-        logger.info("Classifier training completed for evaluation.")
+    logger.info("Classifier training completed for evaluation.")
 
-    evaluator = Evaluator(vae, classifier, test_dl, settings.activities_labels, rank, Path(settings.study_dir))
+    evaluator = Evaluator(vae, classifier, test_dl, settings.activities_labels, 0, Path(settings.study_dir))
     evaluator.evaluate()
-
-    dist.destroy_process_group()
-
-
-def _run_optimize(rank: int, world_size: int, return_dict: dict) -> None:
-    """Run the Optuna hyperparameter optimization in a distributed manner."""
-    _ddp_setup(rank, world_size)
-
-    try:
-        if rank == 0:
-            study = optuna.create_study(
-                direction="minimize",
-                study_name=settings.study_name,
-                sampler=optuna.samplers.TPESampler(seed=settings.seed),
-                pruner=KLCollapsePruner(),
-            )
-            study.optimize(partial(_objective, rank=rank, world_size=world_size), n_trials=settings.n_trials)
-            return_dict["study"] = study
-        else:
-            for _ in range(settings.n_trials):
-                with contextlib.suppress(optuna.TrialPruned):
-                    _objective(None, rank, world_size)
-
-    finally:
-        dist.destroy_process_group()
 
 
 def main() -> None:
-    """Run the hyperparameter optimization using Optuna."""
+    """Run optuna optimization and evaluation for the CSI VAE model."""
     if settings.debug:
         os.environ["TORCH_NCCL_ASYNC_ERROR_HANDLING"] = "1"
         os.environ["TORCH_DISTRIBUTED_DEBUG"] = "DETAIL"
         os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
+    # Create datasets once and share across processes
+    logger.info("Loading datasets from %s", settings.dataset_path)
+    train_ds, test_ds = load_datasets(
+        dataset_path=Path(settings.dataset_path),
+        window_size=settings.window_size,
+        overlap_size=settings.overlap_size,
+        n_activities=settings.n_activities,
+        n_antennas=settings.n_antennas,
+        antenna_select=settings.antenna_select,
+        test_window=settings.window_size * 3,  # Keep three windows per quarter for testing
+    )
+
     world_size = torch.cuda.device_count() if torch.cuda.is_available() else 1
 
-    # Multiprocessing manager to collect results from different processes
-    return_dict = mp.Manager().dict()
+    # Multiprocessing manager to share study across different processes.
+    # Note: datasets are not shared via this dict to avoid serialization.
+    shared_dict = mp.Manager().dict()
 
     # Run Optuna optimization
-    spawn(_run_optimize, args=(world_size, return_dict), nprocs=world_size, join=True)
+    spawn(_run_optimize, args=(world_size, shared_dict, train_ds), nprocs=world_size, join=True)
 
-    # Evaluate the best model
-    spawn(_eval_best_model, args=(world_size, return_dict), nprocs=world_size, join=True)
-
-    study = return_dict["study"]
-    pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
-    complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])
-
-    logger.info(
-        "Study done with %d trials: %d pruned, %d complete.",
-        len(study.trials),
-        len(pruned_trials),
-        len(complete_trials),
-    )
-    logger.info(
-        "Best trial #%d: value=%.4f, params=%s",
-        study.best_trial.number,
-        study.best_trial.value,
-        study.best_trial.params,
-    )
+    # Run evaluation with the best trial
+    _run_eval(shared_dict["study"], train_ds, test_ds)
 
 
 if __name__ == "__main__":

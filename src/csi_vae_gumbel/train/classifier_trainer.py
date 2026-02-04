@@ -1,8 +1,6 @@
 import torch
-from torch import distributed as dist
 from torch import nn, optim
-from torch.nn.parallel import DistributedDataParallel
-from torch.utils.data import DataLoader, DistributedSampler
+from torch.utils.data import DataLoader
 
 
 class ClassifierTrainer:
@@ -16,7 +14,7 @@ class ClassifierTrainer:
         gpu_id: int,
     ) -> None:
         """Initialize the Classifier Trainer."""
-        self.__model = DistributedDataParallel(model.to(gpu_id), device_ids=[gpu_id])
+        self.__model = model.to(gpu_id)
         self.__dataloader = dataloader
         self.__vae = vae.to(gpu_id)  # No need to DDP the VAE as it's frozen
         self.__gpu_id = gpu_id
@@ -24,10 +22,7 @@ class ClassifierTrainer:
 
         self.__optimizer = optim.Adam(self.__model.parameters())
 
-    def __run_epoch(self, epoch: int) -> tuple[float, float]:
-        if isinstance(self.__dataloader.sampler, DistributedSampler):
-            self.__dataloader.sampler.set_epoch(epoch)
-
+    def __run_epoch(self) -> tuple[float, float]:
         epoch_loss = 0.0
         epoch_accuracy = 0.0
 
@@ -35,23 +30,18 @@ class ClassifierTrainer:
             self.__optimizer.zero_grad()
 
             with torch.no_grad():
-                # Split x into three windows for VAE encoding
-                print(x.size())
-                window_size = x.size(1) // 3
-                print(window_size)
-                xs = torch.split(x, window_size, dim=1)
-                z_hard_vae = []
+                # Go from (batch_size, n_antennas, window_size, n_subcarriers)
+                # to (batch_size / 3, 3, n_antennas, window_size, n_subcarriers) and get z
+                x_temp = x.view(x.size(0) // 3, 3, x.size(1), x.size(2), x.size(3))
+                z_hard = []
+                for i in range(3):
+                    _, z_hard_partial, _ = self.__vae(x_temp[:, i].to(self.__gpu_id))
+                    z_hard_partial = z_hard_partial.view(z_hard_partial.size(0), -1)
+                    z_hard.append(z_hard_partial)
 
-                # Predict z_hard for each window
-                for x_window in xs:
-                    _, z_hard_window, _ = self.__vae(x_window.to(self.__gpu_id))
-                    z_hard_window = z_hard_window.view(z_hard_window.size(0), -1)
-                    z_hard_vae.append(z_hard_window)
+            z_hard = torch.cat(z_hard, dim=0)
 
-                # Concatenate z_hard from all three windows
-                z_hard_vae = torch.cat(z_hard_vae, dim=1)
-
-            logits = self.__model(z_hard_vae)
+            logits = self.__model(z_hard)
             loss = self.__criterion(logits, y.to(self.__gpu_id))
             accuracy = (logits.argmax(dim=1) == y.to(self.__gpu_id)).float().mean()
 
@@ -74,15 +64,11 @@ class ClassifierTrainer:
         total_loss = 0.0
         total_accuracy = 0.0
 
-        for epoch in range(epochs):
-            epoch_loss, epoch_accuracy = self.__run_epoch(epoch)
+        for _ in range(epochs):
+            epoch_loss, epoch_accuracy = self.__run_epoch()
 
-            metrics = torch.tensor([epoch_loss, epoch_accuracy], device=self.__gpu_id)
-            dist.all_reduce(metrics, op=dist.ReduceOp.SUM)
-            metrics /= dist.get_world_size()
-
-            total_loss += metrics[0].item()
-            total_accuracy += metrics[1].item()
+            total_loss += epoch_loss
+            total_accuracy += epoch_accuracy
 
         total_loss /= epochs
         total_accuracy /= epochs

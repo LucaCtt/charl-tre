@@ -6,7 +6,7 @@ from optuna.trial import FrozenTrial
 class KLCollapsePruner(BasePruner):
     """Early stopping utility to halt training when KL divergence collapses."""
 
-    def __init__(self, patience: int = 10, eps: float = 1e-6) -> None:
+    def __init__(self, patience: int = 3, eps: float = 1e-6) -> None:
         """Initialize EarlyStopping with a patience parameter.
 
         Arguments:

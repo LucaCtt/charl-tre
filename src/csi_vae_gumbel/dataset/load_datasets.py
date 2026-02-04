@@ -3,20 +3,18 @@ from string import ascii_uppercase
 
 import numpy as np
 import scipy.io as sio
-from torch.utils.data import DataLoader
-from torch.utils.data.distributed import DistributedSampler
 
 from csi_vae_gumbel.dataset.dataset import CSIDataset
 
 __DATASET_PARTS = 4
 
 
-def _split_mats(mats: list[np.ndarray], test_size: float, n_parts: int) -> tuple[list[np.ndarray], list[np.ndarray]]:
+def _split_mats(mats: list[np.ndarray], test_window: float, n_parts: int) -> tuple[list[np.ndarray], list[np.ndarray]]:
     """Split each matrix in mats into train and test parts.
 
     Arguments:
         mats: List of CSI matrices to split.
-        test_size: Proportion of the dataset to include in the test split.
+        test_window: Size of the windows of each part to allocate to the test set.
         n_parts: Number of parts to split each matrix into
 
     Returns:
@@ -30,10 +28,12 @@ def _split_mats(mats: list[np.ndarray], test_size: float, n_parts: int) -> tuple
         # This eliminates the manual start/end indexing logic
         samples_per_part = mat.shape[0] // n_parts
         # We handle potential remainder samples by trimming or using exact multiples
+        # Trim to the largest prefix whose length is evenly divisible by n_parts,
+        # discarding any leftover samples that would prevent equal-sized parts.
         reshaped = mat[: n_parts * samples_per_part].reshape(n_parts, samples_per_part, *mat.shape[1:])
 
         # 2. Calculate split point for the inner dimension
-        split_idx = int(samples_per_part * (1 - test_size))
+        split_idx = reshaped.shape[1] - int(test_window)
 
         # 3. Vectorized slicing
         # reshaped[:, :split_idx] gives all train parts at once
@@ -46,37 +46,34 @@ def _split_mats(mats: list[np.ndarray], test_size: float, n_parts: int) -> tuple
     return train_mats, test_mats
 
 
-def get_splits(
+def load_datasets(
     dataset_path: Path,
-    batch_size: int,
     window_size: int,
     overlap_size: int,
     n_activities: int,
     n_antennas: int,
     antenna_select: int,
-    test_size: float = 0.2,
-) -> tuple[DataLoader, DataLoader]:
-    """Build the CSI dataset train/test dataloaders with DistributedSampler.
+    test_window: float,
+) -> tuple[CSIDataset, CSIDataset]:
+    """Build the CSI train/test datasets.
 
     Arguments:
         dataset_path: Path to the dataset directory.
-        batch_size: Batch size for the dataloaders.
-        window_size: Window size for the CSI samples.
+        window_size: Window size for training samples.
         overlap_size: Overlap size for the CSI samples.
         n_activities: Number of activities (files) to load from the dataset.
         n_antennas: Number of antennas to use from the CSI data.
         antenna_select: Antenna selection strategy.
-        test_size: Proportion of the dataset to include in the test split.
-        shuffle: Whether to shuffle the data in the dataloaders.
+        test_window: Size of the test window to keep from each quarter of each activity.
 
     Returns:
-        A tuple containing the training and testing DataLoaders.
+        A tuple containing the train and test CSIDatasets.
 
     """
     files = [dataset_path / f"S1a_{x}.mat" for x in ascii_uppercase[:n_activities]]
     mats = [np.array(sio.loadmat(file)["csi"]) for file in files]
 
-    train_mats, test_mats = _split_mats(mats, test_size=test_size, n_parts=__DATASET_PARTS)
+    train_mats, test_mats = _split_mats(mats, test_window=test_window, n_parts=__DATASET_PARTS)
 
     # Shape of dataset samples: (n_antennas, window_size, n_subcarriers)
     train_dataset = CSIDataset(
@@ -86,27 +83,14 @@ def get_splits(
         n_antennas=n_antennas,
         antenna_select=antenna_select,
     )
-    train_dataloader = DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        pin_memory=True,
-        shuffle=False,  # DistributedSampler already shuffles the data
-        sampler=DistributedSampler(train_dataset, shuffle=True),  # Shuffle train data
-    )
 
     test_dataset = CSIDataset(
         csi_mats=test_mats,
         window_size=window_size,
-        overlap_size=overlap_size,
+        overlap_size=0,
         n_antennas=n_antennas,
         antenna_select=antenna_select,
-    )
-    test_dataloader = DataLoader(
-        test_dataset,
-        batch_size=batch_size,
-        pin_memory=True,
-        shuffle=False,
-        sampler=DistributedSampler(test_dataset, shuffle=False),  # Do not shuffle test data
+        augment_probability=0.0,
     )
 
-    return train_dataloader, test_dataloader
+    return train_dataset, test_dataset
