@@ -90,9 +90,7 @@ class VAETrainer:
         if isinstance(self.__dataloader.sampler, DistributedSampler):
             self.__dataloader.sampler.set_epoch(epoch)
 
-        epoch_loss = 0.0
-        epoch_recon_loss = 0.0
-        epoch_kl_loss = 0.0
+        metrics = torch.tensor([0.0, 0.0, 0.0], device=self.__gpu_id)
 
         tau = self.__temperature_annealer.step(epoch)
         kl_weight = self.__kl_weight_annealer.step(epoch)
@@ -106,18 +104,22 @@ class VAETrainer:
                 capacity,
             )
 
-            epoch_loss += loss
-            epoch_recon_loss += recon_loss
-            epoch_kl_loss += kl_loss
+            metrics += torch.tensor(
+                [loss, recon_loss, kl_loss],
+                device=self.__gpu_id,
+            )
 
-        epoch_loss /= len(self.__dataloader)
-        epoch_recon_loss /= len(self.__dataloader)
-        epoch_kl_loss /= len(self.__dataloader)
+        # Synchronize metrics across all processes so the lr_annealer gets the correct value
+        dist.all_reduce(metrics, op=dist.ReduceOp.SUM)
+        # Get total number of batches across all processes to account for batch size differences
+        total_batches = torch.tensor(len(self.__dataloader), device=self.__gpu_id)
+        dist.all_reduce(total_batches, op=dist.ReduceOp.SUM)
+        metrics /= total_batches
 
         # This has to be called after each epoch
-        self.__lr_annealer.step(epoch_loss)
+        self.__lr_annealer.step(metrics[0])
 
-        return epoch_loss, epoch_recon_loss, epoch_kl_loss
+        return tuple(metrics.tolist())
 
     def train(self, epochs: int) -> tuple[float, float, float]:
         """Train the VAE model for a specified number of epochs.
@@ -134,35 +136,27 @@ class VAETrainer:
         """
         self.__model.train()
 
-        total_loss = 0.0
-        total_recon_loss = 0.0
-        total_kl_loss = 0.0
+        total_metrics = torch.tensor([0.0, 0.0, 0.0], device=self.__gpu_id)
 
         for epoch in range(epochs):
             epoch_loss, epoch_recon_loss, epoch_kl_loss = self.__run_epoch(epoch)
 
             # Distributed averaging of metrics
-            metrics = torch.tensor(
+            total_metrics += torch.tensor(
                 [epoch_loss, epoch_recon_loss, epoch_kl_loss],
                 device=self.__gpu_id,
             )
-            dist.all_reduce(metrics, op=dist.ReduceOp.SUM)
-            epoch_loss, epoch_recon_loss, epoch_kl_loss = (metrics / dist.get_world_size()).tolist()
-            total_loss += epoch_loss
-            total_recon_loss += epoch_recon_loss
-            total_kl_loss += epoch_kl_loss
 
             if self.__trial is not None:
                 self.__trial.report(epoch_loss, step=epoch)
-                self.__trial.set_user_attr("epoch_loss", epoch_loss)
-                self.__trial.set_user_attr("epoch_kl_loss", epoch_kl_loss)
+                kl_history = self.__trial.user_attrs.get("kl_history", [])
+                kl_history.append(epoch_kl_loss)
+                self.__trial.set_user_attr("kl_history", kl_history)
 
                 if self.__trial.should_prune():
-                    msg = f"Trial was pruned at epoch {epoch}."
+                    msg = f"Pruned at epoch {epoch}."
                     raise optuna.TrialPruned(msg)
 
-        total_loss /= epochs
-        total_recon_loss /= epochs
-        total_kl_loss /= epochs
+        total_metrics /= epochs
 
-        return total_loss, total_recon_loss, total_kl_loss
+        return tuple(total_metrics.tolist())

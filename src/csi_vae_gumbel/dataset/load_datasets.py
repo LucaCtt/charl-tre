@@ -48,23 +48,23 @@ def _split_mats(mats: list[np.ndarray], test_window: float, n_parts: int) -> tup
 
 def load_datasets(
     dataset_path: Path,
-    window_size: int,
+    train_window_size: int,
+    test_window_size: float,
     overlap_size: int,
     n_activities: int,
     n_antennas: int,
     antenna_select: int,
-    test_window: float,
 ) -> tuple[CSIDataset, CSIDataset]:
     """Build the CSI train/test datasets.
 
     Arguments:
         dataset_path: Path to the dataset directory.
-        window_size: Window size for training samples.
+        train_window_size: Window size for training samples.
+        test_window_size: Window size for testing samples. Four windows of this size will make up the test samples.
         overlap_size: Overlap size for the CSI samples.
         n_activities: Number of activities (files) to load from the dataset.
         n_antennas: Number of antennas to use from the CSI data.
         antenna_select: Antenna selection strategy.
-        test_window: Size of the test window to keep from each quarter of each activity.
 
     Returns:
         A tuple containing the train and test CSIDatasets.
@@ -73,12 +73,12 @@ def load_datasets(
     files = [dataset_path / f"S1a_{x}.mat" for x in ascii_uppercase[:n_activities]]
     mats = [np.array(sio.loadmat(file)["csi"]) for file in files]
 
-    train_mats, test_mats = _split_mats(mats, test_window=test_window, n_parts=__DATASET_PARTS)
+    train_mats, test_mats = _split_mats(mats, test_window=test_window_size, n_parts=__DATASET_PARTS)
 
     # Shape of dataset samples: (n_antennas, window_size, n_subcarriers)
     train_dataset = CSIDataset(
         csi_mats=train_mats,
-        window_size=window_size,
+        window_size=train_window_size,
         overlap_size=overlap_size,
         n_antennas=n_antennas,
         antenna_select=antenna_select,
@@ -86,7 +86,7 @@ def load_datasets(
 
     test_dataset = CSIDataset(
         csi_mats=test_mats,
-        window_size=window_size,
+        window_size=train_window_size,
         overlap_size=0,
         n_antennas=n_antennas,
         antenna_select=antenna_select,

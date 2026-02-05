@@ -115,28 +115,28 @@ class Evaluator:
 
         for x, y in self.__dataloader:
             with torch.no_grad():
-                x_temp = x.view(x.size(0) // 3, 3, x.size(1), x.size(2), x.size(3))
-                z_hard = []
-                z_logits = []
-                for i in range(3):
-                    _, z_hard_partial, z_logits_partial = self.__vae(x_temp[:, i].to(self.__gpu_id))
-                    z_hard_partial = z_hard_partial.view(z_hard_partial.size(0), -1)
-                    z_hard.append(z_hard_partial)
-                    z_logits_partial = z_logits_partial.view(z_logits_partial.size(0), -1)
-                    z_logits.append(z_logits_partial)
+                batch_size = x.shape[0]
 
-                z_logits = torch.cat(z_logits, dim=0)
-                z_hard_vae = torch.cat(z_hard, dim=0)
+                _, z_hard, z_logits = self.__vae(x.to(self.__gpu_id))
+
+                # (B, latent_dim, n_categories) → (B, latent_dim * n_categories)
+                z_hard = z_hard.view(batch_size, -1)
+
+                # (B, latent_dim * n_categories) → (B/3, 3 * latent_dim * n_categories)
+                z_hard = z_hard.view(batch_size // 3, 3 * z_hard.shape[1])
+
+                # Take one label every three samples
+                y_trimmed = y[::3].to(self.__gpu_id)
 
                 z_logits_flat = z_logits.view(z_logits.size(0), -1).cpu().numpy()
                 all_latents.append(z_logits_flat)
                 all_labels.append(y.numpy())
 
-                class_logits = self.__classifier(z_hard_vae)
+                class_logits = self.__classifier(z_hard)
                 preds = torch.argmax(class_logits, dim=1)
 
-                accuracy_metric.update(preds, y.to(self.__gpu_id))
-                confusion_matrix_metric.update(preds, y.to(self.__gpu_id))
+                accuracy_metric.update(preds, y_trimmed)
+                confusion_matrix_metric.update(preds, y_trimmed)
 
         conf_matrix = confusion_matrix_metric.compute().cpu().numpy()
 

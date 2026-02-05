@@ -39,8 +39,10 @@ class Settings(BaseSettings):
     ]
     n_samples: int = 12000
     """Number of samples to extract from each CSI matrix file."""
-    window_size: int = 150
-    """Size of the window of CSI in a sample, where 150 CSI = 1 second of data."""
+    train_window_size: int = 150
+    """Size of the window of CSI in a VAE train sample, where 150 CSI = 1 second of data."""
+    test_window_size: int = 450
+    """Size of the window of CSI in a classifier test sample, where 450 CSI = 3 seconds of data."""
     overlap_size: int = 15
     """Size of the overlap between two consecutive windows."""
     n_antennas: int = 1
@@ -55,7 +57,7 @@ class Settings(BaseSettings):
     """Name of the VAE model, used for checkpointing."""
     study_dir: str = f"out/{study_name}"
     """Directory to save model checkpoints."""
-    n_trials: int = 30
+    n_trials: int = 10
     """Number of Optuna trials for hyperparameter optimization."""
     n_categories: int = math.ceil(math.log2(n_activities))
 

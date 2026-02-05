@@ -110,7 +110,7 @@ def _objective(single_trial: BaseTrial | None, rank: int, train_dl: DataLoader) 
     )
 
     # Build and train VAE
-    vae = CategoricalVAE(settings.window_size, settings.n_categories, parameters.latent_dim)
+    vae = CategoricalVAE(settings.train_window_size, settings.n_categories, parameters.latent_dim)
     vae_trainer = VAETrainer(vae, train_dl, parameters, rank, trial)
     loss, recon_loss, kl_loss = vae_trainer.train(settings.n_epochs)
 
@@ -133,7 +133,13 @@ def _run_optimize(rank: int, world_size: int, shared_dict: dict, train_ds: CSIDa
     _ddp_setup(rank, world_size)
 
     sampler = DistributedSampler(train_ds, num_replicas=world_size, rank=rank, shuffle=True)
-    train_dl = DataLoader(train_ds, batch_size=settings.train_batch_size, sampler=sampler, pin_memory=True)
+    train_dl = DataLoader(
+        train_ds,
+        batch_size=settings.train_batch_size,
+        drop_last=True,
+        sampler=sampler,
+        pin_memory=True,
+    )
 
     if rank == 0:
         study = optuna.create_study(
@@ -153,6 +159,7 @@ def _run_optimize(rank: int, world_size: int, shared_dict: dict, train_ds: CSIDa
 
     if rank == 0:
         study = shared_dict["study"]
+        study.trials_dataframe().to_csv(Path(settings.study_dir) / "study_results.csv")
         pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
         complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])
 
@@ -174,11 +181,17 @@ def _run_optimize(rank: int, world_size: int, shared_dict: dict, train_ds: CSIDa
 
 def _run_eval(study: optuna.study.Study, train_ds: CSIDataset, test_ds: CSIDataset) -> None:
     params = VAEParameters(**study.best_trial.params)
-    train_dl = DataLoader(train_ds, batch_size=settings.train_batch_size, shuffle=True, pin_memory=True)
+    train_dl = DataLoader(
+        train_ds,
+        batch_size=settings.train_batch_size,
+        drop_last=True,
+        shuffle=False,
+        pin_memory=True,
+    )
     test_dl = DataLoader(test_ds, batch_size=len(test_ds), shuffle=False, pin_memory=True)
 
     vae = CategoricalVAE(
-        window_size=settings.window_size,
+        window_size=settings.train_window_size,
         n_categories=settings.n_categories,
         latent_dim=params.latent_dim,
     )
@@ -187,7 +200,7 @@ def _run_eval(study: optuna.study.Study, train_ds: CSIDataset, test_ds: CSIDatas
     logger.info("Loaded best VAE model for evaluation.")
 
     classifier = Classifier(
-        params.latent_dim * settings.n_categories,
+        params.latent_dim * settings.n_categories * 3,
         settings.n_activities,
         params.latent_dim * settings.n_activities // 2,
     )
@@ -215,12 +228,12 @@ def main() -> None:
     logger.info("Loading datasets from %s", settings.dataset_path)
     train_ds, test_ds = load_datasets(
         dataset_path=Path(settings.dataset_path),
-        window_size=settings.window_size,
+        train_window_size=settings.train_window_size,
+        test_window_size=settings.test_window_size,
         overlap_size=settings.overlap_size,
         n_activities=settings.n_activities,
         n_antennas=settings.n_antennas,
         antenna_select=settings.antenna_select,
-        test_window=settings.window_size * 3,  # Keep three windows per quarter for testing
     )
 
     world_size = torch.cuda.device_count() if torch.cuda.is_available() else 1
