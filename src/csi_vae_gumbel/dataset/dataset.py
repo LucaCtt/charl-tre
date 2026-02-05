@@ -99,13 +99,13 @@ class CSIDataset(Dataset):
         # The window_size represents the time dimension
         window = np.transpose(window, (2, 0, 1))
 
-        # Apply augmentation if needed
-        if augmented:
-            window = self.__augmenter.apply(window.copy())
-
         # Normalize if needed
         if self.__normalize:
             window = (window - self.__global_min) / (self.__global_max - self.__global_min + 1e-12)
+
+        # Apply augmentation if needed
+        if augmented:
+            window = self.__augmenter.apply(window.copy())
 
         x = torch.from_numpy(window)
         y = self.__labels[file_id]

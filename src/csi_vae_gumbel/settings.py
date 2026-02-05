@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     """Enable debug mode with more verbose logging and synchronous multi-GPU training."""
     seed: int = 42
     """Random seed for reproducibility."""
-    n_epochs: int = 100
+    n_epochs: int = 150
     """Number of training epochs for both VAE and classifier."""
     train_batch_size: int = 32 * 3
     """Batch size for training both VAE and classifier. Will be divided by the number of GPUs used."""
@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     """Name of the VAE model, used for checkpointing."""
     study_dir: str = f"out/{study_name}"
     """Directory to save model checkpoints."""
-    n_trials: int = 10
+    n_trials: int = 50
     """Number of Optuna trials for hyperparameter optimization."""
     n_categories: int = math.ceil(math.log2(n_activities))
 

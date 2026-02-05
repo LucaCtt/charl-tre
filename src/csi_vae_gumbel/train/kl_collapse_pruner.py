@@ -5,7 +5,7 @@ from optuna.pruners import BasePruner
 class KLCollapsePruner(BasePruner):
     """Stateless pruner that avoids private API access."""
 
-    def __init__(self, patience: int = 3, warmup_steps: int = 5, eps: float = 1e-4) -> None:
+    def __init__(self, patience: int = 3, warmup_steps: int = 5, eps: float = 1e-5) -> None:
         """Initialize the pruner with patience, epsilon threshold, and warmup steps.
 
         Arguments:

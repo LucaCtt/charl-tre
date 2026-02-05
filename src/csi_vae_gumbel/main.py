@@ -101,6 +101,7 @@ def _objective(single_trial: BaseTrial | None, rank: int, train_dl: DataLoader) 
             "final_cap",
             settings.final_cap_min,
             settings.final_cap_max,
+            step=0.2,
         ),
         gumbel_temp=trial.suggest_float(
             "gumbel_temp",
@@ -126,7 +127,7 @@ def _objective(single_trial: BaseTrial | None, rank: int, train_dl: DataLoader) 
         save_path.mkdir(parents=True, exist_ok=True)
         torch.save(vae.state_dict(), save_path / "model.pt")
 
-    return recon_loss
+    return loss
 
 
 def _run_optimize(rank: int, world_size: int, shared_dict: dict, train_ds: CSIDataset) -> None:

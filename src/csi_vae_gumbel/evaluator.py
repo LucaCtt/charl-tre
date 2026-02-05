@@ -12,7 +12,7 @@ from torchmetrics.classification import MulticlassAccuracy, MulticlassConfusionM
 def _plot_confusion_matrix(matrix: np.ndarray, class_names: list[str], out_dir: Path) -> None:
     plt.figure(figsize=(10, 8))
     # Normalize by row (True Labels) to see percentages
-    matrix_perc = matrix.astype("float") / matrix.sum(axis=1)[:, np.newaxis]
+    matrix_perc = matrix.astype("float") / (matrix.sum(axis=1)[:, np.newaxis] + 1e-12)
 
     sns.heatmap(
         matrix_perc,
@@ -30,6 +30,7 @@ def _plot_confusion_matrix(matrix: np.ndarray, class_names: list[str], out_dir: 
     plt.tight_layout()
     plt.savefig(out_dir / "confusion_matrix.png")
     plt.show()
+    plt.close()
 
 
 def _plot_latent_tsne(latent_array: np.ndarray, label_array: np.ndarray, class_names: list[str], out_dir: Path) -> None:
@@ -67,6 +68,7 @@ def _plot_latent_tsne(latent_array: np.ndarray, label_array: np.ndarray, class_n
     plt.tight_layout()
     plt.savefig(f"{out_dir}/latent_tsne.png")
     plt.show()
+    plt.close()
 
 
 class Evaluator:
@@ -114,29 +116,25 @@ class Evaluator:
         all_labels = []
 
         for x, y in self.__dataloader:
-            with torch.no_grad():
-                batch_size = x.shape[0]
+            batch_size = x.shape[0]
 
-                _, z_hard, z_logits = self.__vae(x.to(self.__gpu_id))
+            _, z_hard, _ = self.__vae(x.to(self.__gpu_id))
 
-                # (B, latent_dim, n_categories) → (B, latent_dim * n_categories)
-                z_hard = z_hard.view(batch_size, -1)
+            z_hard = z_hard.view(batch_size, -1)
 
-                # (B, latent_dim * n_categories) → (B/3, 3 * latent_dim * n_categories)
-                z_hard = z_hard.view(batch_size // 3, 3 * z_hard.shape[1])
+            # (B, latent_dim, n_categories) → (B/3, 3 * latent_dim * n_categories)
+            z_hard = z_hard.view(batch_size, -1)
+            z_combined = z_hard.view(batch_size // 3, -1)
 
-                # Take one label every three samples
-                y_trimmed = y[::3].to(self.__gpu_id)
+            # Take one label every three samples
+            y_trimmed = y[::3].to(self.__gpu_id)
 
-                z_logits_flat = z_logits.view(z_logits.size(0), -1).cpu().numpy()
-                all_latents.append(z_logits_flat)
-                all_labels.append(y.numpy())
+            preds = torch.argmax(self.__classifier(z_combined), dim=1)
+            accuracy_metric.update(preds, y_trimmed)
+            confusion_matrix_metric.update(preds, y_trimmed)
 
-                class_logits = self.__classifier(z_hard)
-                preds = torch.argmax(class_logits, dim=1)
-
-                accuracy_metric.update(preds, y_trimmed)
-                confusion_matrix_metric.update(preds, y_trimmed)
+            all_latents.append(z_combined.cpu().numpy())
+            all_labels.append(y_trimmed.cpu().numpy())
 
         conf_matrix = confusion_matrix_metric.compute().cpu().numpy()
 

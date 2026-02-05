@@ -67,7 +67,7 @@ class VAETrainer:
         tau: float,
         kl_weight: float,
         capacity: float,
-    ) -> tuple[float, float, float]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         self.__optimizer.zero_grad()
 
         x_recon, _, logits = self.__model(x_true, tau)
@@ -83,7 +83,7 @@ class VAETrainer:
         loss.backward()
         self.__optimizer.step()
 
-        return loss.item(), recon_loss.item(), kl_loss.item()
+        return loss, recon_loss, kl_loss
 
     def __run_epoch(self, epoch: int) -> tuple[float, float, float]:
         # Set the epoch for shuffling if using DistributedSampler
@@ -105,7 +105,7 @@ class VAETrainer:
             )
 
             metrics += torch.tensor(
-                [loss, recon_loss, kl_loss],
+                [loss.detach(), recon_loss.detach(), kl_loss.detach()],
                 device=self.__gpu_id,
             )
 

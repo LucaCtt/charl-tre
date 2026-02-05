@@ -48,7 +48,7 @@ class ClassifierTrainer:
             with torch.no_grad():
                 accuracy = (logits.argmax(dim=1) == y_trimmed).float().mean()
 
-            metrics += torch.tensor([loss.item(), accuracy.item()], device=self.__gpu_id)
+            metrics += torch.tensor([loss.detach(), accuracy], device=self.__gpu_id)
 
             loss.backward()
             self.__optimizer.step()

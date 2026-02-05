@@ -36,7 +36,7 @@ class CSIAugmenter:
 
     def subcarrier_masking(self, x: np.ndarray) -> np.ndarray:
         """Randomly masks frequency subcarriers (columns) to simulate interference."""
-        mask = self.rng.random(x.shape[-1]) < self.mask_prob
+        mask = self.rng.random(x.shape[-1]) > self.mask_prob
         # Broadcast mask across antennas and time
         return x * mask[np.newaxis, np.newaxis, :]
 
