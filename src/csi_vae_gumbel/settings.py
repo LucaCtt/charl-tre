@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     """Random seed for reproducibility."""
     n_epochs: int = 150
     """Number of training epochs for both VAE and classifier."""
-    train_batch_size: int = 32 * 3
+    train_batch_size: int = 48 * 3
     """Batch size for training both VAE and classifier. Will be divided by the number of GPUs used."""
 
     # Dataset config
@@ -39,13 +39,13 @@ class Settings(BaseSettings):
     ]
     n_samples: int = 12000
     """Number of samples to extract from each CSI matrix file."""
-    train_window_size: int = 75
+    train_window_size: int = 150
     """Size of the window of CSI in a VAE train sample, where 150 CSI = 1 second of data."""
     test_window_factor: int = 3
     """Number of train windows to concatenate for each test sample, to evaluate on longer sequences."""
     test_ratio: float = 0.3
     """Proportion of the dataset to be used for testing."""
-    overlap_size: int = 15
+    overlap_size: int = 75
     """Size of the overlap between two consecutive windows."""
     n_antennas: int = 1
     """Total number of antennas used."""
@@ -55,13 +55,14 @@ class Settings(BaseSettings):
     """Number of subcarriers in each CSI sample."""
 
     # Optuna study config
-    study_name: str = f"vae_gumbel_a{n_antennas}"
+    study_name: str = f"vae_gumbel_a{n_antennas}_w{train_window_size}"
     """Name of the VAE model, used for checkpointing."""
     study_dir: str = f"out/{study_name}"
     """Directory to save model checkpoints."""
     n_trials: int = 100
     """Number of Optuna trials for hyperparameter optimization."""
     n_categories: int = math.ceil(math.log2(n_activities))
+    """Number of categories for the Gumbel-Softmax distribution."""
 
     # Optuna hyperparameter search space
     latent_dim_min: int = 1

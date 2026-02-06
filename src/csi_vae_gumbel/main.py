@@ -129,7 +129,7 @@ def _objective(single_trial: BaseTrial | None, rank: int, train_dl: DataLoader) 
         save_path.mkdir(parents=True, exist_ok=True)
         torch.save(vae_model.state_dict(), save_path / "model.pt")
 
-    return loss
+    return recon_loss
 
 
 def _run_optimize(rank: int, world_size: int, shared_dict: dict, train_ds: CSIDataset) -> None:

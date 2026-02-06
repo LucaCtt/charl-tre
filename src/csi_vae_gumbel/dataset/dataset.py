@@ -83,7 +83,7 @@ class CSIDataset(Dataset):
             for start in range(0, csi.shape[0] - window_size + 1, step_size):
                 self.__index_map.append((file_id, start, False))
 
-                if torch.rand(1).item() < self.__augment_probability:
+                if torch.rand(1) < self.__augment_probability:
                     self.__index_map.append((file_id, start, True))
 
     def __len__(self) -> int:
