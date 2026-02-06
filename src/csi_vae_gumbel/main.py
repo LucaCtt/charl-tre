@@ -111,7 +111,12 @@ def _objective(single_trial: BaseTrial | None, rank: int, train_dl: DataLoader) 
     )
 
     # Build and train VAE
-    vae = CategoricalVAE(settings.train_window_size, settings.n_categories, parameters.latent_dim)
+    vae = CategoricalVAE(
+        settings.train_window_size,
+        settings.n_subcarriers // 8,
+        settings.n_categories,
+        parameters.latent_dim,
+    )
     vae_trainer = VAETrainer(vae, train_dl, parameters, rank, trial)
     loss, recon_loss, kl_loss = vae_trainer.train(settings.n_epochs)
 
@@ -194,9 +199,10 @@ def _run_eval(study: optuna.study.Study, train_ds: CSIDataset, test_ds: CSIDatas
     test_dl = DataLoader(test_ds, batch_size=len(test_ds), shuffle=False, pin_memory=True)
 
     vae = CategoricalVAE(
-        window_size=settings.train_window_size,
-        n_categories=settings.n_categories,
-        latent_dim=params.latent_dim,
+        settings.train_window_size,
+        settings.n_subcarriers // 8,
+        settings.n_categories,
+        params.latent_dim,
     )
     load_path = Path(settings.study_dir) / f"trial_{study.best_trial.number}" / "model.pt"
     vae.load_state_dict(torch.load(load_path))

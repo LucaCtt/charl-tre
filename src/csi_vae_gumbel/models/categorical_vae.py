@@ -1,105 +1,120 @@
 import torch
+import torch.nn.functional as func
 from torch import nn
-from torch.nn import functional as func
 
 
 class CategoricalVAE(nn.Module):
-    """Categorical VAE for CSI data from a single antenna."""
+    """Categorical VAE with Gumbel-Softmax reparameterization."""
 
     def __init__(
         self,
         window_size: int,
+        n_subcarriers: int,
         n_categories: int,
         latent_dim: int,
     ) -> None:
-        """Initialize Categorical VAE.
+        """Initialize the Categorical VAE model.
 
         Arguments:
-            window_size (int): Size of the time window.
-            n_categories (int): Number of latent categorical variables.
-            latent_dim (int): Number of classes per categorical variable.
+            window_size: Size of the time window in the input data.
+            n_subcarriers: Number of subcarriers in the input data.
+            n_categories: Number of categories for the categorical latent variables.
+            latent_dim: Dimensionality of the latent space.
 
         """
         super().__init__()
+        self.__window_size = window_size
+        self.__n_subcarriers = n_subcarriers
+        self.__n_categories = n_categories
+        self.__latent_dim = latent_dim
 
-        self.window_size = window_size
-        self.n_categories = n_categories
-        self.latent_dim = latent_dim
+        # Encoder group
+        self.__encoder_conv = nn.Sequential(
+            nn.Conv2d(1, 8, kernel_size=3, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(8, 16, kernel_size=3, stride=2, padding=1),
+            nn.ReLU(),
+        )
+        # Dynamic dimension capture
+        self.__latent_feat_shape, out_paddings = self.__get_shapes_and_paddings()
+        self.__flat_dim = int(torch.prod(torch.tensor(self.__latent_feat_shape)).item())
+        self.__encoder_fc = nn.Linear(self.__flat_dim, n_categories * latent_dim)
 
-        # Encoder: Convolutional layers
-        self.encoder_conv_1 = nn.Conv2d(1, 8, kernel_size=3, stride=2, padding=1)
-        self.encoder_conv_2 = nn.Conv2d(8, 16, kernel_size=3, stride=2, padding=1)
+        # Decoder group
+        self.__decoder_fc = nn.Linear(n_categories * latent_dim, self.__flat_dim)
+        self.__decoder_conv = nn.Sequential(
+            nn.ConvTranspose2d(16, 8, kernel_size=3, stride=2, padding=1, output_padding=out_paddings[0]),
+            nn.ReLU(),
+            nn.ConvTranspose2d(8, 1, kernel_size=3, stride=2, padding=1, output_padding=out_paddings[1]),
+            nn.Sigmoid(),
+        )
 
-        # Latent space: 16 * 38 * 64 is the flattened size after strides
-        self.flat_dim = 16 * 38 * 64
-        self.encoder_fc = nn.Linear(self.flat_dim, n_categories * latent_dim)
+    def __get_shapes_and_paddings(self) -> tuple:
+        """Mock pass to find flattened size and required output_paddings."""
+        with torch.no_grad():
+            x = torch.zeros(1, 1, self.__window_size, self.__n_subcarriers)
 
-        # Decoder: Mirror of encoder
-        self.decoder_fc = nn.Linear(n_categories * latent_dim, self.flat_dim)
-        self.decoder_deconv_1 = nn.ConvTranspose2d(16, 8, kernel_size=3, stride=2, padding=1, output_padding=(0, 1))
-        self.decoder_deconv_2 = nn.ConvTranspose2d(8, 1, kernel_size=3, stride=2, padding=1, output_padding=(1, 1))
+            # Trace Layer 1
+            l1 = self.__encoder_conv[0](x)
+            # Trace Layer 2
+            l2 = self.__encoder_conv[2](l1)
 
-    def encode(self, x: torch.Tensor) -> torch.Tensor:
-        """Encode input CSI data into raw logits for categorical distributions.
+            # Helper to find output_padding needed for a specific layer
+            def __get_op(in_shape: int, out_target: int) -> int:
+                # Standard formula: out = (in-1)*s - 2*p + k
+                current_out = (in_shape - 1) * 2 - 2 * 1 + 3
+                return out_target - current_out
 
-        Arguments:
-            x (torch.Tensor): Input CSI data.
+            # op1: From l2 back to l1
+            op1 = (__get_op(l2.shape[2], l1.shape[2]), __get_op(l2.shape[3], l1.shape[3]))
+            # op2: From l1 back to original x
+            op2 = (__get_op(l1.shape[2], x.shape[2]), __get_op(l1.shape[3], x.shape[3]))
 
-        Returns:
-            torch.Tensor: Raw logits for categorical distributions.
+            return l2.shape[1:], (op1, op2)
 
-        """
-        z = func.relu(self.encoder_conv_1(x))
-        z = func.relu(self.encoder_conv_2(z))
-
-        z = z.view(z.size(0), -1)
-        return self.encoder_fc(z)
-
-    def decode(self, latent_repr: torch.Tensor) -> torch.Tensor:
-        """Decode latent categorical representation back to CSI data.
-
-        Arguments:
-            latent_repr (torch.Tensor): Latent categorical representation.
-
-        Returns:
-            torch.Tensor: Reconstructed CSI data.
-
-        """
-        z = func.relu(self.decoder_fc(latent_repr))
-        z = z.view(z.size(0), 16, 38, 64)
-
-        z = func.relu(self.decoder_deconv_1(z))
-
-        # Final layer: No ReLU, use Sigmoid to bound CSI between 0 and 1
-        return torch.sigmoid(self.decoder_deconv_2(z))
-
-    def forward(self, x: torch.Tensor, tau: float = 1.0) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Forward pass through the Categorical VAE.
+    def __encode(self, x: torch.Tensor) -> torch.Tensor:
+        """Encode input into logits for categorical distribution.
 
         Arguments:
-            x (torch.Tensor): Input CSI data.
-            tau (float): Temperature parameter for Gumbel-Softmax.
+            x: Input tensor of shape (batch_size, 1, window_size, n_subcarriers)
 
         Returns:
-            tuple[torch.Tensor, torch.Tensor, torch.Tensor]: Reconstructed CSI data,
-            hard one-hot latent samples, and raw logits.
+            Logits tensor of shape (batch_size, latent_dim * n_categories)
 
         """
-        # 1. Get raw logits from encoder
-        logits_flat = self.encode(x)
+        z = self.__encoder_conv(x)
+        return self.__encoder_fc(z.view(z.size(0), -1))
 
-        # 2. Reshape to (Batch, N_Latents, Classes_Per_Latent)
-        # PyTorch Gumbel Softmax expects classes on the LAST dimension
-        logits = logits_flat.view(-1, self.latent_dim, self.n_categories)
+    def __decode(self, z: torch.Tensor) -> torch.Tensor:
+        """Decode latent representation back to input space.
 
-        # 3. Gumbel-Softmax Reparameterization
-        # hard=True returns one-hot during forward, but keeps grads via relaxation
-        z_hard = func.gumbel_softmax(logits, tau=tau, hard=True)
+        Arguments:
+            z: Latent tensor of shape (batch_size, latent_dim * n_categories)
 
-        # 4. Flatten back for the decoder
-        z_cat_flat = z_hard.view(z_hard.size(0), -1)
+        Returns:
+            Reconstructed tensor of shape (batch_size, 1, window_size, n_subcarriers)
 
-        # 5. Reconstruct
-        recon = self.decode(z_cat_flat)
+        """
+        z = func.relu(self.__decoder_fc(z))
+        z = z.view(-1, *self.__latent_feat_shape)
+        return self.__decoder_conv(z)
 
+    def forward(self, x: torch.Tensor, tau: float = 1.0) -> tuple:
+        """Forward pass through the VAE.
+
+        Arguments:
+            x: Input tensor of shape (batch_size, 1, window_size, n_subcarriers)
+            tau: Temperature parameter for Gumbel-Softmax
+
+        Returns:
+            recon: Reconstructed tensor of shape (batch_size, 1, window_size, n_subcarriers)
+            z_hard: One-hot latent tensor of shape (batch_size, latent_dim, n_categories)
+            logits: Logits tensor of shape (batch_size, latent_dim, n_categories)
+
+        """
+        logits_flat = self.__encode(x)
+        logits = logits_flat.view(-1, self.__latent_dim, self.__n_categories)
+        z_hard = func.gumbel_softmax(logits, tau=tau, hard=True, dim=-1)
+
+        recon = self.__decode(z_hard.view(z_hard.size(0), -1))
         return recon, z_hard, logits
