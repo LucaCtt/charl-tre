@@ -39,6 +39,7 @@ class CSIDataset(Dataset):
         self.__augmenter = CSIAugmenter()
         self.__normalize = normalize
         self.__augment_probability = augment_probability
+        self.__augment_enabled = augment_probability > 0.0
 
         self.__data: list[np.ndarray] = []
         self.__labels: list[int] = []
@@ -46,7 +47,6 @@ class CSIDataset(Dataset):
 
         self.__global_min = float("inf")
         self.__global_max = 0.0
-
 
         # Load files once, build index map
         for label, csi_mat in enumerate(csi_mats):
@@ -104,10 +104,14 @@ class CSIDataset(Dataset):
             window = (window - self.__global_min) / (self.__global_max - self.__global_min + 1e-12)
 
         # Apply augmentation if needed
-        if augmented:
+        if augmented and self.__augment_enabled:
             window = self.__augmenter.apply(window.copy())
 
         x = torch.from_numpy(window)
         y = self.__labels[file_id]
 
         return x, y
+
+    def toggle_augmentations(self, enable: bool) -> None:
+        """Enable or disable data augmentations for the dataset."""
+        self.__augment_enabled = enable

@@ -17,7 +17,7 @@ class Classifier(nn.Module):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
-            nn.SyncBatchNorm(hidden_dim),
+            nn.LayerNorm(hidden_dim),
             nn.ReLU(inplace=True),
             nn.Dropout(p=0.3),
             nn.Linear(hidden_dim, output_dim),

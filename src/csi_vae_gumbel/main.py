@@ -137,7 +137,6 @@ def _run_optimize(rank: int, world_size: int, shared_dict: dict, train_ds: CSIDa
     train_dl = DataLoader(
         train_ds,
         batch_size=settings.train_batch_size,
-        drop_last=True,
         sampler=sampler,
         pin_memory=True,
     )
@@ -182,10 +181,13 @@ def _run_optimize(rank: int, world_size: int, shared_dict: dict, train_ds: CSIDa
 
 def _run_eval(study: optuna.study.Study, train_ds: CSIDataset, test_ds: CSIDataset) -> None:
     params = VAEParameters(**study.best_trial.params)
+
+    # Disable augmentations for evaluation, because they make dataset length non-deterministic
+    train_ds.toggle_augmentations(False)
+
     train_dl = DataLoader(
         train_ds,
         batch_size=settings.train_batch_size,
-        drop_last=True,
         shuffle=False,
         pin_memory=True,
     )
@@ -203,7 +205,7 @@ def _run_eval(study: optuna.study.Study, train_ds: CSIDataset, test_ds: CSIDatas
     classifier = Classifier(
         params.latent_dim * settings.n_categories * 3,
         settings.n_activities,
-        params.latent_dim * settings.n_activities // 2,
+        2 * params.latent_dim * settings.n_categories * 3,
     )
     classifier_trainer = ClassifierTrainer(
         model=classifier,
@@ -211,11 +213,12 @@ def _run_eval(study: optuna.study.Study, train_ds: CSIDataset, test_ds: CSIDatas
         vae=vae,
         gpu_id=0,
     )
-    classifier_trainer.train(settings.n_epochs)
-    logger.info("Classifier training completed for evaluation.")
+    loss, accuracy = classifier_trainer.train(settings.n_epochs)
+    logger.info("Classifier training completed with loss %.4f and accuracy %.4f", loss, accuracy)
 
     evaluator = Evaluator(vae, classifier, test_dl, settings.activities_labels, 0, Path(settings.study_dir))
-    evaluator.evaluate()
+    accuracy = evaluator.evaluate()
+    logger.info("Evaluation completed with test accuracy %.4f", accuracy)
 
 
 def main() -> None:
@@ -230,7 +233,6 @@ def main() -> None:
     train_ds, test_ds = load_datasets(
         dataset_path=Path(settings.dataset_path),
         train_window_size=settings.train_window_size,
-        test_window_size=settings.test_window_size,
         overlap_size=settings.overlap_size,
         n_activities=settings.n_activities,
         n_antennas=settings.n_antennas,

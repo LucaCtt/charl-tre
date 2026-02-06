@@ -43,7 +43,15 @@ def _plot_latent_tsne(latent_array: np.ndarray, label_array: np.ndarray, class_n
         out_dir: Output directory for saving the plot.
 
     """
-    tsne = TSNE(n_components=2, perplexity=30, learning_rate="auto", init="pca", random_state=42)
+    tsne = TSNE(
+        n_components=2,
+        perplexity=30,
+        learning_rate="auto",
+        init="pca",
+        metric="cosine",
+        early_exaggeration=12,
+        random_state=42,
+    )
     z_tsne = tsne.fit_transform(latent_array)
 
     plt.figure(figsize=(12, 10))
@@ -118,13 +126,12 @@ class Evaluator:
         for x, y in self.__dataloader:
             batch_size = x.shape[0]
 
-            _, z_hard, _ = self.__vae(x.to(self.__gpu_id))
-
-            z_hard = z_hard.view(batch_size, -1)
+            _, z_hard, latents = self.__vae(x.to(self.__gpu_id))
 
             # (B, latent_dim, n_categories) → (B/3, 3 * latent_dim * n_categories)
             z_hard = z_hard.view(batch_size, -1)
             z_combined = z_hard.view(batch_size // 3, -1)
+            latents = latents.view(batch_size, -1)
 
             # Take one label every three samples
             y_trimmed = y[::3].to(self.__gpu_id)
@@ -133,8 +140,9 @@ class Evaluator:
             accuracy_metric.update(preds, y_trimmed)
             confusion_matrix_metric.update(preds, y_trimmed)
 
-            all_latents.append(z_combined.cpu().numpy())
-            all_labels.append(y_trimmed.cpu().numpy())
+            # Use the original latent vectors and labels for t-SNE visualization
+            all_latents.append(latents.cpu().numpy())
+            all_labels.append(y.cpu().numpy())
 
         conf_matrix = confusion_matrix_metric.compute().cpu().numpy()
 
