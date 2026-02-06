@@ -39,9 +39,10 @@ class VAETrainer:
         """
         self.__model = DistributedDataParallel(model.to(gpu_id), device_ids=[gpu_id])
         self.__dataloader = dataloader
-        self.__optimizer = torch.optim.Adam(
+        self.__optimizer = torch.optim.AdamW(
             model.parameters(),
-            lr=parameters.start_lr,
+            lr=1e-3,
+            weight_decay=1e-4,
         )
         self.__lr_annealer = torch.optim.lr_scheduler.ReduceLROnPlateau(
             self.__optimizer,
@@ -51,8 +52,7 @@ class VAETrainer:
             final_capacity=parameters.final_cap,
         )
         self.__temperature_annealer = GumbelTemperatureAnnealer(
-            start_tau=parameters.gumbel_temp,
-            min_tau=parameters.gumbel_temp / 10,
+            start_tau=parameters.start_gumbel_temp,
         )
         self.__kl_weight_annealer = KLWeightAnnealer(
             max_weight=parameters.final_kl_weight,

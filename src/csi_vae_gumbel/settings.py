@@ -39,8 +39,12 @@ class Settings(BaseSettings):
     ]
     n_samples: int = 12000
     """Number of samples to extract from each CSI matrix file."""
-    train_window_size: int = 150
+    train_window_size: int = 75
     """Size of the window of CSI in a VAE train sample, where 150 CSI = 1 second of data."""
+    test_window_factor: int = 3
+    """Number of train windows to concatenate for each test sample, to evaluate on longer sequences."""
+    test_ratio: float = 0.3
+    """Proportion of the dataset to be used for testing."""
     overlap_size: int = 15
     """Size of the overlap between two consecutive windows."""
     n_antennas: int = 1
@@ -62,21 +66,17 @@ class Settings(BaseSettings):
     # Optuna hyperparameter search space
     latent_dim_min: int = 1
     """Minimum latent dimension size."""
-    latent_dim_max: int = 10
+    latent_dim_max: int = 6
     """Maximum latent dimension size."""
-    start_lr_min: float = 1e-4
-    """Minimum starting learning rate."""
-    start_lr_max: float = 3e-3
-    """Maximum starting learning rate."""
     final_kl_weight_min: float = 1e-5
     """Minimum final KL divergence weight in loss computation."""
     final_kl_weight_max: float = 1e-2
     """Maximum final KL divergence weight in loss computation."""
-    final_cap_min: float = 1e-1
+    final_cap_min: float = 0.2
     """Minimum final capacity in loss computation."""
-    final_cap_max: float = 2
+    final_cap_max: float = 1.5
     """Maximum final capacity in loss computation."""
-    gumbel_temp_min: float = 1e-2
+    start_gumbel_temp_min: float = 1
     """Minimum Gumbel-Softmax temperature."""
-    gumbel_temp_max: float = 2
+    start_gumbel_temp_max: float = 1.5
     """Maximum Gumbel-Softmax temperature."""

@@ -79,12 +79,6 @@ def _objective(single_trial: BaseTrial | None, rank: int, train_dl: DataLoader) 
         logger.info("Starting trial %s", trial.number)
 
     parameters = VAEParameters(
-        start_lr=trial.suggest_float(
-            "start_lr",
-            settings.start_lr_min,
-            settings.start_lr_max,
-            log=True,
-        ),
         final_kl_weight=trial.suggest_float(
             "final_kl_weight",
             settings.final_kl_weight_min,
@@ -103,10 +97,10 @@ def _objective(single_trial: BaseTrial | None, rank: int, train_dl: DataLoader) 
             settings.final_cap_max,
             step=0.2,
         ),
-        gumbel_temp=trial.suggest_float(
-            "gumbel_temp",
-            settings.gumbel_temp_min,
-            settings.gumbel_temp_max,
+        start_gumbel_temp=trial.suggest_float(
+            "start_gumbel_temp",
+            settings.start_gumbel_temp_min,
+            settings.start_gumbel_temp_max,
         ),
     )
 
@@ -195,6 +189,7 @@ def _run_eval(study: optuna.study.Study, train_ds: CSIDataset, test_ds: CSIDatas
         batch_size=settings.train_batch_size,
         shuffle=False,
         pin_memory=True,
+        drop_last=True,  # Ensure batch size is consistent for evaluation
     )
     test_dl = DataLoader(test_ds, batch_size=len(test_ds), shuffle=False, pin_memory=True)
 
@@ -209,20 +204,29 @@ def _run_eval(study: optuna.study.Study, train_ds: CSIDataset, test_ds: CSIDatas
     logger.info("Loaded best VAE model for evaluation.")
 
     classifier = Classifier(
-        params.latent_dim * settings.n_categories * 3,
+        params.latent_dim * settings.n_categories * settings.test_window_factor,
         settings.n_activities,
-        2 * params.latent_dim * settings.n_categories * 3,
+        2 * params.latent_dim * settings.n_categories * settings.test_window_factor,
     )
     classifier_trainer = ClassifierTrainer(
         model=classifier,
         dataloader=train_dl,
         vae=vae,
+        test_window_factor=settings.test_window_factor,
         gpu_id=0,
     )
     loss, accuracy = classifier_trainer.train(settings.n_epochs)
     logger.info("Classifier training completed with loss %.4f and accuracy %.4f", loss, accuracy)
 
-    evaluator = Evaluator(vae, classifier, test_dl, settings.activities_labels, 0, Path(settings.study_dir))
+    evaluator = Evaluator(
+        vae,
+        classifier,
+        test_dl,
+        settings.test_window_factor,
+        settings.activities_labels,
+        0,
+        Path(settings.study_dir),
+    )
     accuracy = evaluator.evaluate()
     logger.info("Evaluation completed with test accuracy %.4f", accuracy)
 
@@ -239,11 +243,13 @@ def main() -> None:
     train_ds, test_ds = load_datasets(
         dataset_path=Path(settings.dataset_path),
         train_window_size=settings.train_window_size,
+        test_ratio=settings.test_ratio,
         overlap_size=settings.overlap_size,
         n_activities=settings.n_activities,
         n_antennas=settings.n_antennas,
         antenna_select=settings.antenna_select,
     )
+    logger.info("Datasets loaded with %d training samples and %d testing samples", len(train_ds), len(test_ds))
 
     world_size = torch.cuda.device_count() if torch.cuda.is_available() else 1
 

@@ -3,7 +3,7 @@ class KLWeightAnnealer:
 
     def __init__(
         self,
-        start_epoch: int = 15,
+        start_epoch: int = 10,
         ramp_epochs: int = 30,
         max_weight: float = 9e-4,
     ) -> None:

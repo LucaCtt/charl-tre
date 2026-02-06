@@ -12,7 +12,7 @@ class CapacityAnnealer:
 
     """
 
-    def __init__(self, final_capacity: float = 2, ramp_epochs: int = 30, start_epoch: int = 10) -> None:
+    def __init__(self, final_capacity: float = 0.5, ramp_epochs: int = 50, start_epoch: int = 15) -> None:
         """Initialize the capacity annealer.
 
         Arguments:

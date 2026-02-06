@@ -49,7 +49,6 @@ def _plot_latent_tsne(latent_array: np.ndarray, label_array: np.ndarray, class_n
         learning_rate="auto",
         init="pca",
         metric="cosine",
-        early_exaggeration=12,
         random_state=42,
     )
     z_tsne = tsne.fit_transform(latent_array)
@@ -87,6 +86,7 @@ class Evaluator:
         vae: torch.nn.Module,
         classifier: torch.nn.Module,
         dataloader: DataLoader,
+        test_window_factor: int,
         classes: list[str],
         gpu_id: int,
         out_dir: Path | None = None,
@@ -97,6 +97,7 @@ class Evaluator:
             vae: The trained VAE model.
             classifier: The trained classifier model.
             dataloader: DataLoader for evaluation data.
+            test_window_factor: Factor to combine multiple latent vectors for evaluation.
             classes: List of class names.
             out_dir: Output directory for saving results.
             gpu_id: GPU identifier for computation.
@@ -106,6 +107,7 @@ class Evaluator:
         self.__vae = vae
         self.__classifier = classifier
         self.__dataloader = dataloader
+        self.__test_window_factor = test_window_factor
         self.__classes = classes
         self.__n_classes = len(classes)
         self.__gpu_id = gpu_id
@@ -128,13 +130,13 @@ class Evaluator:
 
             _, z_hard, latents = self.__vae(x.to(self.__gpu_id))
 
-            # (B, latent_dim, n_categories) → (B/3, 3 * latent_dim * n_categories)
+            # (B, latent_dim, n_categories) → (B/factor, factor * latent_dim * n_categories)
             z_hard = z_hard.view(batch_size, -1)
-            z_combined = z_hard.view(batch_size // 3, -1)
+            z_combined = z_hard.view(batch_size // self.__test_window_factor, -1)
             latents = latents.view(batch_size, -1)
 
-            # Take one label every three samples
-            y_trimmed = y[::3].to(self.__gpu_id)
+            # Take one label every test_window_factor samples
+            y_trimmed = y[:: self.__test_window_factor].to(self.__gpu_id)
 
             preds = torch.argmax(self.__classifier(z_combined), dim=1)
             accuracy_metric.update(preds, y_trimmed)

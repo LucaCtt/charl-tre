@@ -11,12 +11,14 @@ class ClassifierTrainer:
         model: nn.Module,
         dataloader: DataLoader,
         vae: nn.Module,
+        test_window_factor: int,
         gpu_id: int,
     ) -> None:
         """Initialize the Classifier Trainer."""
         self.__model = model.to(gpu_id)
         self.__dataloader = dataloader
         self.__vae = vae.to(gpu_id)  # No need to DDP the VAE as it's frozen
+        self.__test_window_factor = test_window_factor
         self.__gpu_id = gpu_id
         self.__criterion = nn.CrossEntropyLoss()
 
@@ -36,11 +38,11 @@ class ClassifierTrainer:
                 # (B, latent_dim, n_categories) → (B, latent_dim * n_categories)
                 z_hard = z_hard.view(batch_size, -1)
 
-                # (B, latent_dim * n_categories) → (B/3, 3 * latent_dim * n_categories)
-                z_hard = z_hard.view(batch_size // 3, 3 * z_hard.shape[1])
+                # (B, latent_dim * n_categories) → (B/factor, factor * latent_dim * n_categories)
+                z_hard = z_hard.view(batch_size // self.__test_window_factor, -1)
 
-            # Take one label every three samples
-            y_trimmed = y[::3].to(self.__gpu_id)
+            # Take one label every test_window_factor samples
+            y_trimmed = y[:: self.__test_window_factor].to(self.__gpu_id)
 
             logits = self.__model(z_hard)
             loss = self.__criterion(logits, y_trimmed)

@@ -5,7 +5,7 @@ from optuna.pruners import BasePruner
 class KLCollapsePruner(BasePruner):
     """Stateless pruner that avoids private API access."""
 
-    def __init__(self, patience: int = 5, warmup_steps: int = 5, eps: float = 1e-6) -> None:
+    def __init__(self, patience: int = 10, warmup_steps: int = 20, eps: float = 1e-6) -> None:
         """Initialize the pruner with patience, epsilon threshold, and warmup steps.
 
         Arguments:
@@ -37,9 +37,12 @@ class KLCollapsePruner(BasePruner):
         if len(recent_kls) < self.patience:
             return False
 
-        # Prune if all recent KL values are below epsilon
+        # Prune if all recent KL values are below epsilon.
+        # This means that the model has collapsed to a uniform distribution
+        # and is not learning meaningful representations
         if all(kl < self.eps for kl in recent_kls):
             return True
 
-        # Prune if all recent KL values are identical (within a small tolerance)
+        # Prune if all recent KL values are identical (within a small tolerance).
+        # This indicates that the model has collapsed to a local minimum and is not improving.
         return bool(all(abs(recent_kls[i] - recent_kls[i - 1]) < self.eps for i in range(1, len(recent_kls))))
