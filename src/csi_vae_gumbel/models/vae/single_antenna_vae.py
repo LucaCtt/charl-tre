@@ -3,7 +3,7 @@ import torch.nn.functional as func
 from torch import nn
 
 
-class CategoricalVAE(nn.Module):
+class SingleAntennaVAE(nn.Module):
     """Categorical VAE with Gumbel-Softmax reparameterization."""
 
     def __init__(
@@ -13,7 +13,7 @@ class CategoricalVAE(nn.Module):
         n_categories: int,
         latent_dim: int,
     ) -> None:
-        """Initialize the Categorical VAE model.
+        """Initialize the Single Antenna VAE model.
 
         Arguments:
             window_size: Size of the time window in the input data.

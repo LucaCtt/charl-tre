@@ -6,23 +6,23 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from csi_vae_gumbel.train.annealers import (
+from csi_vae_gumbel.models.vae.annealers import (
     CapacityAnnealer,
     GumbelTemperatureAnnealer,
     KLWeightAnnealer,
 )
-from csi_vae_gumbel.train.vae_loss import vae_loss
-from csi_vae_gumbel.train.vae_parameters import VAEParameters
+from csi_vae_gumbel.models.vae.loss import vae_loss
+from csi_vae_gumbel.models.vae.parameters import Parameters
 
 
-class VAETrainer:
+class Trainer:
     """Trainer class for VAE model using Distributed Data Parallel (DDP)."""
 
     def __init__(
         self,
         model: nn.Module,
         dataloader: DataLoader,
-        parameters: VAEParameters,
+        parameters: Parameters,
         gpu_id: int,
         trial: optuna.integration.TorchDistributedTrial | None = None,
     ) -> None:

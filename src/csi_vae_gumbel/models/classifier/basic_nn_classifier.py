@@ -2,7 +2,7 @@ import torch
 from torch import nn
 
 
-class Classifier(nn.Module):
+class BasicNNClassifier(nn.Module):
     """Basic 2->8 neural network classifier.
 
     Arguments:

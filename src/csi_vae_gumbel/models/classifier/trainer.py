@@ -3,7 +3,7 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 
 
-class ClassifierTrainer:
+class Trainer:
     """Trainer class for classifier model using Distributed Data Parallel (DDP)."""
 
     def __init__(

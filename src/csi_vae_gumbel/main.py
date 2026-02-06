@@ -17,18 +17,21 @@ from torch.utils.data import DataLoader, DistributedSampler
 
 from csi_vae_gumbel.dataset import CSIDataset, load_datasets
 from csi_vae_gumbel.evaluator import Evaluator
-from csi_vae_gumbel.models import CategoricalVAE, Classifier
+from csi_vae_gumbel.kl_collapse_pruner import KLCollapsePruner
+from csi_vae_gumbel.models import classifier, vae
 from csi_vae_gumbel.settings import Settings
-from csi_vae_gumbel.train import ClassifierTrainer, KLCollapsePruner, VAEParameters, VAETrainer
 
 settings = Settings()
 
+# Configure logging
 level = logging.DEBUG if settings.debug else logging.INFO
 handler = RichHandler(level=level, show_path=False)
 logging.basicConfig(level=level, handlers=[handler], format="%(message)s")
+logger = logging.getLogger("rich")
+
+# Route Optuna logs through app logger
 optuna.logging.enable_propagation()
 optuna.logging.disable_default_handler()
-logger = logging.getLogger("rich")
 
 # Suppress Optuna warnings
 warnings.filterwarnings("ignore", module="optuna_integration.pytorch_distributed")
@@ -41,11 +44,11 @@ torch.manual_seed(settings.seed)
 
 
 def _ddp_setup(rank: int, world_size: int) -> None:
-    """Initialize the distributed environment. Must be called by every process.
+    """Initialize the distributed environment. Must be called by every distributed process.
 
     Arguments:
-        rank: Unique identifier of each process
-        world_size: Total number of processes
+        rank: Unique identifier of each distributed process
+        world_size: Total number of distributed processes
 
     """
     if "MASTER_ADDR" not in os.environ:
@@ -78,7 +81,7 @@ def _objective(single_trial: BaseTrial | None, rank: int, train_dl: DataLoader) 
     if rank == 0:
         logger.info("Starting trial %s", trial.number)
 
-    parameters = VAEParameters(
+    parameters = vae.Parameters(
         final_kl_weight=trial.suggest_float(
             "final_kl_weight",
             settings.final_kl_weight_min,
@@ -105,13 +108,13 @@ def _objective(single_trial: BaseTrial | None, rank: int, train_dl: DataLoader) 
     )
 
     # Build and train VAE
-    vae = CategoricalVAE(
+    vae_model = vae.SingleAntennaVAE(
         settings.train_window_size,
         settings.n_subcarriers // 8,
         settings.n_categories,
         parameters.latent_dim,
     )
-    vae_trainer = VAETrainer(vae, train_dl, parameters, rank, trial)
+    vae_trainer = vae.Trainer(vae_model, train_dl, parameters, rank, trial)
     loss, recon_loss, kl_loss = vae_trainer.train(settings.n_epochs)
 
     if rank == 0:
@@ -124,7 +127,7 @@ def _objective(single_trial: BaseTrial | None, rank: int, train_dl: DataLoader) 
         )
         save_path = Path(settings.study_dir) / f"trial_{trial.number}"
         save_path.mkdir(parents=True, exist_ok=True)
-        torch.save(vae.state_dict(), save_path / "model.pt")
+        torch.save(vae_model.state_dict(), save_path / "model.pt")
 
     return loss
 
@@ -132,11 +135,10 @@ def _objective(single_trial: BaseTrial | None, rank: int, train_dl: DataLoader) 
 def _run_optimize(rank: int, world_size: int, shared_dict: dict, train_ds: CSIDataset) -> None:
     _ddp_setup(rank, world_size)
 
-    sampler = DistributedSampler(train_ds, num_replicas=world_size, rank=rank, shuffle=True)
     train_dl = DataLoader(
         train_ds,
         batch_size=settings.train_batch_size,
-        sampler=sampler,
+        sampler=DistributedSampler(train_ds, num_replicas=world_size, rank=rank, shuffle=True),
         pin_memory=True,
     )
 
@@ -159,6 +161,7 @@ def _run_optimize(rank: int, world_size: int, shared_dict: dict, train_ds: CSIDa
     if rank == 0:
         study = shared_dict["study"]
         study.trials_dataframe().to_csv(Path(settings.study_dir) / "study_results.csv")
+
         pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
         complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])
 
@@ -179,7 +182,7 @@ def _run_optimize(rank: int, world_size: int, shared_dict: dict, train_ds: CSIDa
 
 
 def _run_eval(study: optuna.study.Study, train_ds: CSIDataset, test_ds: CSIDataset) -> None:
-    params = VAEParameters(**study.best_trial.params)
+    params = vae.Parameters(**study.best_trial.params)
 
     # Disable augmentations for evaluation, because they make dataset length non-deterministic
     train_ds.toggle_augmentations(False)
@@ -193,25 +196,25 @@ def _run_eval(study: optuna.study.Study, train_ds: CSIDataset, test_ds: CSIDatas
     )
     test_dl = DataLoader(test_ds, batch_size=len(test_ds), shuffle=False, pin_memory=True)
 
-    vae = CategoricalVAE(
+    vae_model = vae.SingleAntennaVAE(
         settings.train_window_size,
         settings.n_subcarriers // 8,
         settings.n_categories,
         params.latent_dim,
     )
     load_path = Path(settings.study_dir) / f"trial_{study.best_trial.number}" / "model.pt"
-    vae.load_state_dict(torch.load(load_path))
+    vae_model.load_state_dict(torch.load(load_path))
     logger.info("Loaded best VAE model for evaluation.")
 
-    classifier = Classifier(
+    classifier_model = classifier.BasicNNClassifier(
         params.latent_dim * settings.n_categories * settings.test_window_factor,
         settings.n_activities,
         2 * params.latent_dim * settings.n_categories * settings.test_window_factor,
     )
-    classifier_trainer = ClassifierTrainer(
-        model=classifier,
+    classifier_trainer = classifier.Trainer(
+        model=classifier_model,
         dataloader=train_dl,
-        vae=vae,
+        vae=vae_model,
         test_window_factor=settings.test_window_factor,
         gpu_id=0,
     )
@@ -219,8 +222,8 @@ def _run_eval(study: optuna.study.Study, train_ds: CSIDataset, test_ds: CSIDatas
     logger.info("Classifier training completed with loss %.4f and accuracy %.4f", loss, accuracy)
 
     evaluator = Evaluator(
-        vae,
-        classifier,
+        vae_model,
+        classifier_model,
         test_dl,
         settings.test_window_factor,
         settings.activities_labels,

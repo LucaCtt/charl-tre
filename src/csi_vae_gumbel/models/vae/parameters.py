@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
-class VAEParameters:
+class Parameters:
     """Parameters for the VAE training."""
 
     final_kl_weight: float
