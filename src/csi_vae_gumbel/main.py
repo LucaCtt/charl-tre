@@ -7,6 +7,7 @@ from functools import partial
 from pathlib import Path
 
 import optuna
+import pandas as pd
 import torch
 from optuna.trial import BaseTrial, TrialState
 from rich.logging import RichHandler
@@ -160,7 +161,7 @@ def _run_optimize(rank: int, world_size: int, shared_dict: dict, train_ds: CSIDa
 
     if rank == 0:
         study = shared_dict["study"]
-        study.trials_dataframe().to_csv(Path(settings.study_dir) / "study_results.csv")
+        study.trials_dataframe().to_csv(Path(settings.study_dir) / "trials_report.csv")
 
         pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
         complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])
@@ -232,6 +233,20 @@ def _run_eval(study: optuna.study.Study, train_ds: CSIDataset, test_ds: CSIDatas
     )
     accuracy = evaluator.evaluate()
     logger.info("Evaluation completed with test accuracy %.4f", accuracy)
+
+    results_df = pd.DataFrame(
+        {
+            "best_trial": [study.best_trial.number],
+            "best_value": [study.best_trial.value],
+            "final_kl_weight": [params.final_kl_weight],
+            "latent_dim": [params.latent_dim],
+            "final_cap": [params.final_cap],
+            "start_gumbel_temp": [params.start_gumbel_temp],
+            "classifier_loss": [loss],
+            "classifier_accuracy": [accuracy],
+        },
+    )
+    results_df.to_csv(Path(settings.study_dir) / "final_results.csv", index=False)
 
 
 def main() -> None:
