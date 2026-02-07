@@ -35,6 +35,10 @@ class CSIDataset(Dataset):
             normalize: Whether to normalize the CSI data by the global maximum value.
 
         """
+        if overlap_size >= window_size:
+            msg = "Overlap size must be smaller than window size."
+            raise ValueError(msg)
+
         self.__window_size = window_size
         self.__augmenter = CSIAugmenter()
         self.__normalize = normalize

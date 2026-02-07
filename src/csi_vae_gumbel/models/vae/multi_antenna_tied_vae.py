@@ -9,75 +9,94 @@ class MultiAntennaTiedVAE(nn.Module):
     def __init__(
         self,
         window_size: int,
+        n_subcarriers: int,
         n_antennas: int,
         n_categories: int,
         latent_dim: int,
-        hidden_latent_dim: int,
     ) -> None:
         """Initialize the Multi-View Categorical VAE.
 
         Arguments:
             window_size (int): Size of the time window.
+            n_subcarriers (int): Number of subcarriers.
             n_antennas (int): Number of antennas (views).
             n_categories (int): Number of categories for the categorical latent variables.
             latent_dim (int): Dimension of each categorical variable.
-            hidden_latent_dim (int): Dimension of the hidden latent space per antenna.
 
         """
         super().__init__()
 
-        self.window_size = window_size
-        self.n_antennas = n_antennas
-        self.n_categories = n_categories
-        self.latent_dim = latent_dim
+        self.__window_size = window_size
+        self.__n_subcarriers = n_subcarriers
+        self.__n_antennas = n_antennas
+        self.__n_categories = n_categories
+        self.__latent_dim = latent_dim
 
-        # Tied convulutional weights for each antenna
+        # Convolutional weights for each antenna
         # Weight shape: [out_channels, in_channels, kernel_h, kernel_w]
-        self.conv_weights_1 = nn.ParameterList(
+        self.__conv_weights_1 = nn.ParameterList(
             [nn.Parameter(torch.empty(8, 1, 3, 3)) for _ in range(n_antennas)],
         )
-        self.conv_biases_1 = nn.ParameterList([nn.Parameter(torch.zeros(8)) for _ in range(n_antennas)])
+        self.__conv_biases_1 = nn.ParameterList([nn.Parameter(torch.zeros(8)) for _ in range(n_antennas)])
 
-        self.conv_weights_2 = nn.ParameterList(
+        self.__conv_weights_2 = nn.ParameterList(
             [nn.Parameter(torch.empty(16, 8, 3, 3)) for _ in range(n_antennas)],
         )
-        self.conv_biases_2 = nn.ParameterList([nn.Parameter(torch.zeros(16)) for _ in range(n_antennas)])
+        self.__conv_biases_2 = nn.ParameterList([nn.Parameter(torch.zeros(16)) for _ in range(n_antennas)])
 
-        self.feat_h, self.feat_w = 38, 64
-        self.conv_flat_dim = 16 * self.feat_h * self.feat_w
+        # Compute shapes dynamically
+        self.__latent_feat_shape, self.__out_paddings = self.__get_shapes_and_paddings()
+        self.__flat_dim = int(torch.prod(torch.tensor(self.__latent_feat_shape)).item())
 
-        # Per-antenna tied linear weights
+        # Per-antenna linear weights
         self.lin_weights = nn.ParameterList(
-            [nn.Parameter(torch.empty(hidden_latent_dim, self.conv_flat_dim)) for _ in range(n_antennas)],
+            [nn.Parameter(torch.empty(latent_dim * n_categories, self.__flat_dim)) for _ in range(n_antennas)],
         )
         self.lin_biases = nn.ParameterList(
-            [nn.Parameter(torch.zeros(hidden_latent_dim)) for _ in range(n_antennas)],
+            [nn.Parameter(torch.zeros(latent_dim * n_categories)) for _ in range(n_antennas)],
         )
 
-        # Central bottleneck weights, maps n_antennas latents -> Categorical Logits)
-        # Total input to bottleneck = latent_dim * n_antennas
+        # Central bottleneck weights, maps n_antennas latents -> combined latent
         self.bottleneck_weight = nn.Parameter(
-            torch.empty(n_categories * latent_dim, hidden_latent_dim * n_antennas),
+            torch.empty(latent_dim * n_categories, latent_dim * n_categories * n_antennas),
         )
-        self.bottleneck_bias = nn.Parameter(torch.zeros(n_categories * latent_dim))
-
-        # Learnable scale for the tied decoder,
-        # because the optimal magnitude for decoding may differ from encoding.
-        # Initialized to 1.0 so it doesn't disrupt training at the start
-        self.decoder_scale = nn.Parameter(torch.ones(n_antennas))
+        self.bottleneck_bias = nn.Parameter(torch.zeros(latent_dim * n_categories))
 
         self.__init_weights()
 
     def __init_weights(self) -> None:
         """Initialize weights for the model."""
         # Kaiming initialization preserves variance through ReLU layers
-        for w in [*self.conv_weights_1, *self.conv_weights_2, *self.lin_weights]:
+        for w in [*self.__conv_weights_1, *self.__conv_weights_2, *self.lin_weights]:
             nn.init.kaiming_normal_(w, nonlinearity="relu")
 
         # Xavier is better for layers that don't use ReLU,
         # because it keeps the initial logits near zero for a uniform Gumbel start.
         # This helps preventing the model from collapsing to a single category early in training.
         nn.init.xavier_uniform_(self.bottleneck_weight)
+
+    def __get_shapes_and_paddings(self) -> tuple:
+        """Mock pass to find flattened size and required output_paddings."""
+        with torch.no_grad():
+            x = torch.zeros(1, 1, self.__window_size, self.__n_subcarriers)
+
+            # Trace Layer 1
+            l1 = func.conv2d(x, self.__conv_weights_1[0], self.__conv_biases_1[0], stride=2, padding=1)
+            # Trace Layer 2
+            l2 = func.conv2d(l1, self.__conv_weights_2[0], self.__conv_biases_2[0], stride=2, padding=1)
+
+            # Helper to find output_padding needed for a specific layer
+            def __get_op(in_shape: int, out_target: int) -> int:
+                # Standard formula: out = (in-1)*s - 2*p + k
+                current_out = (in_shape - 1) * 2 - 2 * 1 + 3
+                return out_target - current_out
+
+            # op1: From l2 back to l1
+            op1 = (__get_op(l2.shape[2], l1.shape[2]), __get_op(l2.shape[3], l1.shape[3]))
+            # op2: From l1 back to original x
+            op2 = (__get_op(l1.shape[2], x.shape[2]), __get_op(l1.shape[3], x.shape[3]))
+
+            return l2.shape[1:], (op1, op2)
 
     def encode(self, x: torch.Tensor) -> torch.Tensor:
         """Encode inputs from multiple antennas.
@@ -91,15 +110,15 @@ class MultiAntennaTiedVAE(nn.Module):
         """
         encoded_latents = []
 
-        for i in range(self.n_antennas):
+        for i in range(self.__n_antennas):
             zi = x[:, i : i + 1, :, :]  # Shape: (batch_size, 1, window_size, n_subcarriers)
 
             # First convolutional layer
-            zi = func.conv2d(zi, self.conv_weights_1[i], self.conv_biases_1[i], stride=2, padding=1)
+            zi = func.conv2d(zi, self.__conv_weights_1[i], self.__conv_biases_1[i], stride=2, padding=1)
             zi = func.relu(zi)
 
             # Second convolutional layer
-            zi = func.conv2d(zi, self.conv_weights_2[i], self.conv_biases_2[i], stride=2, padding=1)
+            zi = func.conv2d(zi, self.__conv_weights_2[i], self.__conv_biases_2[i], stride=2, padding=1)
             zi = func.relu(zi)
 
             # Flatten
@@ -107,7 +126,6 @@ class MultiAntennaTiedVAE(nn.Module):
 
             # linear layer to get antenna latent
             zi = func.linear(zi, self.lin_weights[i], self.lin_biases[i])
-            zi = func.relu(zi)
 
             encoded_latents.append(zi)
 
@@ -124,7 +142,7 @@ class MultiAntennaTiedVAE(nn.Module):
             torch.Tensor: Reconstructed outputs of shape (batch_size, n_antennas, window_size, n_subcarriers).
 
         """
-        recon_latents = torch.chunk(recon_combined, self.n_antennas, dim=1)
+        recon_latents = torch.chunk(recon_combined, self.__n_antennas, dim=1)
 
         recons = []
         for i, zi in enumerate(recon_latents):
@@ -133,19 +151,28 @@ class MultiAntennaTiedVAE(nn.Module):
             xi = func.relu(xi)
 
             # Reshape to conv feature map
-            xi = xi.view(xi.size(0), 16, 38, 64)
+            xi = xi.view(-1, *self.__latent_feat_shape)
 
             # First transposed convolutional layer
-            xi = func.conv_transpose2d(xi, self.conv_weights_2[i], stride=2, padding=1, output_padding=(0, 1))
+            xi = func.conv_transpose2d(
+                xi,
+                self.__conv_weights_2[i],
+                stride=2,
+                padding=1,
+                output_padding=self.__out_paddings[0],
+            )
             xi = func.relu(xi)
 
-            xi = func.conv_transpose2d(xi, self.conv_weights_1[i], stride=2, padding=1, output_padding=(1, 1))
-
-            # No ReLU here otherwise otherwise negative values become 0, sigmoid(0) = 0.5
-            # so we cannot reconstruct values near 0 properly.
+            xi = func.conv_transpose2d(
+                xi,
+                self.__conv_weights_1[i],
+                stride=2,
+                padding=1,
+                output_padding=self.__out_paddings[1],
+            )
 
             # Final sigmoid activation with learnable scale
-            xi = torch.sigmoid(xi * self.decoder_scale[i])
+            xi = torch.sigmoid(xi)
 
             recons.append(xi)
         return torch.stack(recons, dim=1).squeeze(2)
@@ -168,7 +195,7 @@ class MultiAntennaTiedVAE(nn.Module):
 
         # Map to categorical logits
         logits = func.linear(combined_z, self.bottleneck_weight, self.bottleneck_bias)
-        logits = logits.view(-1, self.latent_dim, self.n_categories)
+        logits = logits.view(-1, self.__latent_dim, self.__n_categories)
 
         # Gumbel-Softmax sampling
         z_hard = func.gumbel_softmax(logits, tau=tau, hard=True)

@@ -1,4 +1,5 @@
 import math
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -17,6 +18,8 @@ class Settings(BaseSettings):
     """Number of training epochs for both VAE and classifier."""
     train_batch_size: int = 48 * 3
     """Batch size for training both VAE and classifier. Will be divided by the number of GPUs used."""
+    arch: Literal["single_antenna", "multi_antenna", "multi_antenna_tied"] = "single_antenna"
+    """Model architecture to use for the VAE."""
 
     # Dataset config
     dataset_path: str = "dataset/S1"
@@ -39,13 +42,13 @@ class Settings(BaseSettings):
     ]
     n_samples: int = 12000
     """Number of samples to extract from each CSI matrix file."""
-    train_window_size: int = 150
+    train_window_size: int = 75
     """Size of the window of CSI in a VAE train sample, where 150 CSI = 1 second of data."""
     test_window_factor: int = 3
     """Number of train windows to concatenate for each test sample, to evaluate on longer sequences."""
     test_ratio: float = 0.3
     """Proportion of the dataset to be used for testing."""
-    overlap_size: int = 75
+    overlap_size: int = 40
     """Size of the overlap between two consecutive windows."""
     n_antennas: int = 1
     """Total number of antennas used."""
@@ -55,7 +58,7 @@ class Settings(BaseSettings):
     """Number of subcarriers in each CSI sample."""
 
     # Optuna study config
-    study_name: str = f"vae_gumbel_a{n_antennas}_w{train_window_size}"
+    study_name: str = f"{arch}_a{n_antennas}_w{train_window_size}_o{overlap_size}"
     """Name of the VAE model, used for checkpointing."""
     study_dir: str = f"out/{study_name}"
     """Directory to save model checkpoints."""

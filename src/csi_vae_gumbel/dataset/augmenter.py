@@ -43,8 +43,8 @@ class CSIAugmenter:
     def time_warp(self, x: np.ndarray) -> np.ndarray:
         """Randomly stretches or compresses the time dimension."""
         c, t, s = x.shape
-        # Create a random warp factor between 0.8 and 1.2
-        warp_factor = self.rng.uniform(0.8, 1.2)
+        # Create a random warp factor
+        warp_factor = self.rng.uniform(0.9, 1.1)
         new_t = int(t * warp_factor)
 
         # Interpolate across the time axis (axis 1)
@@ -69,8 +69,8 @@ class CSIAugmenter:
         _, t, _ = x.shape
         if t <= 1:
             return x
-        # Choose a block size up to 20% of the window (at least 1)
-        max_block = max(1, t // 5)
+        # Choose a block size up to 10% of the window (at least 1)
+        max_block = max(1, t // 10)
         block_size = int(self.rng.integers(1, max_block + 1))
         start = int(self.rng.integers(0, t - block_size + 1))
 

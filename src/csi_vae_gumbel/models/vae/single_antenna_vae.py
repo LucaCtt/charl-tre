@@ -13,7 +13,7 @@ class SingleAntennaVAE(nn.Module):
         n_categories: int,
         latent_dim: int,
     ) -> None:
-        """Initialize the Single Antenna VAE model.
+        """Initialize the single antenna VAE model.
 
         Arguments:
             window_size: Size of the time window in the input data.
@@ -37,11 +37,11 @@ class SingleAntennaVAE(nn.Module):
         )
         # Dynamic dimension capture
         self.__latent_feat_shape, out_paddings = self.__get_shapes_and_paddings()
-        self.__flat_dim = int(torch.prod(torch.tensor(self.__latent_feat_shape)).item())
-        self.__encoder_fc = nn.Linear(self.__flat_dim, n_categories * latent_dim)
+        flat_dim = int(torch.prod(torch.tensor(self.__latent_feat_shape)).item())
+        self.__encoder_fc = nn.Linear(flat_dim, n_categories * latent_dim)
 
         # Decoder group
-        self.__decoder_fc = nn.Linear(n_categories * latent_dim, self.__flat_dim)
+        self.__decoder_fc = nn.Linear(n_categories * latent_dim, flat_dim)
         self.__decoder_conv = nn.Sequential(
             nn.ConvTranspose2d(16, 8, kernel_size=3, stride=2, padding=1, output_padding=out_paddings[0]),
             nn.ReLU(),
