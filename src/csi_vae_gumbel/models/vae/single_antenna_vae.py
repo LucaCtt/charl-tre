@@ -72,7 +72,7 @@ class SingleAntennaVAE(nn.Module):
 
             return l2.shape[1:], (op1, op2)
 
-    def __encode(self, x: torch.Tensor) -> torch.Tensor:
+    def encode(self, x: torch.Tensor) -> torch.Tensor:
         """Encode input into logits for categorical distribution.
 
         Arguments:
@@ -85,7 +85,7 @@ class SingleAntennaVAE(nn.Module):
         z = self.__encoder_conv(x)
         return self.__encoder_fc(z.view(z.size(0), -1))
 
-    def __decode(self, z: torch.Tensor) -> torch.Tensor:
+    def decode(self, z: torch.Tensor) -> torch.Tensor:
         """Decode latent representation back to input space.
 
         Arguments:
@@ -112,9 +112,9 @@ class SingleAntennaVAE(nn.Module):
             logits: Logits tensor of shape (batch_size, latent_dim, n_categories)
 
         """
-        logits_flat = self.__encode(x)
+        logits_flat = self.encode(x)
         logits = logits_flat.view(-1, self.__latent_dim, self.__n_categories)
         z_hard = func.gumbel_softmax(logits, tau=tau, hard=True, dim=-1)
 
-        recon = self.__decode(z_hard.view(z_hard.size(0), -1))
+        recon = self.decode(z_hard.view(z_hard.size(0), -1))
         return recon, z_hard, logits

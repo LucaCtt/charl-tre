@@ -2,6 +2,8 @@ import torch
 import torch.nn.functional as func
 from torch import nn
 
+from csi_vae_gumbel.models.vae.single_antenna_vae import SingleAntennaVAE
+
 
 class MultiAntennaVAE(nn.Module):
     """Multi-antenna categorical VAE with Gumbel-Softmax reparameterization."""
@@ -31,91 +33,34 @@ class MultiAntennaVAE(nn.Module):
         self.__n_categories = n_categories
         self.__latent_dim = latent_dim
 
-        # Encoder group
-        self.__encoder_convs = nn.ModuleList(
-            [
-                nn.Sequential(
-                    nn.Conv2d(1, 8, kernel_size=3, stride=2, padding=1),
-                    nn.ReLU(),
-                    nn.Conv2d(8, 16, kernel_size=3, stride=2, padding=1),
-                    nn.ReLU(),
-                )
-                for _ in range(n_antennas)
-            ],
-        )
-        # Dynamic dimension capture
-        self.__latent_feat_shape, out_paddings = self.__get_shapes_and_paddings()
-        flat_dim = int(torch.prod(torch.tensor(self.__latent_feat_shape)).item())
-
-        self.__encoder_fcs = nn.ModuleList(
-            [nn.Linear(flat_dim, n_categories * latent_dim) for _ in range(n_antennas)],
+        self.__antenna_vaes = nn.ModuleList(
+            [SingleAntennaVAE(window_size, n_subcarriers, n_categories, latent_dim) for _ in range(n_antennas)],
         )
 
         self.__encoder_bottleneck = nn.Linear(n_antennas * n_categories * latent_dim, n_categories * latent_dim)
 
         self.__decoder_bottleneck = nn.Linear(n_categories * latent_dim, n_antennas * n_categories * latent_dim)
 
-        # Decoder group
-        self.__decoder_fcs = nn.ModuleList(
-            [nn.Linear(n_categories * latent_dim, flat_dim) for _ in range(n_antennas)],
-        )
-        self.__decoder_convs = nn.ModuleList(
-            [
-                nn.Sequential(
-                    nn.ConvTranspose2d(16, 8, kernel_size=3, stride=2, padding=1, output_padding=out_paddings[0]),
-                    nn.ReLU(),
-                    nn.ConvTranspose2d(8, 1, kernel_size=3, stride=2, padding=1, output_padding=out_paddings[1]),
-                    nn.Sigmoid(),
-                )
-                for _ in range(n_antennas)
-            ],
-        )
-
-    def __get_shapes_and_paddings(self) -> tuple:
-        """Mock pass to find flattened size and required output_paddings."""
-        with torch.no_grad():
-            x = torch.zeros(1, 1, self.__window_size, self.__n_subcarriers)
-
-            # Trace Layer 1
-            l1 = self.__encoder_convs[0][0](x)  # pyright: ignore[reportIndexIssue]
-            # Trace Layer 2
-            l2 = self.__encoder_convs[0][2](l1)  # pyright: ignore[reportIndexIssue]
-
-            # Helper to find output_padding needed for a specific layer
-            def __get_op(in_shape: int, out_target: int) -> int:
-                # Standard formula: out = (in-1)*s - 2*p + k
-                current_out = (in_shape - 1) * 2 - 2 * 1 + 3
-                return out_target - current_out
-
-            # op1: From l2 back to l1
-            op1 = (__get_op(l2.shape[2], l1.shape[2]), __get_op(l2.shape[3], l1.shape[3]))
-            # op2: From l1 back to original x
-            op2 = (__get_op(l1.shape[2], x.shape[2]), __get_op(l1.shape[3], x.shape[3]))
-
-            return l2.shape[1:], (op1, op2)
-
-    def __encode(self, x: torch.Tensor) -> tuple[torch.Tensor, list[torch.Tensor]]:
+    def encode(self, x: torch.Tensor) -> tuple[torch.Tensor, list[torch.Tensor]]:
         """Encode input into logits for categorical distribution.
 
         Arguments:
-            x: Input tensor of shape (batch_size, 1, window_size, n_subcarriers)
+            x: Input tensor of shape (batch_size, n_antennas, window_size, n_subcarriers)
 
         Returns:
-            Logits tensor of shape (batch_size, latent_dim * n_categories)
-            List of intermediate logits for each antenna
+            Logits tensor of shape (batch_size, n_antennas * latent_dim * n_categories)
+            The same logits but in list form, each item of shape (batch_size, latent_dim * n_categories)
 
         """
         logits = []
-        for i in range(self.__n_antennas):
-            xi = x[:, i : i + 1, :, :]  # Shape: (batch_size, 1, window_size, n_subcarriers)
-            xi = self.__encoder_convs[i](xi)  # pyright: ignore[reportIndexIssue]
-            xi = xi.view(xi.size(0), -1)
-            xi = self.__encoder_fcs[i](xi)  # pyright: ignore[reportIndexIssue]
-            logits.append(xi)
+        for i, vae in enumerate(self.__antenna_vaes):
+            logit = x[:, i : i + 1, :, :]  # Shape: (batch_size, 1, window_size, n_subcarriers)
+            logit = vae.encode(logit)  # pyright: ignore[reportCallIssue]
+            logits.append(logit)
 
         return torch.cat(logits, dim=1), logits
 
-    def __decode(self, z: torch.Tensor) -> tuple[torch.Tensor, list[torch.Tensor]]:
+    def decode(self, z: torch.Tensor) -> tuple[torch.Tensor, list[torch.Tensor]]:
         """Decode latent representation back to input space.
 
         Arguments:
@@ -123,18 +68,19 @@ class MultiAntennaVAE(nn.Module):
 
         Returns:
             Reconstructed tensor of shape (batch_size, 1, window_size, n_subcarriers)
-            List of intermediate reconstructions for each antenna
+            The latents input to each antenna's decoder, in list form,
+            each item of shape (batch_size, latent_dim * n_categories)
 
         """
         recon = []
-        for i in range(self.__n_antennas):
+        latents_input = []
+        for i, vae in enumerate(self.__antenna_vaes):
             zi = z[:, i * self.__n_categories * self.__latent_dim : (i + 1) * self.__n_categories * self.__latent_dim]
-            zi = self.__decoder_fcs[i](zi)  # pyright: ignore[reportIndexIssue]
-            zi = zi.view(-1, *self.__latent_feat_shape)
-            zi = self.__decoder_convs[i](zi)  # pyright: ignore[reportIndexIssue]
+            latents_input.append(zi)
+            zi = vae.decode(zi)  # pyright: ignore[reportCallIssue]
             recon.append(zi)
 
-        return torch.cat(recon, dim=1), recon
+        return torch.cat(recon, dim=1), latents_input
 
     def forward(
         self,
@@ -155,19 +101,18 @@ class MultiAntennaVAE(nn.Module):
             decoder_recons: List of intermediate reconstructions for each antenna
 
         """
-        # Encoder -> combined latent
-        combined_latents, encoder_latents = self.__encode(x)
+        logits, logits_per_antenna = self.encode(x)
 
         # Map to categorical logits
-        logits = self.__encoder_bottleneck(combined_latents)
+        logits = self.__encoder_bottleneck(logits)
 
         # Gumbel-Softmax sampling
         z_hard = func.gumbel_softmax(logits, tau=tau, hard=True)
 
         # Map back to combined latent space
-        recon_combined = self.__decoder_bottleneck(z_hard)
+        recon = self.__decoder_bottleneck(z_hard)
 
         # Decode and stack
-        recon, decoder_recons = self.__decode(recon_combined)
+        recon, latents_input = self.decode(recon)
 
-        return recon, z_hard, logits, encoder_latents, decoder_recons
+        return recon, z_hard, logits, logits_per_antenna, latents_input
