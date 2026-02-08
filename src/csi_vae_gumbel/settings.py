@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     """Number of samples to extract from each CSI matrix file."""
     train_window_size: int = 75
     """Size of the window of CSI in a VAE train sample, where 150 CSI = 1 second of data."""
-    test_window_factor: int = 3
+    test_window_factor: int = 6
     """Number of train windows to concatenate for each test sample, to evaluate on longer sequences."""
     test_ratio: float = 0.3
     """Proportion of the dataset to be used for testing."""

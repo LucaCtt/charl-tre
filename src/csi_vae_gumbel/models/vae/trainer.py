@@ -67,7 +67,19 @@ class Trainer:
         tau: float,
         kl_weight: float,
         capacity: float,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Run a single training batch.
+
+        Arguments:
+            x_true: Ground truth input tensor.
+            tau: Gumbel-Softmax temperature for this batch.
+            kl_weight: KL divergence weight for this batch.
+            capacity: Capacity for KL divergence in this batch.
+
+        Returns:
+            Tuple containing total loss, reconstruction loss, KL divergence loss, and logits.
+
+        """
         self.__optimizer.zero_grad()
 
         x_recon, _, logits = self.__model(x_true, tau)
@@ -83,43 +95,70 @@ class Trainer:
         loss.backward()
         self.__optimizer.step()
 
-        return loss, recon_loss, kl_loss
+        return loss, recon_loss, kl_loss, logits
 
-    def __run_epoch(self, epoch: int) -> tuple[float, float, float]:
+    def __run_epoch(self, epoch: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Run a single training epoch.
+
+        Arguments:
+            epoch: Current epoch number.
+
+        Returns:
+            Tuple containing average total loss, reconstruction loss,
+            KL divergence loss, and average latent entropy for the epoch.
+
+        """
         # Set the epoch for shuffling if using DistributedSampler
         if isinstance(self.__dataloader.sampler, DistributedSampler):
             self.__dataloader.sampler.set_epoch(epoch)
 
-        metrics = torch.tensor([0.0, 0.0, 0.0], device=self.__gpu_id)
+        metrics = torch.zeros(4, device=self.__gpu_id)
+        n_latents = torch.tensor(0, device=self.__gpu_id)
 
         tau = self.__temperature_annealer.step(epoch)
         kl_weight = self.__kl_weight_annealer.step(epoch)
         capacity = self.__capacity_annealer.step(epoch)
 
         for x_true, _ in self.__dataloader:
-            loss, recon_loss, kl_loss = self.__run_batch(
+            loss, recon_loss, kl_loss, logits = self.__run_batch(
                 x_true.to(self.__gpu_id),
                 tau,
                 kl_weight,
                 capacity,
             )
 
+            with torch.no_grad():
+                p = logits.softmax(dim=-1)
+                entropy_per_dim = -(p * (p + 1e-8).log()).sum(dim=-1)
+                entropy = entropy_per_dim.mean()
+
             metrics += torch.tensor(
-                [loss.detach(), recon_loss.detach(), kl_loss.detach()],
+                [
+                    loss.detach(),
+                    recon_loss.detach(),
+                    kl_loss.detach(),
+                    entropy,
+                ],
                 device=self.__gpu_id,
             )
+            n_latents += entropy_per_dim.numel()
 
-        # Synchronize metrics across all processes so the lr_annealer gets the correct value
+        # Synchronize metrics across all processes
         dist.all_reduce(metrics, op=dist.ReduceOp.SUM)
+        dist.all_reduce(n_latents, op=dist.ReduceOp.SUM)
+
         # Get total number of batches across all processes to account for batch size differences
         total_batches = torch.tensor(len(self.__dataloader), device=self.__gpu_id)
         dist.all_reduce(total_batches, op=dist.ReduceOp.SUM)
-        metrics /= total_batches
+
+        # Average the loss and other metrics
+        mean_metrics = metrics[:3] / total_batches
+        mean_entropy = metrics[3] / n_latents
 
         # This has to be called after each epoch
-        self.__lr_annealer.step(metrics[0])
+        self.__lr_annealer.step(mean_metrics[0])
 
-        return tuple(metrics.tolist())
+        return mean_metrics[0], mean_metrics[1], mean_metrics[2], mean_entropy.unsqueeze(0)
 
     def train(self, epochs: int) -> tuple[float, float, float]:
         """Train the VAE model for a specified number of epochs.
@@ -136,22 +175,22 @@ class Trainer:
         """
         self.__model.train()
 
-        total_metrics = torch.tensor([0.0, 0.0, 0.0], device=self.__gpu_id)
+        total_metrics = torch.zeros(4, device=self.__gpu_id)
 
         for epoch in range(epochs):
-            epoch_loss, epoch_recon_loss, epoch_kl_loss = self.__run_epoch(epoch)
+            epoch_loss, epoch_recon_loss, epoch_kl_loss, epoch_entropy = self.__run_epoch(epoch)
 
             # Distributed averaging of metrics
             total_metrics += torch.tensor(
-                [epoch_loss, epoch_recon_loss, epoch_kl_loss],
+                [epoch_loss, epoch_recon_loss, epoch_kl_loss, epoch_entropy],
                 device=self.__gpu_id,
             )
 
             if self.__trial is not None:
-                self.__trial.report(epoch_loss, step=epoch)
-                kl_history = self.__trial.user_attrs.get("kl_history", [])
-                kl_history.append(epoch_kl_loss)
-                self.__trial.set_user_attr("kl_history", kl_history)
+                self.__trial.report(epoch_loss.item(), step=epoch)
+                var_history = self.__trial.user_attrs.get("entropy_history", [])
+                var_history.append(epoch_entropy.item())
+                self.__trial.set_user_attr("entropy_history", var_history)
 
                 if self.__trial.should_prune():
                     msg = f"Pruned at epoch {epoch}."
@@ -159,4 +198,4 @@ class Trainer:
 
         total_metrics /= epochs
 
-        return tuple(total_metrics.tolist())
+        return tuple(total_metrics[:3].tolist())

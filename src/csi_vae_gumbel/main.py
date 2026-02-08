@@ -16,9 +16,9 @@ from torch import multiprocessing as mp
 from torch.multiprocessing.spawn import spawn
 from torch.utils.data import DataLoader, DistributedSampler
 
+from csi_vae_gumbel.collapse_pruner import CollapsePruner
 from csi_vae_gumbel.dataset import CSIDataset, load_datasets
 from csi_vae_gumbel.evaluator import Evaluator
-from csi_vae_gumbel.kl_collapse_pruner import KLCollapsePruner
 from csi_vae_gumbel.models import classifier, vae
 from csi_vae_gumbel.settings import Settings
 
@@ -148,7 +148,7 @@ def _run_optimize(rank: int, world_size: int, shared_dict: dict, train_ds: CSIDa
             direction="minimize",
             study_name=settings.study_name,
             sampler=optuna.samplers.TPESampler(seed=settings.seed),
-            pruner=KLCollapsePruner(),
+            pruner=CollapsePruner(n_categories=settings.n_categories),
         )
         study.optimize(partial(_objective, rank=rank, train_dl=train_dl), n_trials=settings.n_trials)
         shared_dict["study"] = study
