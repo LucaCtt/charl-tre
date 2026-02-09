@@ -10,7 +10,7 @@ class CollapsePruner(BasePruner):
         self,
         n_categories: int,
         patience: int = 10,
-        warmup_steps: int = 50,
+        warmup_steps: int = 80,
         min_entropy_frac: float = 0.02,
         max_entropy_slope: float = 1e-4,
     ) -> None:
@@ -28,7 +28,7 @@ class CollapsePruner(BasePruner):
         self.warmup_steps = warmup_steps
         self.min_entropy_frac = min_entropy_frac
         self.max_entropy_slope = max_entropy_slope
-        self.max_entropy = float(np.log(n_categories))
+        self.max_entropy = n_categories
 
     def prune(self, study: optuna.study.Study, trial: optuna.trial.FrozenTrial) -> bool:  # noqa: ARG002
         """Decide whether to prune the trial based on entropy history.
@@ -58,4 +58,4 @@ class CollapsePruner(BasePruner):
 
         # Entropy is not recovering
         slope = np.polyfit(np.arange(len(ent)), ent, 1)[0]
-        return slope <= self.max_entropy_slope
+        return slope < self.max_entropy_slope

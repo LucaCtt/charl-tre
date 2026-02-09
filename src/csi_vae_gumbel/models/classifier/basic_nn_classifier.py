@@ -3,7 +3,7 @@ from torch import nn
 
 
 class BasicNNClassifier(nn.Module):
-    """Basic 2->8 neural network classifier.
+    """Basic neural network classifier.
 
     Arguments:
         input_dim (int): Dimension of the input features.
@@ -19,7 +19,6 @@ class BasicNNClassifier(nn.Module):
             nn.Linear(input_dim, hidden_dim),
             nn.LayerNorm(hidden_dim),
             nn.ReLU(inplace=True),
-            nn.Dropout(p=0.3),
             nn.Linear(hidden_dim, output_dim),
         )
 

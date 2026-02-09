@@ -17,7 +17,7 @@ class Trainer:
         """Initialize the Classifier Trainer."""
         self.__model = model.to(gpu_id)
         self.__dataloader = dataloader
-        self.__vae = vae.to(gpu_id)  # No need to DDP the VAE as it's frozen
+        self.__vae = vae.to(gpu_id)
         self.__test_window_factor = test_window_factor
         self.__gpu_id = gpu_id
         self.__criterion = nn.CrossEntropyLoss()

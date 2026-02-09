@@ -40,7 +40,7 @@ class Trainer:
         self.__model = DistributedDataParallel(model.to(gpu_id), device_ids=[gpu_id])
         self.__dataloader = dataloader
         self.__optimizer = torch.optim.AdamW(
-            model.parameters(),
+            self.__model.parameters(),
             lr=1e-3,
             weight_decay=1e-4,
         )
@@ -130,7 +130,7 @@ class Trainer:
             with torch.no_grad():
                 p = logits.softmax(dim=-1)
                 entropy_per_dim = -(p * (p + 1e-8).log()).sum(dim=-1)
-                entropy = entropy_per_dim.mean()
+                entropy = entropy_per_dim.sum()
 
             metrics += torch.tensor(
                 [

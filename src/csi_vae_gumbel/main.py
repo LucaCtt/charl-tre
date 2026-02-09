@@ -210,7 +210,7 @@ def _run_eval(study: optuna.study.Study, train_ds: CSIDataset, test_ds: CSIDatas
     classifier_model = classifier.BasicNNClassifier(
         params.latent_dim * settings.n_categories * settings.test_window_factor,
         settings.n_activities,
-        2 * params.latent_dim * settings.n_categories * settings.test_window_factor,
+        int(1.5 * params.latent_dim * settings.n_categories * settings.test_window_factor),
     )
     classifier_trainer = classifier.Trainer(
         model=classifier_model,

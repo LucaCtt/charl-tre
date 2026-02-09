@@ -46,7 +46,6 @@ class SingleAntennaVAE(nn.Module):
             nn.ConvTranspose2d(16, 8, kernel_size=3, stride=2, padding=1, output_padding=out_paddings[0]),
             nn.ReLU(),
             nn.ConvTranspose2d(8, 1, kernel_size=3, stride=2, padding=1, output_padding=out_paddings[1]),
-            nn.Sigmoid(),
         )
 
     def __get_shapes_and_paddings(self) -> tuple:
