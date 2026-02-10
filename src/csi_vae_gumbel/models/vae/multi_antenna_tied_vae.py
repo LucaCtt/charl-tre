@@ -37,12 +37,14 @@ class MultiAntennaTiedVAE(nn.Module):
         self.__conv_weights_1 = nn.ParameterList(
             [nn.Parameter(torch.empty(8, 1, 3, 3)) for _ in range(n_antennas)],
         )
-        self.__conv_biases_1 = nn.ParameterList([nn.Parameter(torch.zeros(8)) for _ in range(n_antennas)])
+        self.__enc_conv_biases_1 = nn.ParameterList([nn.Parameter(torch.zeros(8)) for _ in range(n_antennas)])
+        self.__dec_conv_biases_1 = nn.ParameterList([nn.Parameter(torch.zeros(1)) for _ in range(n_antennas)])
 
         self.__conv_weights_2 = nn.ParameterList(
             [nn.Parameter(torch.empty(16, 8, 3, 3)) for _ in range(n_antennas)],
         )
-        self.__conv_biases_2 = nn.ParameterList([nn.Parameter(torch.zeros(16)) for _ in range(n_antennas)])
+        self.__enc_conv_biases_2 = nn.ParameterList([nn.Parameter(torch.zeros(16)) for _ in range(n_antennas)])
+        self.__dec_conv_biases_2 = nn.ParameterList([nn.Parameter(torch.zeros(8)) for _ in range(n_antennas)])
 
         # Compute shapes dynamically
         self.__latent_feat_shape, self.__out_paddings = self.__get_shapes_and_paddings()
@@ -57,10 +59,8 @@ class MultiAntennaTiedVAE(nn.Module):
         )
 
         # Central bottleneck weights, maps n_antennas latents -> combined latent
-        self.bottleneck_weight = nn.Parameter(
-            torch.empty(latent_dim * n_categories, latent_dim * n_categories * n_antennas),
-        )
-        self.bottleneck_bias = nn.Parameter(torch.zeros(latent_dim * n_categories))
+        self.bottleneck_enc = nn.Linear(latent_dim * n_categories * n_antennas, latent_dim * n_categories)
+        self.bottleneck_dec = nn.Linear(latent_dim * n_categories, latent_dim * n_categories * n_antennas)
 
         self.__init_weights()
 
@@ -70,20 +70,15 @@ class MultiAntennaTiedVAE(nn.Module):
         for w in [*self.__conv_weights_1, *self.__conv_weights_2, *self.lin_weights]:
             nn.init.kaiming_normal_(w, nonlinearity="relu")
 
-        # Xavier is better for layers that don't use ReLU,
-        # because it keeps the initial logits near zero for a uniform Gumbel start.
-        # This helps preventing the model from collapsing to a single category early in training.
-        nn.init.xavier_uniform_(self.bottleneck_weight)
-
     def __get_shapes_and_paddings(self) -> tuple:
         """Mock pass to find flattened size and required output_paddings."""
         with torch.no_grad():
             x = torch.zeros(1, 1, self.__window_size, self.__n_subcarriers)
 
             # Trace Layer 1
-            l1 = func.conv2d(x, self.__conv_weights_1[0], self.__conv_biases_1[0], stride=2, padding=1)
+            l1 = func.conv2d(x, self.__conv_weights_1[0], self.__enc_conv_biases_1[0], stride=2, padding=1)
             # Trace Layer 2
-            l2 = func.conv2d(l1, self.__conv_weights_2[0], self.__conv_biases_2[0], stride=2, padding=1)
+            l2 = func.conv2d(l1, self.__conv_weights_2[0], self.__enc_conv_biases_2[0], stride=2, padding=1)
 
             # Helper to find output_padding needed for a specific layer
             def __get_op(in_shape: int, out_target: int) -> int:
@@ -114,11 +109,11 @@ class MultiAntennaTiedVAE(nn.Module):
             zi = x[:, i : i + 1, :, :]  # Shape: (batch_size, 1, window_size, n_subcarriers)
 
             # First convolutional layer
-            zi = func.conv2d(zi, self.__conv_weights_1[i], self.__conv_biases_1[i], stride=2, padding=1)
+            zi = func.conv2d(zi, self.__conv_weights_1[i], self.__enc_conv_biases_1[i], stride=2, padding=1)
             zi = func.relu(zi)
 
             # Second convolutional layer
-            zi = func.conv2d(zi, self.__conv_weights_2[i], self.__conv_biases_2[i], stride=2, padding=1)
+            zi = func.conv2d(zi, self.__conv_weights_2[i], self.__enc_conv_biases_2[i], stride=2, padding=1)
             zi = func.relu(zi)
 
             # Flatten
@@ -129,19 +124,21 @@ class MultiAntennaTiedVAE(nn.Module):
 
             encoded_latents.append(zi)
 
-        return torch.cat(encoded_latents, dim=1)
+        z = torch.cat(encoded_latents, dim=1)
+        return self.bottleneck_enc(z)
 
-    def decode(self, recon_combined: torch.Tensor) -> torch.Tensor:
+    def decode(self, z_hard: torch.Tensor) -> torch.Tensor:
         """Decode from categorical latent back to multiple antennas.
 
         Arguments:
-            recon_combined (torch.Tensor): Combined latent tensor of shape
-                                           (batch_size, latent_per_antenna * n_antennas).
+            z_hard (torch.Tensor): Hard categorical latent tensor of shape
+                                   (batch_size, latent_dim * n_categories).
 
         Returns:
             torch.Tensor: Reconstructed outputs of shape (batch_size, n_antennas, window_size, n_subcarriers).
 
         """
+        recon_combined = self.bottleneck_dec(z_hard)
         recon_latents = torch.chunk(recon_combined, self.__n_antennas, dim=1)
 
         recons = []
@@ -157,6 +154,7 @@ class MultiAntennaTiedVAE(nn.Module):
             xi = func.conv_transpose2d(
                 xi,
                 self.__conv_weights_2[i],
+                self.__dec_conv_biases_2[i],
                 stride=2,
                 padding=1,
                 output_padding=self.__out_paddings[0],
@@ -166,13 +164,11 @@ class MultiAntennaTiedVAE(nn.Module):
             xi = func.conv_transpose2d(
                 xi,
                 self.__conv_weights_1[i],
+                self.__dec_conv_biases_1[i],
                 stride=2,
                 padding=1,
                 output_padding=self.__out_paddings[1],
             )
-
-            # Final sigmoid activation with learnable scale
-            xi = torch.sigmoid(xi)
 
             recons.append(xi)
         return torch.stack(recons, dim=1).squeeze(2)
@@ -191,20 +187,14 @@ class MultiAntennaTiedVAE(nn.Module):
 
         """
         # Encoder -> combined latent
-        combined_z = self.encode(x)
-
-        # Map to categorical logits
-        logits = func.linear(combined_z, self.bottleneck_weight, self.bottleneck_bias)
+        logits = self.encode(x)
         logits = logits.view(-1, self.__latent_dim, self.__n_categories)
 
         # Gumbel-Softmax sampling
         z_hard = func.gumbel_softmax(logits, tau=tau, hard=True)
 
         # Map back to combined latent space
-        z_cat_flat = z_hard.view(z_hard.size(0), -1)
-        recon_combined = func.linear(z_cat_flat, self.bottleneck_weight.t())
-
-        # Decode and stack
-        recon = self.decode(recon_combined)
+        z_hard_flat = z_hard.view(z_hard.size(0), -1)
+        recon = self.decode(z_hard_flat)
 
         return recon, z_hard, logits
