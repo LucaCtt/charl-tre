@@ -86,7 +86,7 @@ class Evaluator:
         vae: torch.nn.Module,
         classifier: torch.nn.Module,
         dataloader: DataLoader,
-        test_window_factor: int,
+        test_window_ratio: int,
         classes: list[str],
         gpu_id: int,
         out_dir: Path | None = None,
@@ -97,7 +97,7 @@ class Evaluator:
             vae: The trained VAE model.
             classifier: The trained classifier model.
             dataloader: DataLoader for evaluation data.
-            test_window_factor: Factor to combine multiple latent vectors for evaluation.
+            test_window_ratio: Ratio to combine multiple latent vectors for evaluation.
             classes: List of class names.
             out_dir: Output directory for saving results.
             gpu_id: GPU identifier for computation.
@@ -107,7 +107,7 @@ class Evaluator:
         self.__vae = vae
         self.__classifier = classifier
         self.__dataloader = dataloader
-        self.__test_window_factor = test_window_factor
+        self.__test_window_ratio = test_window_ratio
         self.__classes = classes
         self.__n_classes = len(classes)
         self.__gpu_id = gpu_id
@@ -127,20 +127,27 @@ class Evaluator:
 
         for x, y in self.__dataloader:
             batch_size = x.shape[0]
+            window_size = x.shape[2] // self.__test_window_ratio
 
-            _, z_hard, latents = self.__vae(x.to(self.__gpu_id))
+            zs = []
+            latents = []
+            for i in range(self.__test_window_ratio):
+                xi = x[:, :, window_size * i : window_size * (i + 1), :]
 
-            # (B, latent_dim, n_categories) → (B/factor, factor * latent_dim * n_categories)
-            z_hard = z_hard.view(batch_size, -1)
-            z_combined = z_hard.view(batch_size // self.__test_window_factor, -1)
-            latents = latents.view(batch_size, -1)
+                _, z_hard, logits = self.__vae(xi.to(self.__gpu_id))
 
-            # Take one label every test_window_factor samples
-            y_trimmed = y[:: self.__test_window_factor].to(self.__gpu_id)
+                # (B, latent_dim, n_categories) → (B, latent_dim * n_categories)
+                z_hard = z_hard.view(batch_size, -1)
 
-            preds = torch.argmax(self.__classifier(z_combined), dim=1)
-            accuracy_metric.update(preds, y_trimmed)
-            confusion_matrix_metric.update(preds, y_trimmed)
+                zs.append(z_hard)
+                latents.append(logits)
+
+            zs = torch.cat(zs, dim=1)  # (B, latent_dim * n_categories * test_window_ratio)
+            latents = torch.cat(latents, dim=0)  # (B * test_window_ratio, latent_dim, n_categories)
+
+            preds = torch.argmax(self.__classifier(zs), dim=1)
+            accuracy_metric.update(preds, y.to(self.__gpu_id))
+            confusion_matrix_metric.update(preds, y.to(self.__gpu_id))
 
             # Use the original latent vectors and labels for t-SNE visualization
             all_latents.append(latents.cpu().numpy())

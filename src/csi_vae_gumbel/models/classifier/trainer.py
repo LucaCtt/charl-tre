@@ -37,7 +37,7 @@ class Trainer:
         with torch.no_grad():
             # Split every x along the window size dimension into separate samples,
             # so that we can feed them into the VAE.
-            xs = []
+            zs = []
             for i in range(self.__test_window_ratio):
                 xi = x[:, :, window_size * i : window_size * (i + 1), :]
 
@@ -46,11 +46,11 @@ class Trainer:
                 # (B, latent_dim, n_categories) → (B, latent_dim * n_categories)
                 z_hard = z_hard.view(batch_size, -1)
 
-                xs.append(z_hard)
+                zs.append(z_hard)
 
-            xs = torch.cat(xs, dim=1)  # (B, latent_dim * n_categories * test_window_factor)
+            zs = torch.cat(zs, dim=1)  # (B, latent_dim * n_categories * test_window_ratio)
 
-        logits = self.__model(xs)
+        logits = self.__model(zs)
         loss = self.__criterion(logits, y.to(self.__gpu_id))
 
         loss.backward()

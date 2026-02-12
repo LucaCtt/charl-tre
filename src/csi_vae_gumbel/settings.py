@@ -51,11 +51,11 @@ class Settings(BaseSettings):
     """Number of training epochs for the classifier."""
 
     # Optuna study settings
-    n_trials: int = 10
+    n_trials: int = 100
     """Number of Optuna trials for hyperparameter optimization."""
     n_categories: int = math.ceil(math.log2(len(activities)))
     """Number of categories for the Gumbel-Softmax distribution."""
-    study_name: str = f"a{n_antennas}_w{train_window_size}_t{n_trials}"
+    study_name: str = f"a{n_antennas}_w{train_window_size}_tw{test_window_size}_b{train_batch_size}"
     """Name of the VAE model, used for checkpointing."""
     study_path: str = f"out/{study_name}"
     """Directory to save model checkpoints."""

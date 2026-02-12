@@ -27,7 +27,6 @@ class CSIDataset(Dataset):
             csi_mats: List of CSI matrices loaded from .mat files. Each matrix should have shape
                 [num_samples, n_subcarriers, n_antennas].
             window_size: Size of the sliding window to extract from each sample.
-            downsample_factor: Factor by which to downsample the window size.
             n_antennas: Total number of antennas used, either a single one or all of them.
             antenna_select: Specific antenna to select if only one is needed. If None, use all antennas.
             augment_probability: Probability of applying data augmentation to the CSI data.
