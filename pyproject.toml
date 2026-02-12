@@ -13,6 +13,7 @@ dependencies = [
     "scikit-learn>=1.8.0",
     "scipy>=1.17.0",
     "seaborn>=0.13.2",
+    "tigramite>=5.2.10.1",
     "torch>=2.9.1",
     "torchmetrics>=1.8.2",
 ]
@@ -24,7 +25,8 @@ dev = [
 ]
 
 [project.scripts]
-opt = "csi_vae_gumbel.main:main"
+opt = "csi_vae_gumbel.main:opt"
+test = "csi_vae_gumbel.main:test"
 
 [build-system]
 requires = ["uv_build>=0.9.26,<0.10.0"]
