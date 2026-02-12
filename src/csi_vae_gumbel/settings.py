@@ -15,8 +15,8 @@ class Settings(BaseSettings):
     """Random seed for reproducibility."""
     n_epochs: int = 150
     """Number of training epochs for both VAE and classifier."""
-    train_batch_size: int = 512 * 3
-    """Batch size for training both VAE and classifier. Will be divided by the number of GPUs used."""
+    train_batch_size: int = 512
+    """Batch size per GPU for training both VAE and classifier."""
 
     # Dataset config
     dataset_path: str = "dataset/S1"
@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     """Number of samples to extract from each CSI matrix file."""
     window_size: int = 75
     """Size of the window of CSI in a VAE sample, where 150 CSI = 1 second of data."""
-    test_window_factor: int = 6
+    test_window_factor: int = 3
     """Number of train windows to concatenate for each test sample, to evaluate on longer sequences."""
     test_ratio: float = 0.3
     """Proportion of the dataset to be used for testing."""
@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     """Number of subcarriers in each CSI sample."""
 
     # Optuna study config
-    n_trials: int = 100
+    n_trials: int = 10
     """Number of Optuna trials for hyperparameter optimization."""
     n_categories: int = math.ceil(math.log2(n_activities))
     """Number of categories for the Gumbel-Softmax distribution."""

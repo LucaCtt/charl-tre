@@ -195,82 +195,26 @@ def _run_optimize(rank: int, world_size: int, shared_dict: dict, train_ds: CSIDa
             study.best_trial.params,
         )
 
+        results_df = {
+            "best_trial": [study.best_trial.number],
+            "best_value": [study.best_trial.value],
+            "pruned_trials": len(pruned_trials),
+            "complete_trials": len(complete_trials),
+        }
+        with Path.open(Path(settings.study_path) / "study_results.json", "w") as f:
+            json.dump(results_df, f)
+
     dist.destroy_process_group()
 
 
-def _run_eval(study: optuna.study.Study, train_ds: CSIDataset, test_ds: CSIDataset) -> None:
-    params = vae.Parameters(**study.best_trial.params)
-
-    # Disable augmentations for evaluation, because they make dataset length non-deterministic
-    train_dl = DataLoader(
-        train_ds,
-        batch_size=settings.train_batch_size,
-        shuffle=False,
-        pin_memory=True,
-        drop_last=True,  # Ensure batch size is consistent for evaluation
-    )
-    test_dl = DataLoader(test_ds, batch_size=len(test_ds), shuffle=False, pin_memory=True)
-
-    vae_model = vae.SingleAntennaVAE(
-        settings.window_size,
-        settings.n_subcarriers // 8,
-        settings.n_categories,
-        params.latent_dim,
-    )
-    load_path = Path(settings.study_path) / f"trial_{study.best_trial.number}" / "model.pt"
-    vae_model.load_state_dict(torch.load(load_path))
-    logger.info("Loaded best VAE model for evaluation.")
-
-    classifier_model = classifier.BasicNNClassifier(
-        params.latent_dim * settings.n_categories * settings.test_window_factor,
-        settings.n_activities,
-        int(1.5 * params.latent_dim * settings.n_categories * settings.test_window_factor),
-    )
-    classifier_trainer = classifier.Trainer(
-        model=classifier_model,
-        dataloader=train_dl,
-        vae=vae_model,
-        test_window_factor=settings.test_window_factor,
-        gpu_id=0,
-    )
-    loss, accuracy = classifier_trainer.train(settings.n_epochs)
-    logger.info("Classifier training completed with loss %.4f and accuracy %.4f", loss, accuracy)
-
-    evaluator = Evaluator(
-        vae_model,
-        classifier_model,
-        test_dl,
-        settings.test_window_factor,
-        settings.activities_labels,
-        0,
-        Path(settings.study_path),
-    )
-    accuracy = evaluator.evaluate()
-    logger.info("Evaluation completed with test accuracy %.4f", accuracy)
-
-    # Save final results
-    results_df = {
-        "best_trial": [study.best_trial.number],
-        "best_value": [study.best_trial.value],
-        "final_kl_weight": [params.final_kl_weight],
-        "latent_dim": [params.latent_dim],
-        "final_cap": [params.final_cap],
-        "start_gumbel_temp": [params.start_gumbel_temp],
-        "classifier_loss": [loss],
-        "classifier_accuracy": [accuracy],
-    }
-    with Path.open(Path(settings.study_path) / "final_results.json", "w") as f:
-        json.dump(results_df, f)
-
-
-def main() -> None:
+def opt() -> None:
     """Run optuna optimization and evaluation for the CSI VAE model."""
     if settings.debug:
         os.environ["TORCH_NCCL_ASYNC_ERROR_HANDLING"] = "1"
         os.environ["TORCH_DISTRIBUTED_DEBUG"] = "DETAIL"
         os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
-    # Create datasets once and share across processes
+    # Create datasets once and share across VAE training processes
     logger.info("Loading datasets from %s", settings.dataset_path)
     train_ds, test_ds = load_datasets(
         dataset_path=Path(settings.dataset_path),
@@ -291,9 +235,106 @@ def main() -> None:
     # Run Optuna optimization
     spawn(_run_optimize, args=(world_size, shared_dict, train_ds), nprocs=world_size, join=True)
 
-    # Run evaluation with the best trial
-    _run_eval(shared_dict["study"], train_ds, test_ds)
+
+def _run_classifier_train(
+    rank: int,
+    world_size: int,
+    vae_model: vae.SingleAntennaVAE,
+    classifier_model: classifier.BasicNNClassifier,
+    train_ds: CSIDataset,
+) -> None:
+    _ddp_setup(rank, world_size)
+
+    train_dl = DataLoader(
+        train_ds,
+        batch_size=settings.train_batch_size,
+        sampler=DistributedSampler(train_ds, num_replicas=world_size, rank=rank, shuffle=False),
+        pin_memory=True,
+        drop_last=True,  # Ensure batch size is consistent for training
+    )
+
+    classifier_trainer = classifier.Trainer(
+        model=classifier_model,
+        dataloader=train_dl,
+        vae=vae_model,
+        test_window_factor=settings.test_window_factor,
+        gpu_id=rank,
+    )
+    loss, accuracy = classifier_trainer.train(settings.n_epochs)
+
+    if rank == 0:
+        logger.info("Classifier training completed with loss %.4f and accuracy %.4f", loss, accuracy)
+
+    dist.destroy_process_group()
+
+
+def test() -> None:
+    """Evaluate the best VAE model on the test set using a classifier."""
+    with Path(f"{settings.study_path}/study_results.json").open("r") as f:
+        study_info = json.load(f)
+
+    best_model_path = Path(settings.study_path) / f"trial_{study_info['best_trial']}"
+
+    with Path(best_model_path / "results.json").open("r") as f:
+        info = json.load(f)
+
+    params = vae.Parameters(
+        final_cap=info["final_cap"],
+        start_gumbel_temp=info["start_gumbel_temp"],
+        final_kl_weight=info["final_kl_weight"],
+        latent_dim=info["latent_dim"],
+    )
+
+    logger.info("Loading best VAE model for evaluation...")
+    vae_model = vae.SingleAntennaVAE(
+        settings.window_size,
+        settings.n_subcarriers // 8,
+        settings.n_categories,
+        params.latent_dim,
+    )
+    best_model_weights = torch.load(best_model_path / "model.pt")
+    vae_model.load_state_dict(best_model_weights)
+
+    classifier_model = classifier.BasicNNClassifier(
+        params.latent_dim * settings.n_categories * settings.test_window_factor,
+        settings.n_activities,
+        int(1.5 * params.latent_dim * settings.n_categories * settings.test_window_factor),
+    )
+
+    logger.info("Loading datasets...")
+    train_ds, test_ds = load_datasets(
+        dataset_path=Path(settings.dataset_path),
+        window_size=settings.window_size * settings.test_window_factor,
+        test_ratio=settings.test_ratio,
+        n_activities=settings.n_activities,
+        n_antennas=settings.n_antennas,
+        antenna_select=settings.antenna_select,
+    )
+
+    logger.info("Starting classifier training for evaluation...")
+    world_size = torch.cuda.device_count() if torch.cuda.is_available() else 1
+    spawn(
+        _run_classifier_train,
+        args=(world_size, vae_model, classifier_model, train_ds),
+        nprocs=world_size,
+        join=True,
+    )
+
+    logger.info("Starting evaluation on test set...")
+    test_dl = DataLoader(test_ds, batch_size=len(test_ds) // (world_size * 12), shuffle=False, pin_memory=True)
+    evaluator = Evaluator(
+        vae_model,
+        classifier_model,
+        test_dl,
+        settings.test_window_factor,
+        settings.activities_labels,
+        0,
+        Path(settings.study_path),
+    )
+    accuracy = evaluator.evaluate()
+    logger.info("Evaluation completed with test accuracy %.4f", accuracy)
 
 
 if __name__ == "__main__":
-    main()
+    opt()
+    test()
