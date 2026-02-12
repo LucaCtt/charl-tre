@@ -110,13 +110,13 @@ def _objective(single_trial: BaseTrial | None, rank: int, train_dl: DataLoader) 
 
     # Build and train VAE
     vae_model = vae.SingleAntennaVAE(
-        settings.window_size,
-        settings.n_subcarriers // 8,
+        settings.train_window_size,
+        settings.n_subcarriers,
         settings.n_categories,
         parameters.latent_dim,
     )
     vae_trainer = vae.Trainer(vae_model, train_dl, parameters, rank, trial)
-    loss, recon_loss, kl_loss = vae_trainer.train(settings.n_epochs)
+    loss, recon_loss, kl_loss = vae_trainer.train(settings.vae_n_epochs)
 
     if rank == 0:
         logger.info(
@@ -195,14 +195,14 @@ def _run_optimize(rank: int, world_size: int, shared_dict: dict, train_ds: CSIDa
             study.best_trial.params,
         )
 
-        results_df = {
+        results = {
             "best_trial": [study.best_trial.number],
             "best_value": [study.best_trial.value],
             "pruned_trials": len(pruned_trials),
             "complete_trials": len(complete_trials),
         }
         with Path.open(Path(settings.study_path) / "study_results.json", "w") as f:
-            json.dump(results_df, f)
+            json.dump(results, f)
 
     dist.destroy_process_group()
 
@@ -218,11 +218,12 @@ def opt() -> None:
     logger.info("Loading datasets from %s", settings.dataset_path)
     train_ds, test_ds = load_datasets(
         dataset_path=Path(settings.dataset_path),
-        window_size=settings.window_size,
+        window_size=settings.train_window_size,
         test_ratio=settings.test_ratio,
         n_activities=settings.n_activities,
         n_antennas=settings.n_antennas,
         antenna_select=settings.antenna_select,
+        seed=settings.seed,
     )
     logger.info("Datasets loaded with %d training samples and %d testing samples", len(train_ds), len(test_ds))
 
@@ -248,19 +249,18 @@ def _run_classifier_train(
     train_dl = DataLoader(
         train_ds,
         batch_size=settings.train_batch_size,
-        sampler=DistributedSampler(train_ds, num_replicas=world_size, rank=rank, shuffle=False),
+        sampler=DistributedSampler(train_ds, num_replicas=world_size, rank=rank, shuffle=True),
         pin_memory=True,
-        drop_last=True,  # Ensure batch size is consistent for training
     )
 
     classifier_trainer = classifier.Trainer(
         model=classifier_model,
         dataloader=train_dl,
         vae=vae_model,
-        test_window_factor=settings.test_window_factor,
+        test_window_ratio=settings.test_window_ratio,
         gpu_id=rank,
     )
-    loss, accuracy = classifier_trainer.train(settings.n_epochs)
+    loss, accuracy = classifier_trainer.train(settings.classifier_n_epochs)
 
     if rank == 0:
         logger.info("Classifier training completed with loss %.4f and accuracy %.4f", loss, accuracy)
@@ -287,8 +287,8 @@ def test() -> None:
 
     logger.info("Loading best VAE model for evaluation...")
     vae_model = vae.SingleAntennaVAE(
-        settings.window_size,
-        settings.n_subcarriers // 8,
+        settings.train_window_size,
+        settings.n_subcarriers,
         settings.n_categories,
         params.latent_dim,
     )
@@ -296,19 +296,20 @@ def test() -> None:
     vae_model.load_state_dict(best_model_weights)
 
     classifier_model = classifier.BasicNNClassifier(
-        params.latent_dim * settings.n_categories * settings.test_window_factor,
+        params.latent_dim * settings.n_categories * settings.test_window_ratio,
         settings.n_activities,
-        int(1.5 * params.latent_dim * settings.n_categories * settings.test_window_factor),
+        int(1.5 * params.latent_dim * settings.n_categories * settings.test_window_ratio),
     )
 
     logger.info("Loading datasets...")
     train_ds, test_ds = load_datasets(
         dataset_path=Path(settings.dataset_path),
-        window_size=settings.window_size * settings.test_window_factor,
+        window_size=settings.test_window_size,
         test_ratio=settings.test_ratio,
         n_activities=settings.n_activities,
         n_antennas=settings.n_antennas,
         antenna_select=settings.antenna_select,
+        seed=settings.seed,
     )
 
     logger.info("Starting classifier training for evaluation...")
@@ -320,14 +321,16 @@ def test() -> None:
         join=True,
     )
 
+    torch.save(vae_model.state_dict(), Path(settings.study_path) / "classifier.pt")
+
     logger.info("Starting evaluation on test set...")
     test_dl = DataLoader(test_ds, batch_size=len(test_ds) // (world_size * 12), shuffle=False, pin_memory=True)
     evaluator = Evaluator(
         vae_model,
         classifier_model,
         test_dl,
-        settings.test_window_factor,
-        settings.activities_labels,
+        settings.test_window_ratio,
+        settings.activities,
         0,
         Path(settings.study_path),
     )

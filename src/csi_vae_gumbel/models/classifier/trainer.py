@@ -14,14 +14,14 @@ class Trainer:
         model: nn.Module,
         dataloader: DataLoader,
         vae: nn.Module,
-        test_window_factor: int,
+        test_window_ratio: int,
         gpu_id: int,
     ) -> None:
         """Initialize the Classifier Trainer."""
         self.__model = DistributedDataParallel(model.to(gpu_id), device_ids=[gpu_id])
         self.__dataloader = dataloader
         self.__vae = vae.to(gpu_id)
-        self.__test_window_factor = test_window_factor
+        self.__test_window_ratio = test_window_ratio
         self.__gpu_id = gpu_id
         self.__criterion = nn.CrossEntropyLoss()
 
@@ -32,13 +32,13 @@ class Trainer:
         self.__optimizer.zero_grad()
 
         batch_size = x.shape[0]
-        window_size = x.shape[2] // self.__test_window_factor
+        window_size = x.shape[2] // self.__test_window_ratio
 
         with torch.no_grad():
             # Split every x along the window size dimension into separate samples,
             # so that we can feed them into the VAE.
             xs = []
-            for i in range(self.__test_window_factor):
+            for i in range(self.__test_window_ratio):
                 xi = x[:, :, window_size * i : window_size * (i + 1), :]
 
                 _, z_hard, _ = self.__vae(xi.to(self.__gpu_id))
@@ -70,16 +70,9 @@ class Trainer:
 
         for x, y in self.__dataloader:
             loss, accuracy = self.__run_batch(x.to(self.__gpu_id), y.to(self.__gpu_id))
+            metrics += torch.tensor([loss, accuracy], device=self.__gpu_id)
 
-            metrics += torch.tensor([loss.detach(), accuracy], device=self.__gpu_id)
-
-        dist.all_reduce(metrics, op=dist.ReduceOp.SUM)
-
-        # Get total number of batches across all processes to account for batch size differences
-        total_batches = torch.tensor(len(self.__dataloader), device=self.__gpu_id)
-        dist.all_reduce(total_batches, op=dist.ReduceOp.SUM)
-
-        metrics /= total_batches
+        metrics /= len(self.__dataloader)
 
         return metrics[0], metrics[1]
 
@@ -95,5 +88,8 @@ class Trainer:
             total_metrics += torch.tensor([epoch_loss, epoch_accuracy], device=self.__gpu_id)
 
         total_metrics /= epochs
+
+        dist.all_reduce(total_metrics, op=dist.ReduceOp.SUM)
+        total_metrics /= dist.get_world_size()
 
         return tuple(total_metrics.tolist())

@@ -19,6 +19,7 @@ class CSIDataset(Dataset):
         antenna_select: int,
         augment_probability: float = 0.3,
         normalize: bool = True,
+        seed: int = 42,
     ) -> None:
         """Initialize the CSI dataset.
 
@@ -31,10 +32,11 @@ class CSIDataset(Dataset):
             antenna_select: Specific antenna to select if only one is needed. If None, use all antennas.
             augment_probability: Probability of applying data augmentation to the CSI data.
             normalize: Whether to normalize the CSI data by the global maximum value.
+            seed: Random seed for reproducibility of data augmentation.
 
         """
         self.__window_size = window_size
-        self.__augmenter = CSIAugmenter()
+        self.__augmenter = CSIAugmenter(seed=seed)
         self.__normalize = normalize
         self.__augment_probability = augment_probability
 

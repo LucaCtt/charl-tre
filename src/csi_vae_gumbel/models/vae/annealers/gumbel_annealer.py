@@ -5,7 +5,7 @@ class GumbelTemperatureAnnealer:
         self,
         start_tau: float = 1.5,
         min_tau: float = 0.4,
-        n_epochs: int = 150,
+        n_epochs: int = 100,
         start_epoch: int = 0,
     ) -> None:
         """Initialize the Gumbel temperature annealer.

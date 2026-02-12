@@ -10,7 +10,7 @@ class CollapsePruner(BasePruner):
         self,
         n_categories: int,
         patience: int = 10,
-        warmup_steps: int = 80,
+        warmup_steps: int = 50,
         min_entropy_frac: float = 0.02,
         max_entropy_slope: float = 1e-4,
     ) -> None:
