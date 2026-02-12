@@ -48,8 +48,7 @@ def _split_mats(mats: list[np.ndarray], test_ratio: float, n_parts: int) -> tupl
 
 def load_datasets(
     dataset_path: Path,
-    train_window_size: int,
-    overlap_size: int,
+    window_size: int,
     n_activities: int,
     n_antennas: int,
     antenna_select: int,
@@ -59,8 +58,7 @@ def load_datasets(
 
     Arguments:
         dataset_path: Path to the dataset directory.
-        train_window_size: Window size for training samples.
-        overlap_size: Overlap size for the CSI samples.
+        window_size: Window size for CSI samples.
         n_activities: Number of activities (files) to load from the dataset.
         n_antennas: Number of antennas to use from the CSI data.
         antenna_select: Antenna selection strategy.
@@ -78,16 +76,14 @@ def load_datasets(
     # Shape of dataset samples: (n_antennas, window_size, n_subcarriers)
     train_dataset = CSIDataset(
         csi_mats=train_mats,
-        window_size=train_window_size,
-        overlap_size=overlap_size,
+        window_size=window_size,
         n_antennas=n_antennas,
         antenna_select=antenna_select,
     )
 
     test_dataset = CSIDataset(
         csi_mats=test_mats,
-        window_size=train_window_size,
-        overlap_size=0,
+        window_size=window_size,
         n_antennas=n_antennas,
         antenna_select=antenna_select,
         augment_probability=0.0,

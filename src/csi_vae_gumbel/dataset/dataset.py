@@ -15,10 +15,9 @@ class CSIDataset(Dataset):
         self,
         csi_mats: list[np.ndarray],
         window_size: int,
-        overlap_size: int,
         n_antennas: int,
         antenna_select: int,
-        augment_probability: float = 0.5,
+        augment_probability: float = 0.3,
         normalize: bool = True,
     ) -> None:
         """Initialize the CSI dataset.
@@ -27,7 +26,6 @@ class CSIDataset(Dataset):
             csi_mats: List of CSI matrices loaded from .mat files. Each matrix should have shape
                 [num_samples, n_subcarriers, n_antennas].
             window_size: Size of the sliding window to extract from each sample.
-            overlap_size: Size of the overlap between two consecutive windows.
             downsample_factor: Factor by which to downsample the window size.
             n_antennas: Total number of antennas used, either a single one or all of them.
             antenna_select: Specific antenna to select if only one is needed. If None, use all antennas.
@@ -35,15 +33,10 @@ class CSIDataset(Dataset):
             normalize: Whether to normalize the CSI data by the global maximum value.
 
         """
-        if overlap_size >= window_size:
-            msg = "Overlap size must be smaller than window size."
-            raise ValueError(msg)
-
         self.__window_size = window_size
         self.__augmenter = CSIAugmenter()
         self.__normalize = normalize
         self.__augment_probability = augment_probability
-        self.__augment_enabled = augment_probability > 0.0
 
         self.__data: list[np.ndarray] = []
         self.__labels: list[int] = []
@@ -83,12 +76,9 @@ class CSIDataset(Dataset):
             self.__labels.append(label)
 
             # Build lazy sliding-window index
-            step_size = window_size - overlap_size
-            for start in range(0, csi.shape[0] - window_size + 1, step_size):
-                self.__index_map.append((file_id, start, False))
-
-                if torch.rand(1) < self.__augment_probability:
-                    self.__index_map.append((file_id, start, True))
+            for start in range(csi.shape[0] - window_size + 1):
+                is_augmented = torch.rand(1).item() < self.__augment_probability
+                self.__index_map.append((file_id, start, is_augmented))
 
     def __len__(self) -> int:
         return len(self.__index_map)
@@ -108,14 +98,10 @@ class CSIDataset(Dataset):
             window = (window - self.__global_min) / (self.__global_max - self.__global_min + 1e-12)
 
         # Apply augmentation if needed
-        if augmented and self.__augment_enabled:
+        if augmented:
             window = self.__augmenter.apply(window.copy())
 
         x = torch.from_numpy(window)
         y = self.__labels[file_id]
 
         return x, y
-
-    def toggle_augmentations(self, enable: bool) -> None:
-        """Enable or disable data augmentations for the dataset."""
-        self.__augment_enabled = enable

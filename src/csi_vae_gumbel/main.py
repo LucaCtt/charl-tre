@@ -1,4 +1,5 @@
 import contextlib
+import json
 import logging
 import os
 import random
@@ -7,7 +8,6 @@ from functools import partial
 from pathlib import Path
 
 import optuna
-import pandas as pd
 import torch
 from optuna.trial import BaseTrial, TrialState
 from rich.logging import RichHandler
@@ -110,7 +110,7 @@ def _objective(single_trial: BaseTrial | None, rank: int, train_dl: DataLoader) 
 
     # Build and train VAE
     vae_model = vae.SingleAntennaVAE(
-        settings.train_window_size,
+        settings.window_size,
         settings.n_subcarriers // 8,
         settings.n_categories,
         parameters.latent_dim,
@@ -126,9 +126,22 @@ def _objective(single_trial: BaseTrial | None, rank: int, train_dl: DataLoader) 
             recon_loss,
             kl_loss,
         )
-        save_path = Path(settings.study_dir) / f"trial_{trial.number}"
+        save_path = Path(settings.study_path) / f"trial_{trial.number}"
         save_path.mkdir(parents=True, exist_ok=True)
         torch.save(vae_model.state_dict(), save_path / "model.pt")
+
+        results = {
+            "trial_number": trial.number,
+            "final_kl_weight": parameters.final_kl_weight,
+            "latent_dim": parameters.latent_dim,
+            "final_cap": parameters.final_cap,
+            "start_gumbel_temp": parameters.start_gumbel_temp,
+            "loss": loss,
+            "recon_loss": recon_loss,
+            "kl_loss": kl_loss,
+        }
+        with Path.open(save_path / "results.json", "w") as f:
+            json.dump(results, f)
 
     return recon_loss
 
@@ -150,7 +163,11 @@ def _run_optimize(rank: int, world_size: int, shared_dict: dict, train_ds: CSIDa
             sampler=optuna.samplers.TPESampler(seed=settings.seed),
             pruner=CollapsePruner(n_categories=settings.n_categories),
         )
-        study.optimize(partial(_objective, rank=rank, train_dl=train_dl), n_trials=settings.n_trials)
+        study.optimize(
+            partial(_objective, rank=rank, train_dl=train_dl),
+            n_trials=settings.n_trials,
+            gc_after_trial=True,
+        )
         shared_dict["study"] = study
     else:
         for _ in range(settings.n_trials):
@@ -161,7 +178,6 @@ def _run_optimize(rank: int, world_size: int, shared_dict: dict, train_ds: CSIDa
 
     if rank == 0:
         study = shared_dict["study"]
-        study.trials_dataframe().to_csv(Path(settings.study_dir) / "trials_report.csv")
 
         pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
         complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])
@@ -186,8 +202,6 @@ def _run_eval(study: optuna.study.Study, train_ds: CSIDataset, test_ds: CSIDatas
     params = vae.Parameters(**study.best_trial.params)
 
     # Disable augmentations for evaluation, because they make dataset length non-deterministic
-    train_ds.toggle_augmentations(False)
-
     train_dl = DataLoader(
         train_ds,
         batch_size=settings.train_batch_size,
@@ -198,12 +212,12 @@ def _run_eval(study: optuna.study.Study, train_ds: CSIDataset, test_ds: CSIDatas
     test_dl = DataLoader(test_ds, batch_size=len(test_ds), shuffle=False, pin_memory=True)
 
     vae_model = vae.SingleAntennaVAE(
-        settings.train_window_size,
+        settings.window_size,
         settings.n_subcarriers // 8,
         settings.n_categories,
         params.latent_dim,
     )
-    load_path = Path(settings.study_dir) / f"trial_{study.best_trial.number}" / "model.pt"
+    load_path = Path(settings.study_path) / f"trial_{study.best_trial.number}" / "model.pt"
     vae_model.load_state_dict(torch.load(load_path))
     logger.info("Loaded best VAE model for evaluation.")
 
@@ -229,24 +243,24 @@ def _run_eval(study: optuna.study.Study, train_ds: CSIDataset, test_ds: CSIDatas
         settings.test_window_factor,
         settings.activities_labels,
         0,
-        Path(settings.study_dir),
+        Path(settings.study_path),
     )
     accuracy = evaluator.evaluate()
     logger.info("Evaluation completed with test accuracy %.4f", accuracy)
 
-    results_df = pd.DataFrame(
-        {
-            "best_trial": [study.best_trial.number],
-            "best_value": [study.best_trial.value],
-            "final_kl_weight": [params.final_kl_weight],
-            "latent_dim": [params.latent_dim],
-            "final_cap": [params.final_cap],
-            "start_gumbel_temp": [params.start_gumbel_temp],
-            "classifier_loss": [loss],
-            "classifier_accuracy": [accuracy],
-        },
-    )
-    results_df.to_csv(Path(settings.study_dir) / "final_results.csv", index=False)
+    # Save final results
+    results_df = {
+        "best_trial": [study.best_trial.number],
+        "best_value": [study.best_trial.value],
+        "final_kl_weight": [params.final_kl_weight],
+        "latent_dim": [params.latent_dim],
+        "final_cap": [params.final_cap],
+        "start_gumbel_temp": [params.start_gumbel_temp],
+        "classifier_loss": [loss],
+        "classifier_accuracy": [accuracy],
+    }
+    with Path.open(Path(settings.study_path) / "final_results.json", "w") as f:
+        json.dump(results_df, f)
 
 
 def main() -> None:
@@ -260,9 +274,8 @@ def main() -> None:
     logger.info("Loading datasets from %s", settings.dataset_path)
     train_ds, test_ds = load_datasets(
         dataset_path=Path(settings.dataset_path),
-        train_window_size=settings.train_window_size,
+        window_size=settings.window_size,
         test_ratio=settings.test_ratio,
-        overlap_size=settings.overlap_size,
         n_activities=settings.n_activities,
         n_antennas=settings.n_antennas,
         antenna_select=settings.antenna_select,
