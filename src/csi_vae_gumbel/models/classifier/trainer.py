@@ -25,7 +25,7 @@ class Trainer:
         self.__gpu_id = gpu_id
         self.__criterion = nn.CrossEntropyLoss()
 
-        self.__optimizer = optim.Adam(self.__model.parameters())
+        self.__optimizer = optim.Adam(self.__model.parameters(), lr=5e-4)
 
     def __run_batch(self, x: torch.Tensor, y: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Run a single training batch."""
@@ -37,27 +37,21 @@ class Trainer:
         with torch.no_grad():
             # Split every x along the window size dimension into separate samples,
             # so that we can feed them into the VAE.
-            zs = []
-            for i in range(self.__test_window_ratio):
-                xi = x[:, :, window_size * i : window_size * (i + 1), :]
+            x = x.view(batch_size * self.__test_window_ratio, x.shape[1], window_size, x.shape[3])
 
-                _, z_hard, _ = self.__vae(xi.to(self.__gpu_id))
+            _, z_hard, _ = self.__vae(x)
 
-                # (B, latent_dim, n_categories) → (B, latent_dim * n_categories)
-                z_hard = z_hard.view(batch_size, -1)
+            # (B * test_window_ratio, latent_dim, n_categories) → (B, latent_dim * n_categories * test_window_ratio)
+            z_hard = z_hard.view(batch_size, -1)
 
-                zs.append(z_hard)
-
-            zs = torch.cat(zs, dim=1)  # (B, latent_dim * n_categories * test_window_ratio)
-
-        logits = self.__model(zs)
-        loss = self.__criterion(logits, y.to(self.__gpu_id))
+        logits = self.__model(z_hard)
+        loss = self.__criterion(logits, y)
 
         loss.backward()
         self.__optimizer.step()
 
         with torch.no_grad():
-            accuracy = (logits.argmax(dim=1) == y.to(self.__gpu_id)).float().mean()
+            accuracy = (logits.argmax(dim=1) == y).float().mean()
 
         return loss.detach(), accuracy.detach()
 

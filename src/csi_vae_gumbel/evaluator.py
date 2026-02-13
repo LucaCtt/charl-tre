@@ -45,7 +45,7 @@ def _plot_latent_tsne(latent_array: np.ndarray, label_array: np.ndarray, class_n
     """
     tsne = TSNE(
         n_components=2,
-        perplexity=30,
+        perplexity=50,
         learning_rate="auto",
         init="pca",
         metric="cosine",
@@ -104,8 +104,8 @@ class Evaluator:
             out_dir: Output directory for saving plots.
 
         """
-        self.__vae = vae
-        self.__classifier = classifier
+        self.__vae = vae.to(gpu_id)
+        self.__classifier = classifier.to(gpu_id)
         self.__dataloader = dataloader
         self.__test_window_ratio = test_window_ratio
         self.__classes = classes
@@ -129,23 +129,15 @@ class Evaluator:
             batch_size = x.shape[0]
             window_size = x.shape[2] // self.__test_window_ratio
 
-            zs = []
-            latents = []
-            for i in range(self.__test_window_ratio):
-                xi = x[:, :, window_size * i : window_size * (i + 1), :]
+            x_r = x.view(batch_size * self.__test_window_ratio, x.shape[1], window_size, x.shape[3]).to(self.__gpu_id)
 
-                _, z_hard, logits = self.__vae(xi.to(self.__gpu_id))
+            _, z_hard, latents = self.__vae(x_r)
 
-                # (B, latent_dim, n_categories) → (B, latent_dim * n_categories)
-                z_hard = z_hard.view(batch_size, -1)
+            # (B * test_window_ratio, latent_dim, n_categories) → (B, latent_dim * n_categories * test_window_ratio)
+            z_hard = z_hard.view(batch_size, -1)
+            latents = latents.view(batch_size, -1)
 
-                zs.append(z_hard)
-                latents.append(logits)
-
-            zs = torch.cat(zs, dim=1)  # (B, latent_dim * n_categories * test_window_ratio)
-            latents = torch.cat(latents, dim=0)  # (B * test_window_ratio, latent_dim, n_categories)
-
-            preds = torch.argmax(self.__classifier(zs), dim=1)
+            preds = torch.argmax(self.__classifier(z_hard), dim=1)
             accuracy_metric.update(preds, y.to(self.__gpu_id))
             confusion_matrix_metric.update(preds, y.to(self.__gpu_id))
 

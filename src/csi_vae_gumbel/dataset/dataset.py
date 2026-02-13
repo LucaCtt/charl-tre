@@ -41,7 +41,7 @@ class CSIDataset(Dataset):
 
         self.__data: list[np.ndarray] = []
         self.__labels: list[int] = []
-        self.__index_map: list[tuple[int, int, bool]] = []
+        self.__index_map: list[tuple[int, int]] = []
 
         self.__global_min = float("inf")
         self.__global_max = 0.0
@@ -78,14 +78,13 @@ class CSIDataset(Dataset):
 
             # Build lazy sliding-window index
             for start in range(csi.shape[0] - window_size + 1):
-                is_augmented = torch.rand(1).item() < self.__augment_probability
-                self.__index_map.append((file_id, start, is_augmented))
+                self.__index_map.append((file_id, start))
 
     def __len__(self) -> int:
         return len(self.__index_map)
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, int]:
-        file_id, start, augmented = self.__index_map[idx]
+        file_id, start = self.__index_map[idx]
         csi = self.__data[file_id]
 
         window = csi[start : start + self.__window_size]
@@ -99,7 +98,7 @@ class CSIDataset(Dataset):
             window = (window - self.__global_min) / (self.__global_max - self.__global_min + 1e-12)
 
         # Apply augmentation if needed
-        if augmented:
+        if torch.rand(1).item() < self.__augment_probability:
             window = self.__augmenter.apply(window.copy())
 
         x = torch.from_numpy(window)

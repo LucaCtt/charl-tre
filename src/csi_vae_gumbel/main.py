@@ -264,16 +264,20 @@ def _run_classifier_train(
 
     if rank == 0:
         logger.info("Classifier training completed with loss %.4f and accuracy %.4f", loss, accuracy)
+        torch.save(classifier_model.state_dict(), Path(settings.study_path) / "classifier.pt")
 
     dist.destroy_process_group()
 
 
 def test() -> None:
     """Evaluate the best VAE model on the test set using a classifier."""
+    world_size = torch.cuda.device_count() if torch.cuda.is_available() else 1
+
     with Path(f"{settings.study_path}/study_results.json").open("r") as f:
         study_info = json.load(f)
+        best_trial_number = study_info["best_trial"][0]
 
-    best_model_path = Path(settings.study_path) / f"trial_{study_info['best_trial']}"
+    best_model_path = Path(settings.study_path) / f"trial_{best_trial_number}"
 
     with Path(best_model_path / "results.json").open("r") as f:
         info = json.load(f)
@@ -295,12 +299,6 @@ def test() -> None:
     best_model_weights = torch.load(best_model_path / "model.pt")
     vae_model.load_state_dict(best_model_weights)
 
-    classifier_model = classifier.BasicNNClassifier(
-        params.latent_dim * settings.n_categories * settings.test_window_ratio,
-        settings.n_activities,
-        int(1.5 * params.latent_dim * settings.n_categories * settings.test_window_ratio),
-    )
-
     logger.info("Loading datasets...")
     train_ds, test_ds = load_datasets(
         dataset_path=Path(settings.dataset_path),
@@ -312,18 +310,25 @@ def test() -> None:
         seed=settings.seed,
     )
 
-    logger.info("Starting classifier training for evaluation...")
-    world_size = torch.cuda.device_count() if torch.cuda.is_available() else 1
-    spawn(
-        _run_classifier_train,
-        args=(world_size, vae_model, classifier_model, train_ds),
-        nprocs=world_size,
-        join=True,
+    classifier_model = classifier.BasicNNClassifier(
+        params.latent_dim * settings.n_categories * settings.test_window_ratio,
+        settings.n_activities,
+        int(1.5 * params.latent_dim * settings.n_categories * settings.test_window_ratio),
     )
 
-    torch.save(vae_model.state_dict(), Path(settings.study_path) / "classifier.pt")
+    if not Path(settings.study_path).joinpath("classifier.pt").exists():
+        logger.info("Training classifier...")
+        spawn(
+            _run_classifier_train,
+            args=(world_size, vae_model, classifier_model, train_ds),
+            nprocs=world_size,
+            join=True,
+        )
 
-    logger.info("Starting evaluation on test set...")
+    classifier_weights = torch.load(Path(settings.study_path) / "classifier.pt")
+    classifier_model.load_state_dict(classifier_weights)
+
+    logger.info("Evaluating on test set...")
     test_dl = DataLoader(test_ds, batch_size=len(test_ds) // (world_size * 12), shuffle=False, pin_memory=True)
     evaluator = Evaluator(
         vae_model,
