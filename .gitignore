@@ -13,8 +13,5 @@ wheels/
 # Dataset
 /dataset/
 
-# Logs and checkpoints
-/out/
-
 # Environment variables
 .env
