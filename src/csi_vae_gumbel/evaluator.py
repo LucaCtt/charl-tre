@@ -45,7 +45,7 @@ def _plot_latent_tsne(latent_array: np.ndarray, label_array: np.ndarray, class_n
     """
     tsne = TSNE(
         n_components=2,
-        perplexity=50,
+        perplexity=30,
         learning_rate="auto",
         init="pca",
         metric="cosine",
