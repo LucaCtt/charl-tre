@@ -5,6 +5,8 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
+    "dcor>=0.7",
+    "gpytorch>=1.15.1",
     "matplotlib>=3.10.8",
     "numba>=0.63.1",
     "optuna>=4.7.0",
