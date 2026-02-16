@@ -5,6 +5,8 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
+from csi_vae_gumbel.util import split_test_window
+
 
 class Trainer:
     """Trainer class for classifier model using Distributed Data Parallel (DDP)."""
@@ -14,14 +16,27 @@ class Trainer:
         model: nn.Module,
         dataloader: DataLoader,
         vae: nn.Module,
-        test_window_ratio: int,
+        sample_window_size: int,
+        overlap_size: int,
         gpu_id: int,
     ) -> None:
-        """Initialize the Classifier Trainer."""
+        """Initialize the Classifier Trainer.
+
+        Arguments:
+            model: The classifier model to be trained.
+            dataloader: DataLoader for the training dataset.
+            vae: The pre-trained VAE model used for feature extraction.
+            sample_window_size: The size of the window to split the input samples into.
+            overlap_size: The number of frames to overlap between windows.
+            gpu_id: The GPU ID to use for training.
+
+        """
         self.__model = DistributedDataParallel(model.to(gpu_id), device_ids=[gpu_id])
         self.__dataloader = dataloader
         self.__vae = vae.to(gpu_id)
-        self.__test_window_ratio = test_window_ratio
+        self.__sample_window_size = sample_window_size
+        self.__overlap_size = overlap_size
+
         self.__gpu_id = gpu_id
         self.__criterion = nn.CrossEntropyLoss()
 
@@ -31,18 +46,17 @@ class Trainer:
         """Run a single training batch."""
         self.__optimizer.zero_grad()
 
-        batch_size = x.shape[0]
-        window_size = x.shape[2] // self.__test_window_ratio
+        original_batch_size = x.shape[0]
 
         with torch.no_grad():
             # Split every x along the window size dimension into separate samples,
             # so that we can feed them into the VAE.
-            x = x.view(batch_size * self.__test_window_ratio, x.shape[1], window_size, x.shape[3])
+            x = split_test_window(x, self.__sample_window_size, self.__overlap_size)
 
             _, z_hard, _ = self.__vae(x)
 
-            # (B * test_window_ratio, latent_dim, n_categories) → (B, latent_dim * n_categories * test_window_ratio)
-            z_hard = z_hard.view(batch_size, -1)
+            # (B * n_windows, latent_dim, n_categories) → (B, latent_dim * n_categories * n_windows)
+            z_hard = z_hard.view(original_batch_size, -1)
 
         logits = self.__model(z_hard)
         loss = self.__criterion(logits, y)

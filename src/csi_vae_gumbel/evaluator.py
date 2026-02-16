@@ -8,6 +8,8 @@ from sklearn.manifold import TSNE
 from torch.utils.data import DataLoader
 from torchmetrics.classification import MulticlassAccuracy, MulticlassConfusionMatrix
 
+from csi_vae_gumbel.util import split_test_window
+
 
 def _plot_confusion_matrix(matrix: np.ndarray, class_names: list[str], out_dir: Path) -> None:
     plt.figure(figsize=(10, 8))
@@ -86,7 +88,8 @@ class Evaluator:
         vae: torch.nn.Module,
         classifier: torch.nn.Module,
         dataloader: DataLoader,
-        test_window_ratio: int,
+        sample_window_size: int,
+        overlap_size: int,
         classes: list[str],
         gpu_id: int,
         out_dir: Path | None = None,
@@ -97,17 +100,18 @@ class Evaluator:
             vae: The trained VAE model.
             classifier: The trained classifier model.
             dataloader: DataLoader for evaluation data.
-            test_window_ratio: Ratio to combine multiple latent vectors for evaluation.
+            sample_window_size: Size of the window to sample from the test data.
+            overlap_size: Overlap size between windows.
             classes: List of class names.
-            out_dir: Output directory for saving results.
             gpu_id: GPU identifier for computation.
-            out_dir: Output directory for saving plots.
+            out_dir: Optional output directory for saving confusion matrix and t-SNE plots.
 
         """
         self.__vae = vae.to(gpu_id)
         self.__classifier = classifier.to(gpu_id)
         self.__dataloader = dataloader
-        self.__test_window_ratio = test_window_ratio
+        self.__sample_window_size = sample_window_size
+        self.__overlap_size = overlap_size
         self.__classes = classes
         self.__n_classes = len(classes)
         self.__gpu_id = gpu_id
@@ -126,16 +130,15 @@ class Evaluator:
         all_labels = []
 
         for x, y in self.__dataloader:
-            batch_size = x.shape[0]
-            window_size = x.shape[2] // self.__test_window_ratio
+            original_batch_size = x.shape[0]
 
-            x_r = x.view(batch_size * self.__test_window_ratio, x.shape[1], window_size, x.shape[3]).to(self.__gpu_id)
+            x_r = split_test_window(x, self.__sample_window_size, self.__overlap_size).to(self.__gpu_id)
 
             _, z_hard, latents = self.__vae(x_r)
 
-            # (B * test_window_ratio, latent_dim, n_categories) → (B, latent_dim * n_categories * test_window_ratio)
-            z_hard = z_hard.view(batch_size, -1)
-            latents = latents.view(batch_size, -1)
+            # (B * n_windows, latent_dim, n_categories) → (B, latent_dim * n_categories * n_windows)
+            z_hard = z_hard.view(original_batch_size, -1)
+            latents = latents.view(original_batch_size, -1)
 
             preds = torch.argmax(self.__classifier(z_hard), dim=1)
             accuracy_metric.update(preds, y.to(self.__gpu_id))
@@ -150,7 +153,7 @@ class Evaluator:
         latent_array = np.concatenate(all_latents, axis=0)
         label_array = np.concatenate(all_labels, axis=0)
 
-        if self.__out_dir is not None and self.__gpu_id == 0:
+        if self.__out_dir is not None:
             _plot_confusion_matrix(conf_matrix, self.__classes, self.__out_dir)
             _plot_latent_tsne(latent_array, label_array, self.__classes, self.__out_dir)
 

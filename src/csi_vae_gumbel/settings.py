@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     """Size of the window of CSI in a VAE train sample, where 150 CSI = 1 second of data."""
     test_window_size: int = 450
     """Size of the window of CSI in a classifier test sample, where 150 CSI = 1 second of data."""
+    test_overlap_size: int = 50
+    """Number of frames to overlap between train windows when splitting the test window."""
     test_ratio: float = 0.3
     """Proportion of the dataset to be used for testing."""
     n_antennas: int = 1
@@ -84,6 +86,9 @@ class Settings(BaseSettings):
         return len(self.activities)
 
     @property
-    def test_window_ratio(self) -> int:
-        """Calculate the ratio of the test window size to the train window size."""
-        return self.test_window_size // self.train_window_size
+    def n_train_windows_in_test(self) -> int:
+        """Return the number of train windows that compose the test window, counting the overlap."""
+        # We start with one full window, then slide it by (train_window_size - test_overlap_size)
+        # until we reach the end of the test window. The integer division counts how many
+        # additional shifts fit into the remaining length (test_window_size - train_window_size).
+        return 1 + (self.test_window_size - self.train_window_size) // (self.train_window_size - self.test_overlap_size)

@@ -257,7 +257,8 @@ def _run_classifier_train(
         model=classifier_model,
         dataloader=train_dl,
         vae=vae_model,
-        test_window_ratio=settings.test_window_ratio,
+        sample_window_size=settings.train_window_size,
+        overlap_size=settings.test_overlap_size,
         gpu_id=rank,
     )
     loss, accuracy = classifier_trainer.train(settings.classifier_n_epochs)
@@ -311,9 +312,9 @@ def test() -> None:
     )
 
     classifier_model = classifier.BasicNNClassifier(
-        params.latent_dim * settings.n_categories * settings.test_window_ratio,
+        params.latent_dim * settings.n_categories * settings.n_train_windows_in_test,
         settings.n_activities,
-        int(1.5 * params.latent_dim * settings.n_categories * settings.test_window_ratio),
+        int(1.5 * params.latent_dim * settings.n_categories * settings.n_train_windows_in_test),
     )
 
     if not Path(settings.study_path).joinpath("classifier.pt").exists():
@@ -331,13 +332,14 @@ def test() -> None:
     logger.info("Evaluating on test set...")
     test_dl = DataLoader(test_ds, batch_size=len(test_ds) // (world_size * 12), shuffle=False, pin_memory=True)
     evaluator = Evaluator(
-        vae_model,
-        classifier_model,
-        test_dl,
-        settings.test_window_ratio,
-        settings.activities,
-        0,
-        Path(settings.study_path),
+        vae=vae_model,
+        classifier=classifier_model,
+        dataloader=test_dl,
+        sample_window_size=settings.train_window_size,
+        overlap_size=settings.test_overlap_size,
+        classes=settings.activities,
+        gpu_id=0,
+        out_dir=Path(settings.study_path),
     )
     accuracy = evaluator.evaluate()
     logger.info("Evaluation completed with test accuracy %.4f", accuracy)
