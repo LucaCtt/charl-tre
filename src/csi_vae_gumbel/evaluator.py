@@ -5,6 +5,7 @@ import numpy as np
 import seaborn as sns
 import torch
 from sklearn.manifold import TSNE
+from torch import distributed as dist
 from torch.utils.data import DataLoader
 from torchmetrics.classification import MulticlassAccuracy, MulticlassConfusionMatrix
 
@@ -132,13 +133,16 @@ class Evaluator:
         for x, y in self.__dataloader:
             original_batch_size = x.shape[0]
 
-            x_r = split_test_window(x, self.__sample_window_size, self.__overlap_size).to(self.__gpu_id)
+            x_r = split_test_window(x.to(self.__gpu_id), self.__sample_window_size, self.__overlap_size)
 
             _, z_hard, latents = self.__vae(x_r)
 
             # (B * n_windows, latent_dim, n_categories) → (B, latent_dim * n_categories * n_windows)
-            z_hard = z_hard.view(original_batch_size, -1)
-            latents = latents.view(original_batch_size, -1)
+            n_windows = x_r.shape[0] // original_batch_size
+            z_hard = z_hard.view(original_batch_size, n_windows, -1)
+            #z_hard = z_hard.reshape(original_batch_size, -1)
+            latents = latents.view(original_batch_size, n_windows, -1)
+            latents = latents.reshape(original_batch_size, -1)
 
             preds = torch.argmax(self.__classifier(z_hard), dim=1)
             accuracy_metric.update(preds, y.to(self.__gpu_id))
@@ -153,8 +157,13 @@ class Evaluator:
         latent_array = np.concatenate(all_latents, axis=0)
         label_array = np.concatenate(all_labels, axis=0)
 
-        if self.__out_dir is not None:
+        if self.__gpu_id == 0 and self.__out_dir is not None:
             _plot_confusion_matrix(conf_matrix, self.__classes, self.__out_dir)
             _plot_latent_tsne(latent_array, label_array, self.__classes, self.__out_dir)
 
-        return accuracy_metric.compute().item()
+        accuracy = accuracy_metric.compute()
+
+        dist.all_reduce(accuracy, op=dist.ReduceOp.SUM)
+        accuracy /= dist.get_world_size()
+
+        return accuracy.item()

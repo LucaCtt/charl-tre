@@ -12,10 +12,10 @@ import torch
 from optuna.trial import BaseTrial, TrialState
 from rich.logging import RichHandler
 from torch import distributed as dist
-from torch import multiprocessing as mp
 from torch.multiprocessing.spawn import spawn
 from torch.utils.data import DataLoader, DistributedSampler
 
+from csi_vae_gumbel import util
 from csi_vae_gumbel.collapse_pruner import CollapsePruner
 from csi_vae_gumbel.dataset import CSIDataset, load_datasets
 from csi_vae_gumbel.evaluator import Evaluator
@@ -43,27 +43,11 @@ os.environ.setdefault("PYTHONHASHSEED", str(settings.seed))
 random.seed(settings.seed)
 torch.manual_seed(settings.seed)
 
-
-def _ddp_setup(rank: int, world_size: int) -> None:
-    """Initialize the distributed environment. Must be called by every distributed process.
-
-    Arguments:
-        rank: Unique identifier of each distributed process
-        world_size: Total number of distributed processes
-
-    """
-    if "MASTER_ADDR" not in os.environ:
-        os.environ["MASTER_ADDR"] = "localhost"
-    if "MASTER_PORT" not in os.environ:
-        os.environ["MASTER_PORT"] = "12355"
-
-    acc = torch.accelerator.current_accelerator()
-    if acc is None:
-        msg = "No accelerator found for DDP setup."
-        raise RuntimeError(msg)
-    backend = torch.distributed.get_default_backend_for_device(acc)
-
-    dist.init_process_group(backend=backend, rank=rank, world_size=world_size, device_id=rank)
+# DDP debug settings
+if settings.debug:
+    os.environ["TORCH_NCCL_ASYNC_ERROR_HANDLING"] = "1"
+    os.environ["TORCH_DISTRIBUTED_DEBUG"] = "DETAIL"
+    os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
 
 def _objective(single_trial: BaseTrial | None, rank: int, train_dl: DataLoader) -> float:
@@ -146,8 +130,8 @@ def _objective(single_trial: BaseTrial | None, rank: int, train_dl: DataLoader) 
     return recon_loss
 
 
-def _run_optimize(rank: int, world_size: int, shared_dict: dict, train_ds: CSIDataset) -> None:
-    _ddp_setup(rank, world_size)
+def _run_optimize(rank: int, world_size: int, train_ds: CSIDataset) -> None:
+    util.setup_ddp(rank, world_size)
 
     train_dl = DataLoader(
         train_ds,
@@ -156,6 +140,7 @@ def _run_optimize(rank: int, world_size: int, shared_dict: dict, train_ds: CSIDa
         pin_memory=True,
     )
 
+    study = None
     if rank == 0:
         study = optuna.create_study(
             direction="minimize",
@@ -168,7 +153,6 @@ def _run_optimize(rank: int, world_size: int, shared_dict: dict, train_ds: CSIDa
             n_trials=settings.n_trials,
             gc_after_trial=True,
         )
-        shared_dict["study"] = study
     else:
         for _ in range(settings.n_trials):
             with contextlib.suppress(optuna.TrialPruned):
@@ -176,9 +160,7 @@ def _run_optimize(rank: int, world_size: int, shared_dict: dict, train_ds: CSIDa
 
     dist.barrier()
 
-    if rank == 0:
-        study = shared_dict["study"]
-
+    if rank == 0 and study is not None:
         pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
         complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])
 
@@ -196,8 +178,8 @@ def _run_optimize(rank: int, world_size: int, shared_dict: dict, train_ds: CSIDa
         )
 
         results = {
-            "best_trial": [study.best_trial.number],
-            "best_value": [study.best_trial.value],
+            "best_trial": study.best_trial.number,
+            "best_value": study.best_trial.value,
             "pruned_trials": len(pruned_trials),
             "complete_trials": len(complete_trials),
         }
@@ -207,52 +189,46 @@ def _run_optimize(rank: int, world_size: int, shared_dict: dict, train_ds: CSIDa
     dist.destroy_process_group()
 
 
-def opt() -> None:
-    """Run optuna optimization and evaluation for the CSI VAE model."""
-    if settings.debug:
-        os.environ["TORCH_NCCL_ASYNC_ERROR_HANDLING"] = "1"
-        os.environ["TORCH_DISTRIBUTED_DEBUG"] = "DETAIL"
-        os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
-
-    # Create datasets once and share across VAE training processes
-    logger.info("Loading datasets from %s", settings.dataset_path)
-    train_ds, test_ds = load_datasets(
-        dataset_path=Path(settings.dataset_path),
-        window_size=settings.train_window_size,
-        test_ratio=settings.test_ratio,
-        n_activities=settings.n_activities,
-        n_antennas=settings.n_antennas,
-        antenna_select=settings.antenna_select,
-        seed=settings.seed,
-    )
-    logger.info("Datasets loaded with %d training samples and %d testing samples", len(train_ds), len(test_ds))
-
-    world_size = torch.cuda.device_count() if torch.cuda.is_available() else 1
-
-    # Multiprocessing manager to share study across different processes.
-    # Note: datasets are not shared via this dict to avoid serialization.
-    shared_dict = mp.Manager().dict()
-
-    # Run Optuna optimization
-    spawn(_run_optimize, args=(world_size, shared_dict, train_ds), nprocs=world_size, join=True)
-
-
-def _run_classifier_train(
+def _run_test(
     rank: int,
     world_size: int,
-    vae_model: vae.SingleAntennaVAE,
-    classifier_model: classifier.BasicNNClassifier,
     train_ds: CSIDataset,
+    test_ds: CSIDataset,
 ) -> None:
-    _ddp_setup(rank, world_size)
+    util.setup_ddp(rank, world_size)
 
     train_dl = DataLoader(
         train_ds,
         batch_size=settings.train_batch_size,
+        shuffle=False,
         sampler=DistributedSampler(train_ds, num_replicas=world_size, rank=rank, shuffle=True),
         pin_memory=True,
     )
+    test_dl = DataLoader(
+        test_ds,
+        batch_size=settings.train_batch_size,
+        shuffle=False,
+        sampler=DistributedSampler(test_ds, num_replicas=world_size, rank=rank, shuffle=False),
+        pin_memory=True,
+    )
 
+    best_model_path = util.get_best_model_path(Path(settings.study_path))
+    best_params = util.get_vae_params(best_model_path)
+
+    vae_model = vae.SingleAntennaVAE(
+        settings.train_window_size,
+        settings.n_subcarriers,
+        settings.n_categories,
+        best_params.latent_dim,
+    )
+    best_model_weights = torch.load(best_model_path / "model.pt", weights_only=True)
+    vae_model.load_state_dict(best_model_weights)
+
+    classifier_model = classifier.BasicNNClassifier(
+        best_params.latent_dim * settings.n_categories * settings.n_train_windows_in_test,
+        settings.n_activities,
+        int(1.5 * best_params.latent_dim * settings.n_categories * settings.n_train_windows_in_test),
+    )
     classifier_trainer = classifier.Trainer(
         model=classifier_model,
         dataloader=train_dl,
@@ -267,70 +243,10 @@ def _run_classifier_train(
         logger.info("Classifier training completed with loss %.4f and accuracy %.4f", loss, accuracy)
         torch.save(classifier_model.state_dict(), Path(settings.study_path) / "classifier.pt")
 
-    dist.destroy_process_group()
+        logger.info("Evaluating on test set...")
 
+    dist.barrier()
 
-def test() -> None:
-    """Evaluate the best VAE model on the test set using a classifier."""
-    world_size = torch.cuda.device_count() if torch.cuda.is_available() else 1
-
-    with Path(f"{settings.study_path}/study_results.json").open("r") as f:
-        study_info = json.load(f)
-        best_trial_number = study_info["best_trial"][0]
-
-    best_model_path = Path(settings.study_path) / f"trial_{best_trial_number}"
-
-    with Path(best_model_path / "results.json").open("r") as f:
-        info = json.load(f)
-
-    params = vae.Parameters(
-        final_cap=info["final_cap"],
-        start_gumbel_temp=info["start_gumbel_temp"],
-        final_kl_weight=info["final_kl_weight"],
-        latent_dim=info["latent_dim"],
-    )
-
-    logger.info("Loading best VAE model for evaluation...")
-    vae_model = vae.SingleAntennaVAE(
-        settings.train_window_size,
-        settings.n_subcarriers,
-        settings.n_categories,
-        params.latent_dim,
-    )
-    best_model_weights = torch.load(best_model_path / "model.pt")
-    vae_model.load_state_dict(best_model_weights)
-
-    logger.info("Loading datasets...")
-    train_ds, test_ds = load_datasets(
-        dataset_path=Path(settings.dataset_path),
-        window_size=settings.test_window_size,
-        test_ratio=settings.test_ratio,
-        n_activities=settings.n_activities,
-        n_antennas=settings.n_antennas,
-        antenna_select=settings.antenna_select,
-        seed=settings.seed,
-    )
-
-    classifier_model = classifier.BasicNNClassifier(
-        params.latent_dim * settings.n_categories * settings.n_train_windows_in_test,
-        settings.n_activities,
-        int(1.5 * params.latent_dim * settings.n_categories * settings.n_train_windows_in_test),
-    )
-
-    if not Path(settings.study_path).joinpath("classifier.pt").exists():
-        logger.info("Training classifier...")
-        spawn(
-            _run_classifier_train,
-            args=(world_size, vae_model, classifier_model, train_ds),
-            nprocs=world_size,
-            join=True,
-        )
-
-    classifier_weights = torch.load(Path(settings.study_path) / "classifier.pt")
-    classifier_model.load_state_dict(classifier_weights)
-
-    logger.info("Evaluating on test set...")
-    test_dl = DataLoader(test_ds, batch_size=len(test_ds) // (world_size * 12), shuffle=False, pin_memory=True)
     evaluator = Evaluator(
         vae=vae_model,
         classifier=classifier_model,
@@ -338,11 +254,63 @@ def test() -> None:
         sample_window_size=settings.train_window_size,
         overlap_size=settings.test_overlap_size,
         classes=settings.activities,
-        gpu_id=0,
+        gpu_id=rank,
         out_dir=Path(settings.study_path),
     )
     accuracy = evaluator.evaluate()
-    logger.info("Evaluation completed with test accuracy %.4f", accuracy)
+
+    dist.barrier()
+
+    if rank == 0:
+        logger.info("Evaluation completed with test accuracy %.4f", accuracy)
+
+    dist.destroy_process_group()
+
+
+def opt() -> None:
+    """Run optuna optimization and evaluation for the CSI VAE model."""
+    # Create datasets once and share across VAE training processes
+    logger.info("Loading dataset from %s...", settings.dataset_path)
+    train_ds, _ = load_datasets(
+        dataset_path=Path(settings.dataset_path),
+        window_size=settings.train_window_size,
+        test_ratio=settings.test_ratio,
+        n_activities=settings.n_activities,
+        n_antennas=settings.n_antennas,
+        antenna_select=settings.antenna_select,
+        seed=settings.seed,
+    )
+    logger.info("Dataset loaded with %d training samples", len(train_ds))
+
+    world_size = torch.cuda.device_count() if torch.cuda.is_available() else 1
+
+    # Run Optuna optimization
+    spawn(_run_optimize, args=(world_size, train_ds), nprocs=world_size, join=True)
+
+
+def test() -> None:
+    """Evaluate the best VAE model on the test set using a classifier."""
+    logger.info("Loading datasets from %s...", settings.dataset_path)
+    train_ds, test_ds = load_datasets(
+        dataset_path=Path(settings.dataset_path),
+        window_size=settings.test_window_size,  # Window size here is (usually) different from VAE training
+        test_ratio=settings.test_ratio,
+        n_activities=settings.n_activities,
+        n_antennas=settings.n_antennas,
+        antenna_select=settings.antenna_select,
+        seed=settings.seed,
+    )
+    logger.info("Datasets loaded with %d training samples and %d testing samples", len(train_ds), len(test_ds))
+
+    world_size = torch.cuda.device_count() if torch.cuda.is_available() else 1
+
+    logger.info("Training classifier...")
+    spawn(
+        _run_test,
+        args=(world_size, train_ds, test_ds),
+        nprocs=world_size,
+        join=True,
+    )
 
 
 if __name__ == "__main__":

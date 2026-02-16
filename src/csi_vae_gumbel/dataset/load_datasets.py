@@ -52,8 +52,8 @@ def load_datasets(
     n_activities: int,
     n_antennas: int,
     antenna_select: int,
-    test_ratio: float = 0.3,
-    seed: int = 42,
+    test_ratio: float,
+    seed: int,
 ) -> tuple[CSIDataset, CSIDataset]:
     """Build the CSI train/test datasets.
 

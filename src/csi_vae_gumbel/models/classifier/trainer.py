@@ -40,7 +40,7 @@ class Trainer:
         self.__gpu_id = gpu_id
         self.__criterion = nn.CrossEntropyLoss()
 
-        self.__optimizer = optim.Adam(self.__model.parameters(), lr=5e-4)
+        self.__optimizer = optim.Adam(self.__model.parameters(), lr=2e-3)
 
     def __run_batch(self, x: torch.Tensor, y: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Run a single training batch."""
@@ -51,12 +51,12 @@ class Trainer:
         with torch.no_grad():
             # Split every x along the window size dimension into separate samples,
             # so that we can feed them into the VAE.
-            x = split_test_window(x, self.__sample_window_size, self.__overlap_size)
+            x_r = split_test_window(x, self.__sample_window_size, self.__overlap_size)
 
-            _, z_hard, _ = self.__vae(x)
+            _, z_hard, _ = self.__vae(x_r)
 
             # (B * n_windows, latent_dim, n_categories) → (B, latent_dim * n_categories * n_windows)
-            z_hard = z_hard.view(original_batch_size, -1)
+            z_hard = z_hard.reshape(original_batch_size, -1)
 
         logits = self.__model(z_hard)
         loss = self.__criterion(logits, y)
@@ -78,9 +78,18 @@ class Trainer:
 
         for x, y in self.__dataloader:
             loss, accuracy = self.__run_batch(x.to(self.__gpu_id), y.to(self.__gpu_id))
-            metrics += torch.tensor([loss, accuracy], device=self.__gpu_id)
 
-        metrics /= len(self.__dataloader)
+            metrics[0] += loss
+            metrics[1] += accuracy
+
+        # Sum metrics across all processes
+        dist.all_reduce(metrics, op=dist.ReduceOp.SUM)
+
+        # Get total number of batches across all processes to account for batch size differences
+        total_batches = torch.tensor(len(self.__dataloader), dtype=torch.int64, device=self.__gpu_id)
+        dist.all_reduce(total_batches, op=dist.ReduceOp.SUM)
+
+        metrics /= total_batches
 
         return metrics[0], metrics[1]
 

@@ -41,7 +41,7 @@ class Trainer:
         self.__dataloader = dataloader
         self.__optimizer = torch.optim.AdamW(
             self.__model.parameters(),
-            lr=3e-3,
+            lr=2e-3,
             weight_decay=1e-4,
         )
         self.__lr_annealer = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -132,15 +132,10 @@ class Trainer:
                 entropy_per_dim = -(p * (p + 1e-8).log()).sum(dim=-1)
                 entropy = entropy_per_dim.sum()
 
-            metrics += torch.tensor(
-                [
-                    loss.detach(),
-                    recon_loss.detach(),
-                    kl_loss.detach(),
-                    entropy,
-                ],
-                device=self.__gpu_id,
-            )
+            metrics[0] += loss
+            metrics[1] += recon_loss
+            metrics[2] += kl_loss
+            metrics[3] += entropy
             n_latents += entropy_per_dim.numel()
 
         # Synchronize metrics across all processes

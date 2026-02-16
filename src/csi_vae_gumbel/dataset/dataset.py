@@ -17,9 +17,9 @@ class CSIDataset(Dataset):
         window_size: int,
         n_antennas: int,
         antenna_select: int,
+        seed: int,
         augment_probability: float = 0.3,
         normalize: bool = True,
-        seed: int = 42,
     ) -> None:
         """Initialize the CSI dataset.
 
