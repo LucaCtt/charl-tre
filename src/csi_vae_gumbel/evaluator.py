@@ -140,7 +140,7 @@ class Evaluator:
             # (B * n_windows, latent_dim, n_categories) → (B, latent_dim * n_categories * n_windows)
             n_windows = x_r.shape[0] // original_batch_size
             z_hard = z_hard.view(original_batch_size, n_windows, -1)
-            #z_hard = z_hard.reshape(original_batch_size, -1)
+            z_hard = z_hard.reshape(original_batch_size, -1)
             latents = latents.view(original_batch_size, n_windows, -1)
             latents = latents.reshape(original_batch_size, -1)
 

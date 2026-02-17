@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     """Size of the window of CSI in a VAE train sample, where 150 CSI = 1 second of data."""
     test_window_size: int = 450
     """Size of the window of CSI in a classifier test sample, where 150 CSI = 1 second of data."""
-    test_overlap_size: int = 0
+    test_overlap_size: int = 50
     """Number of frames to overlap between train windows when splitting the test window."""
     test_ratio: float = 0.3
     """Proportion of the dataset to be used for testing."""

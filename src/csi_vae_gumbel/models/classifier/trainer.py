@@ -40,7 +40,7 @@ class Trainer:
         self.__gpu_id = gpu_id
         self.__criterion = nn.CrossEntropyLoss()
 
-        self.__optimizer = optim.Adam(self.__model.parameters(), lr=2e-3)
+        self.__optimizer = optim.Adam(self.__model.parameters(), lr=3e-3)
 
     def __run_batch(self, x: torch.Tensor, y: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Run a single training batch."""
@@ -56,6 +56,8 @@ class Trainer:
             _, z_hard, _ = self.__vae(x_r)
 
             # (B * n_windows, latent_dim, n_categories) → (B, latent_dim * n_categories * n_windows)
+            n_windows = x_r.shape[0] // original_batch_size
+            z_hard = z_hard.view(original_batch_size, n_windows, -1)
             z_hard = z_hard.reshape(original_batch_size, -1)
 
         logits = self.__model(z_hard)
