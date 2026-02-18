@@ -30,6 +30,10 @@ dev = [
 [project.scripts]
 opt = "csi_vae_gumbel.main:opt"
 test = "csi_vae_gumbel.main:test"
+causal-full = "csi_vae_gumbel.causal_analysis_full:main"
+causal-raw = "csi_vae_gumbel.causal_discovery_raw:main"
+causal-paths = "csi_vae_gumbel.path_search_from_raw:main"
+causal-classify = "csi_vae_gumbel.classify_with_rules:main"
 
 [build-system]
 requires = ["uv_build>=0.9.26,<0.10.0"]

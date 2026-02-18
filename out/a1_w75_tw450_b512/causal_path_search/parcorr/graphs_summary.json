@@ -1,0 +1,2009 @@
+{
+  "source_raw_dir": "out/a1_w75_tw450_b512/causal_graphs_raw/parcorr",
+  "independence_test": "parcorr",
+  "tau_min": 1,
+  "tau_max": 5,
+  "filter_threshold": 0.1,
+  "path_threshold": 0.0,
+  "classifier_stride": 75,
+  "classifier_train_ratio": 0.7,
+  "segment_length": 80,
+  "segment_hop": 10,
+  "top_rules_per_activity": 50,
+  "rule_min_delta": 0.0,
+  "min_rules_per_activity": 1,
+  "low_edge_threshold": -1,
+  "top_fallback_source_vars": 8,
+  "top_fallback_target_vars": 12,
+  "min_condition_count": 8,
+  "fallback_min_delta": 0.05,
+  "fallback_pool_size": 300,
+  "core_fraction": 1.0,
+  "tie_breaker_weight": 0.0,
+  "coverage_weight": 0.0,
+  "prior_weight": 0.0,
+  "prototype_weight": 1.0,
+  "min_margin": 0.0,
+  "max_rules_scale": 1.0,
+  "low_edge_budget_ratio": 0.3,
+  "calibration_clip": 0.0,
+  "n_states_per_variable": 2,
+  "n_latent_variables": 24,
+  "activities": {
+    "Walk": {
+      "activity_id": 0,
+      "n_samples_raw": 925,
+      "n_edges": 17,
+      "top_edges": [
+        {
+          "src": 23,
+          "dst": 23,
+          "lag": 2,
+          "strength": 0.35339779810666894,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 3,
+          "dst": 6,
+          "lag": 2,
+          "strength": 0.31436137947539167,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 3,
+          "dst": 3,
+          "lag": 2,
+          "strength": 0.30121425594106044,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 6,
+          "dst": 6,
+          "lag": 2,
+          "strength": 0.2653961277937803,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 6,
+          "dst": 3,
+          "lag": 2,
+          "strength": 0.21015896359439934,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 3,
+          "dst": 2,
+          "lag": 2,
+          "strength": 0.1873300155498855,
+          "sign": -1,
+          "mark": "-->"
+        },
+        {
+          "src": 3,
+          "dst": 5,
+          "lag": 2,
+          "strength": 0.17996729019436608,
+          "sign": -1,
+          "mark": "-->"
+        },
+        {
+          "src": 6,
+          "dst": 7,
+          "lag": 2,
+          "strength": 0.1570015191233112,
+          "sign": -1,
+          "mark": "-->"
+        },
+        {
+          "src": 6,
+          "dst": 22,
+          "lag": 2,
+          "strength": 0.15088218582304033,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 23,
+          "dst": 18,
+          "lag": 2,
+          "strength": 0.1409812271586713,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 23,
+          "dst": 20,
+          "lag": 2,
+          "strength": 0.13786372616433554,
+          "sign": -1,
+          "mark": "o->"
+        },
+        {
+          "src": 3,
+          "dst": 0,
+          "lag": 2,
+          "strength": 0.13584986837681778,
+          "sign": -1,
+          "mark": "-->"
+        },
+        {
+          "src": 3,
+          "dst": 2,
+          "lag": 4,
+          "strength": 0.13211116239421,
+          "sign": -1,
+          "mark": "-->"
+        },
+        {
+          "src": 21,
+          "dst": 13,
+          "lag": 1,
+          "strength": 0.13044916951217778,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 12,
+          "dst": 1,
+          "lag": 2,
+          "strength": 0.11978457735364588,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 23,
+          "dst": 7,
+          "lag": 2,
+          "strength": 0.11724799979983794,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 12,
+          "dst": 23,
+          "lag": 2,
+          "strength": 0.1102625129785355,
+          "sign": 1,
+          "mark": "o->"
+        }
+      ],
+      "top_paths": [
+        {
+          "path": [
+            "Z3 -[2]-> Z6",
+            "Z6 -[2]-> Z7"
+          ],
+          "score": 0.47136289859870284
+        },
+        {
+          "path": [
+            "Z3 -[2]-> Z6",
+            "Z6 -[2]-> Z22"
+          ],
+          "score": 0.465243565298432
+        },
+        {
+          "path": [
+            "Z6 -[2]-> Z3",
+            "Z3 -[2]-> Z2"
+          ],
+          "score": 0.3974889791442848
+        },
+        {
+          "path": [
+            "Z6 -[2]-> Z3",
+            "Z3 -[2]-> Z5"
+          ],
+          "score": 0.3901262537887654
+        },
+        {
+          "path": [
+            "Z23 -[2]-> Z23"
+          ],
+          "score": 0.35339779810666894
+        },
+        {
+          "path": [
+            "Z6 -[2]-> Z3",
+            "Z3 -[2]-> Z0"
+          ],
+          "score": 0.3460088319712171
+        },
+        {
+          "path": [
+            "Z6 -[2]-> Z3",
+            "Z3 -[4]-> Z2"
+          ],
+          "score": 0.34227012598860934
+        },
+        {
+          "path": [
+            "Z3 -[2]-> Z6"
+          ],
+          "score": 0.31436137947539167
+        },
+        {
+          "path": [
+            "Z3 -[2]-> Z3"
+          ],
+          "score": 0.30121425594106044
+        },
+        {
+          "path": [
+            "Z6 -[2]-> Z6"
+          ],
+          "score": 0.2653961277937803
+        }
+      ],
+      "n_rules": 15,
+      "n_graph_rules": 15,
+      "n_fallback_rules": 0,
+      "rule_budget": 17,
+      "core_rule_count": 15,
+      "tie_rule_count": 0,
+      "use_prototype_fallback": false,
+      "top_rules": [
+        "IF Z0_C3[t-2] is true THEN Z1_C2[t] is likely true (sign=+, p_train=0.567, p_other=0.201, strength=0.314)",
+        "IF Z0_C3[t-2] is true THEN Z0_C3[t] is likely true (sign=+, p_train=0.680, p_other=0.324, strength=0.301)",
+        "IF Z1_C2[t-2] is true THEN Z1_C2[t] is likely true (sign=+, p_train=0.652, p_other=0.313, strength=0.265)",
+        "IF Z1_C2[t-2] is true THEN Z0_C3[t] is likely true (sign=+, p_train=0.757, p_other=0.436, strength=0.210)",
+        "IF Z1_C2[t-2] is true THEN Z1_C3[t] is likely false (sign=-, p_train=0.906, p_other=0.633, strength=0.157)",
+        "IF Z0_C3[t-2] is true THEN Z0_C2[t] is likely false (sign=-, p_train=0.874, p_other=0.681, strength=0.187)",
+        "IF Z0_C3[t-2] is true THEN Z0_C0[t] is likely false (sign=-, p_train=0.883, p_other=0.675, strength=0.136)",
+        "IF Z0_C3[t-2] is true THEN Z1_C1[t] is likely false (sign=-, p_train=0.870, p_other=0.716, strength=0.180)",
+        "IF Z0_C3[t-4] is true THEN Z0_C2[t] is likely false (sign=-, p_train=0.854, p_other=0.663, strength=0.132)",
+        "IF Z5_C1[t-1] is true THEN Z3_C1[t] is likely true (sign=+, p_train=0.500, p_other=0.181, strength=0.130)"
+      ]
+    },
+    "Run": {
+      "activity_id": 1,
+      "n_samples_raw": 925,
+      "n_edges": 12,
+      "top_edges": [
+        {
+          "src": 6,
+          "dst": 6,
+          "lag": 2,
+          "strength": 0.23649217557489396,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 6,
+          "dst": 3,
+          "lag": 2,
+          "strength": 0.23618243718715587,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 3,
+          "dst": 6,
+          "lag": 2,
+          "strength": 0.2308934417302303,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 3,
+          "dst": 2,
+          "lag": 2,
+          "strength": 0.1344953877668316,
+          "sign": -1,
+          "mark": "o->"
+        },
+        {
+          "src": 6,
+          "dst": 20,
+          "lag": 4,
+          "strength": 0.13366122024247884,
+          "sign": -1,
+          "mark": "o->"
+        },
+        {
+          "src": 3,
+          "dst": 5,
+          "lag": 2,
+          "strength": 0.13293593345246058,
+          "sign": -1,
+          "mark": "o->"
+        },
+        {
+          "src": 7,
+          "dst": 0,
+          "lag": 2,
+          "strength": 0.11763664252230878,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 3,
+          "dst": 3,
+          "lag": 2,
+          "strength": 0.11725012501186531,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 4,
+          "dst": 18,
+          "lag": 5,
+          "strength": 0.113337135613369,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 6,
+          "dst": 2,
+          "lag": 2,
+          "strength": 0.11098201680773832,
+          "sign": -1,
+          "mark": "o->"
+        },
+        {
+          "src": 6,
+          "dst": 1,
+          "lag": 2,
+          "strength": 0.11067511752144708,
+          "sign": -1,
+          "mark": "o->"
+        },
+        {
+          "src": 6,
+          "dst": 7,
+          "lag": 2,
+          "strength": 0.10975520078641811,
+          "sign": -1,
+          "mark": "o->"
+        }
+      ],
+      "top_paths": [
+        {
+          "path": [
+            "Z3 -[2]-> Z6",
+            "Z6 -[2]-> Z7",
+            "Z7 -[2]-> Z0"
+          ],
+          "score": 0.45828528503895716
+        },
+        {
+          "path": [
+            "Z6 -[2]-> Z3",
+            "Z3 -[2]-> Z2"
+          ],
+          "score": 0.3706778249539875
+        },
+        {
+          "path": [
+            "Z6 -[2]-> Z3",
+            "Z3 -[2]-> Z5"
+          ],
+          "score": 0.36911837063961644
+        },
+        {
+          "path": [
+            "Z3 -[2]-> Z6",
+            "Z6 -[4]-> Z20"
+          ],
+          "score": 0.36455466197270914
+        },
+        {
+          "path": [
+            "Z3 -[2]-> Z6",
+            "Z6 -[2]-> Z2"
+          ],
+          "score": 0.34187545853796864
+        },
+        {
+          "path": [
+            "Z3 -[2]-> Z6",
+            "Z6 -[2]-> Z1"
+          ],
+          "score": 0.3415685592516774
+        },
+        {
+          "path": [
+            "Z3 -[2]-> Z6",
+            "Z6 -[2]-> Z7"
+          ],
+          "score": 0.3406486425166484
+        },
+        {
+          "path": [
+            "Z6 -[2]-> Z6"
+          ],
+          "score": 0.23649217557489396
+        },
+        {
+          "path": [
+            "Z6 -[2]-> Z3"
+          ],
+          "score": 0.23618243718715587
+        },
+        {
+          "path": [
+            "Z3 -[2]-> Z6"
+          ],
+          "score": 0.2308934417302303
+        }
+      ],
+      "n_rules": 10,
+      "n_graph_rules": 10,
+      "n_fallback_rules": 0,
+      "rule_budget": 12,
+      "core_rule_count": 10,
+      "tie_rule_count": 0,
+      "use_prototype_fallback": false,
+      "top_rules": [
+        "IF Z0_C3[t-2] is true THEN Z1_C2[t] is likely true (sign=+, p_train=0.472, p_other=0.209, strength=0.231)",
+        "IF Z1_C2[t-2] is true THEN Z1_C2[t] is likely true (sign=+, p_train=0.530, p_other=0.324, strength=0.236)",
+        "IF Z1_C2[t-2] is true THEN Z0_C3[t] is likely true (sign=+, p_train=0.646, p_other=0.446, strength=0.236)",
+        "IF Z0_C3[t-2] is true THEN Z0_C3[t] is likely true (sign=+, p_train=0.579, p_other=0.334, strength=0.117)",
+        "IF Z0_C3[t-2] is true THEN Z0_C2[t] is likely false (sign=-, p_train=0.861, p_other=0.682, strength=0.134)",
+        "IF Z1_C2[t-2] is true THEN Z1_C3[t] is likely false (sign=-, p_train=0.840, p_other=0.639, strength=0.110)",
+        "IF Z1_C2[t-2] is true THEN Z0_C2[t] is likely false (sign=-, p_train=0.873, p_other=0.688, strength=0.111)",
+        "IF Z1_C2[t-2] is true THEN Z0_C1[t] is likely false (sign=-, p_train=0.923, p_other=0.768, strength=0.111)",
+        "IF Z0_C3[t-2] is true THEN Z1_C1[t] is likely false (sign=-, p_train=0.837, p_other=0.719, strength=0.133)",
+        "IF Z1_C2[t-4] is true THEN Z5_C0[t] is likely false (sign=-, p_train=0.322, p_other=0.248, strength=0.134)"
+      ]
+    },
+    "Jump": {
+      "activity_id": 2,
+      "n_samples_raw": 925,
+      "n_edges": 23,
+      "top_edges": [
+        {
+          "src": 6,
+          "dst": 6,
+          "lag": 2,
+          "strength": 0.2633011209457933,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 6,
+          "dst": 6,
+          "lag": 5,
+          "strength": 0.24297573219199556,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 6,
+          "dst": 3,
+          "lag": 2,
+          "strength": 0.20032830420269745,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 6,
+          "dst": 19,
+          "lag": 4,
+          "strength": 0.169947395113386,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 23,
+          "dst": 23,
+          "lag": 2,
+          "strength": 0.16801386006893712,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 3,
+          "dst": 3,
+          "lag": 2,
+          "strength": 0.16442999349158138,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 3,
+          "dst": 6,
+          "lag": 4,
+          "strength": 0.1589499121989153,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 2,
+          "dst": 7,
+          "lag": 4,
+          "strength": 0.15435393045878004,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 6,
+          "dst": 22,
+          "lag": 2,
+          "strength": 0.1526099362945544,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 6,
+          "dst": 3,
+          "lag": 5,
+          "strength": 0.1411379109337732,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 6,
+          "dst": 22,
+          "lag": 4,
+          "strength": 0.1375826231022876,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 23,
+          "dst": 7,
+          "lag": 2,
+          "strength": 0.1351719431083847,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 6,
+          "dst": 6,
+          "lag": 1,
+          "strength": 0.12622191670578042,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 6,
+          "dst": 12,
+          "lag": 4,
+          "strength": 0.1261720981127322,
+          "sign": -1,
+          "mark": "-->"
+        },
+        {
+          "src": 0,
+          "dst": 5,
+          "lag": 4,
+          "strength": 0.11700306530248727,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 6,
+          "dst": 0,
+          "lag": 2,
+          "strength": 0.11513195231468412,
+          "sign": -1,
+          "mark": "-->"
+        },
+        {
+          "src": 6,
+          "dst": 0,
+          "lag": 5,
+          "strength": 0.11506783699673329,
+          "sign": -1,
+          "mark": "-->"
+        },
+        {
+          "src": 7,
+          "dst": 1,
+          "lag": 4,
+          "strength": 0.11351199783443794,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 3,
+          "dst": 6,
+          "lag": 2,
+          "strength": 0.11268998670674173,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 6,
+          "dst": 7,
+          "lag": 2,
+          "strength": 0.10965678547106603,
+          "sign": -1,
+          "mark": "-->"
+        }
+      ],
+      "top_paths": [
+        {
+          "path": [
+            "Z3 -[4]-> Z6",
+            "Z6 -[4]-> Z19",
+            "Z19 -[5]-> Z8"
+          ],
+          "score": 0.43826379728014203
+        },
+        {
+          "path": [
+            "Z3 -[2]-> Z6",
+            "Z6 -[4]-> Z19",
+            "Z19 -[5]-> Z8"
+          ],
+          "score": 0.39200387178796847
+        },
+        {
+          "path": [
+            "Z3 -[4]-> Z6",
+            "Z6 -[2]-> Z0",
+            "Z0 -[4]-> Z5"
+          ],
+          "score": 0.39108492981608667
+        },
+        {
+          "path": [
+            "Z3 -[4]-> Z6",
+            "Z6 -[5]-> Z0",
+            "Z0 -[4]-> Z5"
+          ],
+          "score": 0.39102081449813586
+        },
+        {
+          "path": [
+            "Z3 -[4]-> Z6",
+            "Z6 -[2]-> Z7",
+            "Z7 -[4]-> Z1"
+          ],
+          "score": 0.3821186955044193
+        },
+        {
+          "path": [
+            "Z3 -[2]-> Z6",
+            "Z6 -[2]-> Z0",
+            "Z0 -[4]-> Z5"
+          ],
+          "score": 0.3448250043239131
+        },
+        {
+          "path": [
+            "Z3 -[2]-> Z6",
+            "Z6 -[5]-> Z0",
+            "Z0 -[4]-> Z5"
+          ],
+          "score": 0.3447608890059623
+        },
+        {
+          "path": [
+            "Z3 -[2]-> Z6",
+            "Z6 -[2]-> Z7",
+            "Z7 -[4]-> Z1"
+          ],
+          "score": 0.3358587700122457
+        },
+        {
+          "path": [
+            "Z3 -[4]-> Z6",
+            "Z6 -[4]-> Z19"
+          ],
+          "score": 0.32889730731230127
+        },
+        {
+          "path": [
+            "Z3 -[4]-> Z6",
+            "Z6 -[2]-> Z22"
+          ],
+          "score": 0.31155984849346974
+        }
+      ],
+      "n_rules": 12,
+      "n_graph_rules": 12,
+      "n_fallback_rules": 0,
+      "rule_budget": 23,
+      "core_rule_count": 12,
+      "tie_rule_count": 0,
+      "use_prototype_fallback": false,
+      "top_rules": [
+        "IF Z0_C2[t-4] is true THEN Z1_C3[t] is likely true (sign=+, p_train=0.635, p_other=0.462, strength=0.154)",
+        "IF Z5_C3[t-2] is true THEN Z1_C3[t] is likely true (sign=+, p_train=0.679, p_other=0.493, strength=0.135)",
+        "IF Z1_C2[t-2] is true THEN Z0_C3[t] is likely true (sign=+, p_train=0.550, p_other=0.455, strength=0.200)",
+        "IF Z1_C2[t-2] is true THEN Z1_C3[t] is likely false (sign=-, p_train=0.750, p_other=0.648, strength=0.110)",
+        "IF Z4_C3[t-5] is true THEN Z2_C0[t] is likely true (sign=+, p_train=0.294, p_other=0.235, strength=0.109)",
+        "IF Z0_C0[t-4] is true THEN Z1_C1[t] is likely true (sign=+, p_train=0.301, p_other=0.269, strength=0.117)",
+        "IF Z3_C1[t-2] is true THEN Z5_C0[t] is likely false (sign=-, p_train=0.400, p_other=0.357, strength=0.110)",
+        "IF Z1_C3[t-4] is true THEN Z0_C1[t] is likely true (sign=+, p_train=0.146, p_other=0.122, strength=0.114)",
+        "IF Z1_C2[t-2] is true THEN Z0_C0[t] is likely false (sign=-, p_train=0.750, p_other=0.711, strength=0.115)",
+        "IF Z0_C3[t-1] is true THEN Z3_C2[t] is likely true (sign=+, p_train=0.250, p_other=0.224, strength=0.109)"
+      ]
+    },
+    "Sit": {
+      "activity_id": 3,
+      "n_samples_raw": 925,
+      "n_edges": 32,
+      "top_edges": [
+        {
+          "src": 3,
+          "dst": 3,
+          "lag": 2,
+          "strength": 0.3590913627693162,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 6,
+          "dst": 3,
+          "lag": 2,
+          "strength": 0.32480854300123835,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 23,
+          "dst": 23,
+          "lag": 2,
+          "strength": 0.2833769104660704,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 6,
+          "dst": 6,
+          "lag": 4,
+          "strength": 0.22283383400371326,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 3,
+          "dst": 22,
+          "lag": 2,
+          "strength": 0.22045414570859184,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 6,
+          "dst": 6,
+          "lag": 2,
+          "strength": 0.2074138677628895,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 22,
+          "dst": 3,
+          "lag": 3,
+          "strength": 0.20202992312811383,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 20,
+          "dst": 20,
+          "lag": 4,
+          "strength": 0.19013424139019855,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 22,
+          "dst": 6,
+          "lag": 3,
+          "strength": 0.17842664406596925,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 6,
+          "dst": 22,
+          "lag": 2,
+          "strength": 0.15461149492847964,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 23,
+          "dst": 18,
+          "lag": 2,
+          "strength": 0.14258101914894167,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 23,
+          "dst": 23,
+          "lag": 4,
+          "strength": 0.1424089087388467,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 13,
+          "dst": 0,
+          "lag": 1,
+          "strength": 0.14030081496390379,
+          "sign": -1,
+          "mark": "o->"
+        },
+        {
+          "src": 17,
+          "dst": 23,
+          "lag": 2,
+          "strength": 0.13968608545210284,
+          "sign": -1,
+          "mark": "o->"
+        },
+        {
+          "src": 23,
+          "dst": 0,
+          "lag": 4,
+          "strength": 0.1331033362437586,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 3,
+          "dst": 6,
+          "lag": 2,
+          "strength": 0.1308732247711914,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 17,
+          "dst": 21,
+          "lag": 2,
+          "strength": 0.13084587240743326,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 4,
+          "dst": 3,
+          "lag": 4,
+          "strength": 0.12936065294634158,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 23,
+          "dst": 18,
+          "lag": 4,
+          "strength": 0.12478285173521564,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 13,
+          "dst": 13,
+          "lag": 1,
+          "strength": 0.12424128039086077,
+          "sign": 1,
+          "mark": "o->"
+        }
+      ],
+      "top_paths": [
+        {
+          "path": [
+            "Z17 -[2]-> Z23",
+            "Z23 -[4]-> Z6",
+            "Z6 -[2]-> Z3",
+            "Z3 -[2]-> Z22"
+          ],
+          "score": 0.7957790102004567
+        },
+        {
+          "path": [
+            "Z14 -[4]-> Z22",
+            "Z22 -[3]-> Z6",
+            "Z6 -[2]-> Z3",
+            "Z3 -[4]-> Z20"
+          ],
+          "score": 0.7337963701217942
+        },
+        {
+          "path": [
+            "Z14 -[4]-> Z22",
+            "Z22 -[3]-> Z6",
+            "Z6 -[2]-> Z3",
+            "Z3 -[4]-> Z0"
+          ],
+          "score": 0.731605504989781
+        },
+        {
+          "path": [
+            "Z17 -[2]-> Z23",
+            "Z23 -[4]-> Z6",
+            "Z6 -[2]-> Z3",
+            "Z3 -[4]-> Z20"
+          ],
+          "score": 0.6928196997918921
+        },
+        {
+          "path": [
+            "Z17 -[2]-> Z23",
+            "Z23 -[4]-> Z6",
+            "Z6 -[2]-> Z3",
+            "Z3 -[4]-> Z0"
+          ],
+          "score": 0.6906288346598789
+        },
+        {
+          "path": [
+            "Z23 -[4]-> Z6",
+            "Z6 -[2]-> Z3",
+            "Z3 -[2]-> Z22"
+          ],
+          "score": 0.6560929247483538
+        },
+        {
+          "path": [
+            "Z4 -[4]-> Z3",
+            "Z3 -[2]-> Z22",
+            "Z22 -[3]-> Z6",
+            "Z6 -[2]-> Z14"
+          ],
+          "score": 0.6522695791917339
+        },
+        {
+          "path": [
+            "Z1 -[4]-> Z4",
+            "Z4 -[4]-> Z3",
+            "Z3 -[2]-> Z22",
+            "Z22 -[3]-> Z6"
+          ],
+          "score": 0.6415247134849391
+        },
+        {
+          "path": [
+            "Z4 -[4]-> Z3",
+            "Z3 -[2]-> Z22",
+            "Z22 -[3]-> Z6",
+            "Z6 -[2]-> Z12"
+          ],
+          "score": 0.6381671065581743
+        },
+        {
+          "path": [
+            "Z22 -[3]-> Z6",
+            "Z6 -[2]-> Z3",
+            "Z3 -[4]-> Z20"
+          ],
+          "score": 0.6207300223672347
+        }
+      ],
+      "n_rules": 14,
+      "n_graph_rules": 14,
+      "n_fallback_rules": 0,
+      "rule_budget": 20,
+      "core_rule_count": 14,
+      "tie_rule_count": 0,
+      "use_prototype_fallback": false,
+      "top_rules": [
+        "IF Z5_C3[t-2] is true THEN Z5_C3[t] is likely true (sign=+, p_train=0.898, p_other=0.301, strength=0.283)",
+        "IF Z5_C3[t-4] is true THEN Z5_C3[t] is likely true (sign=+, p_train=0.884, p_other=0.267, strength=0.142)",
+        "IF Z5_C3[t-4] is true THEN Z4_C2[t] is likely true (sign=+, p_train=0.494, p_other=0.163, strength=0.125)",
+        "IF Z5_C3[t-2] is true THEN Z4_C2[t] is likely true (sign=+, p_train=0.494, p_other=0.211, strength=0.143)",
+        "IF Z5_C3[t-4] is true THEN Z0_C0[t] is likely true (sign=+, p_train=0.669, p_other=0.436, strength=0.133)",
+        "IF Z1_C3[t-5] is true THEN Z3_C3[t] is likely false (sign=-, p_train=0.939, p_other=0.834, strength=0.118)",
+        "IF Z5_C3[t-4] is true THEN Z1_C2[t] is likely false (sign=-, p_train=0.998, p_other=0.914, strength=0.111)",
+        "IF Z3_C1[t-1] is true THEN Z0_C2[t] is likely true (sign=+, p_train=0.396, p_other=0.313, strength=0.112)",
+        "IF Z4_C1[t-2] is true THEN Z5_C1[t] is likely true (sign=+, p_train=0.147, p_other=0.088, strength=0.131)",
+        "IF Z3_C2[t-4] is true THEN Z5_C2[t] is likely false (sign=-, p_train=0.974, p_other=0.911, strength=0.113)"
+      ]
+    },
+    "Empty": {
+      "activity_id": 4,
+      "n_samples_raw": 925,
+      "n_edges": 0,
+      "top_edges": [],
+      "top_paths": [
+        {
+          "path": [
+            "Z7 -[4]-> Z4"
+          ],
+          "score": 0.10470724946877423
+        }
+      ],
+      "n_rules": 0,
+      "n_graph_rules": 0,
+      "n_fallback_rules": 0,
+      "rule_budget": 0,
+      "core_rule_count": 0,
+      "tie_rule_count": 0,
+      "use_prototype_fallback": true,
+      "top_rules": []
+    },
+    "Stand": {
+      "activity_id": 5,
+      "n_samples_raw": 925,
+      "n_edges": 14,
+      "top_edges": [
+        {
+          "src": 6,
+          "dst": 6,
+          "lag": 2,
+          "strength": 0.5163683058894217,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 6,
+          "dst": 6,
+          "lag": 4,
+          "strength": 0.32970652991112176,
+          "sign": -1,
+          "mark": "-->"
+        },
+        {
+          "src": 6,
+          "dst": 22,
+          "lag": 2,
+          "strength": 0.3075336749353963,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 6,
+          "dst": 3,
+          "lag": 2,
+          "strength": 0.274656586263788,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 6,
+          "dst": 22,
+          "lag": 4,
+          "strength": 0.1627865594587819,
+          "sign": -1,
+          "mark": "-->"
+        },
+        {
+          "src": 22,
+          "dst": 6,
+          "lag": 4,
+          "strength": 0.1585629081863384,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 19,
+          "dst": 3,
+          "lag": 5,
+          "strength": 0.1485513917601602,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 6,
+          "dst": 3,
+          "lag": 4,
+          "strength": 0.1441192641483256,
+          "sign": -1,
+          "mark": "-->"
+        },
+        {
+          "src": 23,
+          "dst": 20,
+          "lag": 4,
+          "strength": 0.14354068841537115,
+          "sign": -1,
+          "mark": "o->"
+        },
+        {
+          "src": 23,
+          "dst": 20,
+          "lag": 2,
+          "strength": 0.14186727431935428,
+          "sign": -1,
+          "mark": "o->"
+        },
+        {
+          "src": 4,
+          "dst": 6,
+          "lag": 5,
+          "strength": 0.1247474222593449,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 5,
+          "dst": 14,
+          "lag": 1,
+          "strength": 0.12120447958972225,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 23,
+          "dst": 18,
+          "lag": 2,
+          "strength": 0.1210800960174136,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 22,
+          "dst": 19,
+          "lag": 4,
+          "strength": 0.11646749876095217,
+          "sign": 1,
+          "mark": "o->"
+        }
+      ],
+      "top_paths": [
+        {
+          "path": [
+            "Z4 -[5]-> Z6",
+            "Z6 -[2]-> Z22",
+            "Z22 -[4]-> Z19",
+            "Z19 -[5]-> Z3"
+          ],
+          "score": 0.6972999877158536
+        },
+        {
+          "path": [
+            "Z6 -[2]-> Z22",
+            "Z22 -[4]-> Z19",
+            "Z19 -[5]-> Z3"
+          ],
+          "score": 0.5725525654565087
+        },
+        {
+          "path": [
+            "Z4 -[5]-> Z6",
+            "Z6 -[4]-> Z22",
+            "Z22 -[4]-> Z19",
+            "Z19 -[5]-> Z3"
+          ],
+          "score": 0.5525528722392392
+        },
+        {
+          "path": [
+            "Z4 -[5]-> Z6",
+            "Z6 -[2]-> Z22",
+            "Z22 -[4]-> Z19"
+          ],
+          "score": 0.5487485959556934
+        },
+        {
+          "path": [
+            "Z6 -[2]-> Z6"
+          ],
+          "score": 0.5163683058894217
+        },
+        {
+          "path": [
+            "Z22 -[4]-> Z6",
+            "Z6 -[2]-> Z3"
+          ],
+          "score": 0.4332194944501264
+        },
+        {
+          "path": [
+            "Z4 -[5]-> Z6",
+            "Z6 -[2]-> Z22"
+          ],
+          "score": 0.43228109719474117
+        },
+        {
+          "path": [
+            "Z6 -[4]-> Z22",
+            "Z22 -[4]-> Z19",
+            "Z19 -[5]-> Z3"
+          ],
+          "score": 0.4278054499798942
+        },
+        {
+          "path": [
+            "Z6 -[2]-> Z22",
+            "Z22 -[4]-> Z19"
+          ],
+          "score": 0.4240011736963485
+        },
+        {
+          "path": [
+            "Z4 -[5]-> Z6",
+            "Z6 -[4]-> Z22",
+            "Z22 -[4]-> Z19"
+          ],
+          "score": 0.404001480479079
+        }
+      ],
+      "n_rules": 11,
+      "n_graph_rules": 11,
+      "n_fallback_rules": 0,
+      "rule_budget": 14,
+      "core_rule_count": 11,
+      "tie_rule_count": 0,
+      "use_prototype_fallback": false,
+      "top_rules": [
+        "IF Z5_C3[t-4] is true THEN Z5_C0[t] is likely false (sign=-, p_train=0.821, p_other=0.402, strength=0.144)",
+        "IF Z5_C3[t-2] is true THEN Z5_C0[t] is likely false (sign=-, p_train=0.819, p_other=0.463, strength=0.142)",
+        "IF Z5_C3[t-2] is true THEN Z4_C2[t] is likely true (sign=+, p_train=0.374, p_other=0.222, strength=0.121)",
+        "IF Z1_C2[t-2] is true THEN Z1_C2[t] is likely true (sign=+, p_train=0.500, p_other=0.326, strength=0.516)",
+        "IF Z1_C2[t-2] is true THEN Z5_C2[t] is likely true (sign=+, p_train=0.500, p_other=0.241, strength=0.308)",
+        "IF Z5_C2[t-4] is true THEN Z4_C3[t] is likely true (sign=+, p_train=0.375, p_other=0.134, strength=0.116)",
+        "IF Z1_C2[t-4] is true THEN Z0_C3[t] is likely false (sign=-, p_train=0.750, p_other=0.618, strength=0.144)",
+        "IF Z1_C1[t-1] is true THEN Z3_C2[t] is likely true (sign=+, p_train=0.197, p_other=0.169, strength=0.121)",
+        "IF Z5_C2[t-4] is true THEN Z1_C2[t] is likely true (sign=+, p_train=0.250, p_other=0.205, strength=0.159)",
+        "IF Z1_C2[t-2] is true THEN Z0_C3[t] is likely true (sign=+, p_train=0.500, p_other=0.459, strength=0.275)"
+      ]
+    },
+    "Waving": {
+      "activity_id": 6,
+      "n_samples_raw": 925,
+      "n_edges": 12,
+      "top_edges": [
+        {
+          "src": 6,
+          "dst": 6,
+          "lag": 2,
+          "strength": 0.22592427632015732,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 3,
+          "dst": 3,
+          "lag": 2,
+          "strength": 0.1888208296029916,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 23,
+          "dst": 23,
+          "lag": 2,
+          "strength": 0.17620777757327355,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 23,
+          "dst": 20,
+          "lag": 2,
+          "strength": 0.14924486677856363,
+          "sign": -1,
+          "mark": "o->"
+        },
+        {
+          "src": 3,
+          "dst": 6,
+          "lag": 2,
+          "strength": 0.14204326753926844,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 3,
+          "dst": 0,
+          "lag": 2,
+          "strength": 0.12816919437853538,
+          "sign": -1,
+          "mark": "o->"
+        },
+        {
+          "src": 21,
+          "dst": 23,
+          "lag": 2,
+          "strength": 0.12747581322078533,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 7,
+          "dst": 21,
+          "lag": 2,
+          "strength": 0.1272252645523395,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 22,
+          "dst": 6,
+          "lag": 2,
+          "strength": 0.12052376258646297,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 7,
+          "dst": 20,
+          "lag": 2,
+          "strength": 0.1195133063516742,
+          "sign": -1,
+          "mark": "o->"
+        },
+        {
+          "src": 1,
+          "dst": 1,
+          "lag": 2,
+          "strength": 0.11272727272727291,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 22,
+          "dst": 22,
+          "lag": 2,
+          "strength": 0.10958458303082694,
+          "sign": 1,
+          "mark": "o->"
+        }
+      ],
+      "top_paths": [
+        {
+          "path": [
+            "Z7 -[2]-> Z21",
+            "Z21 -[2]-> Z23",
+            "Z23 -[2]-> Z20"
+          ],
+          "score": 0.4039459445516885
+        },
+        {
+          "path": [
+            "Z21 -[2]-> Z23",
+            "Z23 -[2]-> Z20"
+          ],
+          "score": 0.27672067999934896
+        },
+        {
+          "path": [
+            "Z7 -[2]-> Z21",
+            "Z21 -[2]-> Z23"
+          ],
+          "score": 0.25470107777312484
+        },
+        {
+          "path": [
+            "Z6 -[2]-> Z6"
+          ],
+          "score": 0.22592427632015732
+        },
+        {
+          "path": [
+            "Z3 -[2]-> Z3"
+          ],
+          "score": 0.1888208296029916
+        },
+        {
+          "path": [
+            "Z23 -[2]-> Z23"
+          ],
+          "score": 0.17620777757327355
+        },
+        {
+          "path": [
+            "Z23 -[2]-> Z20"
+          ],
+          "score": 0.14924486677856363
+        },
+        {
+          "path": [
+            "Z3 -[2]-> Z6"
+          ],
+          "score": 0.14204326753926844
+        },
+        {
+          "path": [
+            "Z3 -[2]-> Z0"
+          ],
+          "score": 0.12816919437853538
+        },
+        {
+          "path": [
+            "Z21 -[2]-> Z23"
+          ],
+          "score": 0.12747581322078533
+        }
+      ],
+      "n_rules": 4,
+      "n_graph_rules": 4,
+      "n_fallback_rules": 0,
+      "rule_budget": 12,
+      "core_rule_count": 4,
+      "tie_rule_count": 0,
+      "use_prototype_fallback": false,
+      "top_rules": [
+        "IF Z0_C3[t-2] is true THEN Z0_C3[t] is likely true (sign=+, p_train=0.409, p_other=0.349, strength=0.189)",
+        "IF Z0_C3[t-2] is true THEN Z0_C0[t] is likely false (sign=-, p_train=0.730, p_other=0.688, strength=0.128)",
+        "IF Z0_C1[t-2] is true THEN Z0_C1[t] is likely true (sign=+, p_train=0.164, p_other=0.119, strength=0.113)",
+        "IF Z1_C3[t-2] is true THEN Z5_C1[t] is likely true (sign=+, p_train=0.103, p_other=0.084, strength=0.127)"
+      ]
+    },
+    "Clap": {
+      "activity_id": 7,
+      "n_samples_raw": 925,
+      "n_edges": 3,
+      "top_edges": [
+        {
+          "src": 6,
+          "dst": 13,
+          "lag": 2,
+          "strength": 0.12061510387292174,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 13,
+          "dst": 6,
+          "lag": 3,
+          "strength": 0.12061510387292174,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 15,
+          "dst": 11,
+          "lag": 1,
+          "strength": 0.11540424090600533,
+          "sign": 1,
+          "mark": "o->"
+        }
+      ],
+      "top_paths": [
+        {
+          "path": [
+            "Z6 -[2]-> Z13"
+          ],
+          "score": 0.12061510387292174
+        },
+        {
+          "path": [
+            "Z13 -[3]-> Z6"
+          ],
+          "score": 0.12061510387292174
+        },
+        {
+          "path": [
+            "Z15 -[1]-> Z11"
+          ],
+          "score": 0.11540424090600533
+        }
+      ],
+      "n_rules": 2,
+      "n_graph_rules": 2,
+      "n_fallback_rules": 0,
+      "rule_budget": 2,
+      "core_rule_count": 2,
+      "tie_rule_count": 0,
+      "use_prototype_fallback": false,
+      "top_rules": [
+        "IF Z3_C3[t-1] is true THEN Z2_C3[t] is likely true (sign=+, p_train=0.481, p_other=0.351, strength=0.115)",
+        "IF Z3_C1[t-3] is true THEN Z1_C2[t] is likely true (sign=+, p_train=0.025, p_other=0.117, strength=0.121)"
+      ]
+    },
+    "Lay down": {
+      "activity_id": 8,
+      "n_samples_raw": 925,
+      "n_edges": 2,
+      "top_edges": [
+        {
+          "src": 23,
+          "dst": 23,
+          "lag": 5,
+          "strength": 0.19560439560439555,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 20,
+          "dst": 19,
+          "lag": 3,
+          "strength": 0.1135849598378866,
+          "sign": -1,
+          "mark": "o->"
+        }
+      ],
+      "top_paths": [
+        {
+          "path": [
+            "Z23 -[5]-> Z23"
+          ],
+          "score": 0.19560439560439555
+        },
+        {
+          "path": [
+            "Z20 -[3]-> Z19"
+          ],
+          "score": 0.1135849598378866
+        }
+      ],
+      "n_rules": 2,
+      "n_graph_rules": 2,
+      "n_fallback_rules": 0,
+      "rule_budget": 2,
+      "core_rule_count": 2,
+      "tie_rule_count": 0,
+      "use_prototype_fallback": false,
+      "top_rules": [
+        "IF Z5_C3[t-5] is true THEN Z5_C3[t] is likely true (sign=+, p_train=0.333, p_other=0.281, strength=0.196)",
+        "IF Z5_C0[t-3] is true THEN Z4_C3[t] is likely false (sign=-, p_train=0.932, p_other=0.927, strength=0.114)"
+      ]
+    },
+    "Wipe": {
+      "activity_id": 9,
+      "n_samples_raw": 925,
+      "n_edges": 15,
+      "top_edges": [
+        {
+          "src": 6,
+          "dst": 6,
+          "lag": 2,
+          "strength": 0.23985590260357392,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 23,
+          "dst": 23,
+          "lag": 5,
+          "strength": 0.17922933601169283,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 3,
+          "dst": 3,
+          "lag": 2,
+          "strength": 0.1506364067607574,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 6,
+          "dst": 3,
+          "lag": 2,
+          "strength": 0.14241839544836155,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 6,
+          "dst": 6,
+          "lag": 4,
+          "strength": 0.13388861295238352,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 6,
+          "dst": 22,
+          "lag": 2,
+          "strength": 0.1303020704742382,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 5,
+          "dst": 21,
+          "lag": 2,
+          "strength": 0.12861316121445598,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 3,
+          "dst": 10,
+          "lag": 4,
+          "strength": 0.1244358784326764,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 6,
+          "dst": 0,
+          "lag": 2,
+          "strength": 0.11955868200778441,
+          "sign": -1,
+          "mark": "-->"
+        },
+        {
+          "src": 21,
+          "dst": 0,
+          "lag": 4,
+          "strength": 0.11935439466584113,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 7,
+          "dst": 16,
+          "lag": 2,
+          "strength": 0.117206399520707,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 3,
+          "dst": 2,
+          "lag": 2,
+          "strength": 0.11399109468453743,
+          "sign": -1,
+          "mark": "o->"
+        },
+        {
+          "src": 22,
+          "dst": 14,
+          "lag": 2,
+          "strength": 0.11292814288780169,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 22,
+          "dst": 6,
+          "lag": 2,
+          "strength": 0.1127833111417121,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 6,
+          "dst": 13,
+          "lag": 2,
+          "strength": 0.10888794646371697,
+          "sign": 1,
+          "mark": "o->"
+        }
+      ],
+      "top_paths": [
+        {
+          "path": [
+            "Z22 -[2]-> Z6",
+            "Z6 -[2]-> Z3",
+            "Z3 -[4]-> Z10"
+          ],
+          "score": 0.37963758502275
+        },
+        {
+          "path": [
+            "Z22 -[2]-> Z6",
+            "Z6 -[2]-> Z3",
+            "Z3 -[2]-> Z2"
+          ],
+          "score": 0.36919280127461107
+        },
+        {
+          "path": [
+            "Z6 -[2]-> Z3",
+            "Z3 -[4]-> Z10"
+          ],
+          "score": 0.26685427388103794
+        },
+        {
+          "path": [
+            "Z6 -[2]-> Z3",
+            "Z3 -[2]-> Z2"
+          ],
+          "score": 0.256409490132899
+        },
+        {
+          "path": [
+            "Z22 -[2]-> Z6",
+            "Z6 -[2]-> Z3"
+          ],
+          "score": 0.25520170659007363
+        },
+        {
+          "path": [
+            "Z5 -[2]-> Z21",
+            "Z21 -[4]-> Z0"
+          ],
+          "score": 0.24796755588029712
+        },
+        {
+          "path": [
+            "Z6 -[2]-> Z22",
+            "Z22 -[2]-> Z14"
+          ],
+          "score": 0.24323021336203987
+        },
+        {
+          "path": [
+            "Z6 -[2]-> Z6"
+          ],
+          "score": 0.23985590260357392
+        },
+        {
+          "path": [
+            "Z22 -[2]-> Z6",
+            "Z6 -[2]-> Z0"
+          ],
+          "score": 0.2323419931494965
+        },
+        {
+          "path": [
+            "Z22 -[2]-> Z6",
+            "Z6 -[2]-> Z13"
+          ],
+          "score": 0.22167125760542905
+        }
+      ],
+      "n_rules": 12,
+      "n_graph_rules": 12,
+      "n_fallback_rules": 0,
+      "rule_budget": 15,
+      "core_rule_count": 12,
+      "tie_rule_count": 0,
+      "use_prototype_fallback": false,
+      "top_rules": [
+        "IF Z0_C3[t-2] is true THEN Z0_C3[t] is likely true (sign=+, p_train=0.665, p_other=0.326, strength=0.151)",
+        "IF Z1_C2[t-2] is true THEN Z0_C3[t] is likely true (sign=+, p_train=0.793, p_other=0.433, strength=0.142)",
+        "IF Z1_C2[t-2] is true THEN Z1_C2[t] is likely true (sign=+, p_train=0.511, p_other=0.325, strength=0.240)",
+        "IF Z0_C3[t-2] is true THEN Z0_C2[t] is likely false (sign=-, p_train=0.932, p_other=0.676, strength=0.114)",
+        "IF Z1_C2[t-2] is true THEN Z0_C0[t] is likely false (sign=-, p_train=0.874, p_other=0.700, strength=0.120)",
+        "IF Z1_C2[t-4] is true THEN Z1_C2[t] is likely true (sign=+, p_train=0.403, p_other=0.256, strength=0.134)",
+        "IF Z5_C2[t-2] is true THEN Z1_C2[t] is likely true (sign=+, p_train=0.384, p_other=0.204, strength=0.113)",
+        "IF Z5_C1[t-4] is true THEN Z0_C0[t] is likely true (sign=+, p_train=0.565, p_other=0.444, strength=0.119)",
+        "IF Z1_C3[t-2] is true THEN Z4_C0[t] is likely true (sign=+, p_train=0.542, p_other=0.480, strength=0.117)",
+        "IF Z5_C3[t-5] is true THEN Z5_C3[t] is likely true (sign=+, p_train=0.333, p_other=0.281, strength=0.179)"
+      ]
+    },
+    "Squat": {
+      "activity_id": 10,
+      "n_samples_raw": 925,
+      "n_edges": 11,
+      "top_edges": [
+        {
+          "src": 23,
+          "dst": 23,
+          "lag": 2,
+          "strength": 0.24684859682623678,
+          "sign": 1,
+          "mark": "-->"
+        },
+        {
+          "src": 23,
+          "dst": 20,
+          "lag": 2,
+          "strength": 0.19615574262187135,
+          "sign": -1,
+          "mark": "-->"
+        },
+        {
+          "src": 6,
+          "dst": 6,
+          "lag": 1,
+          "strength": 0.18583064936437466,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 19,
+          "dst": 22,
+          "lag": 2,
+          "strength": 0.1676446110651335,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 18,
+          "dst": 23,
+          "lag": 2,
+          "strength": 0.15135893684320512,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 3,
+          "dst": 6,
+          "lag": 2,
+          "strength": 0.147963040581625,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 20,
+          "dst": 2,
+          "lag": 3,
+          "strength": 0.1409433446170115,
+          "sign": -1,
+          "mark": "o->"
+        },
+        {
+          "src": 20,
+          "dst": 0,
+          "lag": 3,
+          "strength": 0.12466280622700612,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 13,
+          "dst": 6,
+          "lag": 1,
+          "strength": 0.11114266714789674,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 13,
+          "dst": 15,
+          "lag": 5,
+          "strength": 0.11044576642705295,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 0,
+          "dst": 20,
+          "lag": 2,
+          "strength": 0.10876892147053376,
+          "sign": -1,
+          "mark": "o->"
+        }
+      ],
+      "top_paths": [
+        {
+          "path": [
+            "Z18 -[2]-> Z23",
+            "Z23 -[2]-> Z20",
+            "Z20 -[3]-> Z2"
+          ],
+          "score": 0.48845802408208794
+        },
+        {
+          "path": [
+            "Z18 -[2]-> Z23",
+            "Z23 -[2]-> Z20",
+            "Z20 -[3]-> Z0"
+          ],
+          "score": 0.4721774856920826
+        },
+        {
+          "path": [
+            "Z18 -[2]-> Z23",
+            "Z23 -[2]-> Z20"
+          ],
+          "score": 0.34751467946507647
+        },
+        {
+          "path": [
+            "Z23 -[2]-> Z20",
+            "Z20 -[3]-> Z2"
+          ],
+          "score": 0.3370990872388828
+        },
+        {
+          "path": [
+            "Z23 -[2]-> Z20",
+            "Z20 -[3]-> Z0"
+          ],
+          "score": 0.3208185488488775
+        },
+        {
+          "path": [
+            "Z0 -[2]-> Z20",
+            "Z20 -[3]-> Z2"
+          ],
+          "score": 0.24971226608754526
+        },
+        {
+          "path": [
+            "Z23 -[2]-> Z23"
+          ],
+          "score": 0.24684859682623678
+        },
+        {
+          "path": [
+            "Z23 -[2]-> Z20"
+          ],
+          "score": 0.19615574262187135
+        },
+        {
+          "path": [
+            "Z6 -[1]-> Z6"
+          ],
+          "score": 0.18583064936437466
+        },
+        {
+          "path": [
+            "Z19 -[2]-> Z22"
+          ],
+          "score": 0.1676446110651335
+        }
+      ],
+      "n_rules": 9,
+      "n_graph_rules": 9,
+      "n_fallback_rules": 0,
+      "rule_budget": 11,
+      "core_rule_count": 9,
+      "tie_rule_count": 0,
+      "use_prototype_fallback": false,
+      "top_rules": [
+        "IF Z5_C3[t-2] is true THEN Z5_C3[t] is likely true (sign=+, p_train=0.581, p_other=0.330, strength=0.247)",
+        "IF Z4_C2[t-2] is true THEN Z5_C3[t] is likely true (sign=+, p_train=0.611, p_other=0.221, strength=0.151)",
+        "IF Z5_C3[t-2] is true THEN Z5_C0[t] is likely false (sign=-, p_train=0.698, p_other=0.474, strength=0.196)",
+        "IF Z5_C0[t-3] is true THEN Z0_C0[t] is likely true (sign=+, p_train=0.647, p_other=0.367, strength=0.125)",
+        "IF Z0_C0[t-2] is true THEN Z5_C0[t] is likely false (sign=-, p_train=0.586, p_other=0.370, strength=0.109)",
+        "IF Z5_C0[t-3] is true THEN Z0_C2[t] is likely false (sign=-, p_train=0.767, p_other=0.685, strength=0.141)",
+        "IF Z1_C2[t-1] is true THEN Z1_C2[t] is likely true (sign=+, p_train=0.333, p_other=0.212, strength=0.186)",
+        "IF Z4_C3[t-2] is true THEN Z5_C2[t] is likely true (sign=+, p_train=0.156, p_other=0.100, strength=0.168)",
+        "IF Z3_C1[t-5] is true THEN Z3_C3[t] is likely true (sign=+, p_train=0.192, p_other=0.185, strength=0.110)"
+      ]
+    },
+    "Stretch": {
+      "activity_id": 11,
+      "n_samples_raw": 925,
+      "n_edges": 4,
+      "top_edges": [
+        {
+          "src": 23,
+          "dst": 23,
+          "lag": 2,
+          "strength": 0.17635006744431067,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 23,
+          "dst": 23,
+          "lag": 4,
+          "strength": 0.142107744703752,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 2,
+          "dst": 21,
+          "lag": 1,
+          "strength": 0.12187736072106559,
+          "sign": 1,
+          "mark": "o->"
+        },
+        {
+          "src": 3,
+          "dst": 3,
+          "lag": 2,
+          "strength": 0.11741750397400744,
+          "sign": 1,
+          "mark": "o->"
+        }
+      ],
+      "top_paths": [
+        {
+          "path": [
+            "Z23 -[2]-> Z23"
+          ],
+          "score": 0.17635006744431067
+        },
+        {
+          "path": [
+            "Z23 -[4]-> Z23"
+          ],
+          "score": 0.142107744703752
+        },
+        {
+          "path": [
+            "Z2 -[1]-> Z21"
+          ],
+          "score": 0.12187736072106559
+        },
+        {
+          "path": [
+            "Z3 -[2]-> Z3"
+          ],
+          "score": 0.11741750397400744
+        }
+      ],
+      "n_rules": 4,
+      "n_graph_rules": 4,
+      "n_fallback_rules": 0,
+      "rule_budget": 4,
+      "core_rule_count": 4,
+      "tie_rule_count": 0,
+      "use_prototype_fallback": false,
+      "top_rules": [
+        "IF Z0_C2[t-1] is true THEN Z5_C1[t] is likely true (sign=+, p_train=0.132, p_other=0.085, strength=0.122)",
+        "IF Z5_C3[t-2] is true THEN Z5_C3[t] is likely true (sign=+, p_train=0.303, p_other=0.355, strength=0.176)",
+        "IF Z5_C3[t-4] is true THEN Z5_C3[t] is likely true (sign=+, p_train=0.273, p_other=0.323, strength=0.142)",
+        "IF Z0_C3[t-2] is true THEN Z0_C3[t] is likely true (sign=+, p_train=0.303, p_other=0.359, strength=0.117)"
+      ]
+    }
+  }
+}

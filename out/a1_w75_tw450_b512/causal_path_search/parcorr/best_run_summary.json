@@ -1,0 +1,30 @@
+{
+  "saved_at": "2026-02-18T12:26:19.966056",
+  "status": "best_rule_based_run",
+  "independence_test": "parcorr",
+  "accuracy": 0.7041666666666667,
+  "n_segments": 240,
+  "tuned_config": {
+    "classifier_stride": 75,
+    "segment_length": 80,
+    "segment_hop": 10,
+    "top_rules_per_activity": 50,
+    "rule_min_delta": 0.0,
+    "filter_threshold": 0.1,
+    "path_threshold": 0.0,
+    "classifier_train_ratio": 0.7,
+    "min_rules_per_activity": 1,
+    "low_edge_threshold": -1,
+    "core_fraction": 1.0,
+    "prototype_weight": 1.0
+  },
+  "artifacts": {
+    "rules_json": "/Users/geryo/github/csi-vae-gumbel/out/a1_w75_tw450_b512/causal_path_search/parcorr/classification_rules.json",
+    "rules_txt": "/Users/geryo/github/csi-vae-gumbel/out/a1_w75_tw450_b512/causal_path_search/parcorr/classification_rules.txt",
+    "metrics_json": "/Users/geryo/github/csi-vae-gumbel/out/a1_w75_tw450_b512/causal_path_search/parcorr/deterministic_classifier_metrics.json",
+    "confusion_png": "/Users/geryo/github/csi-vae-gumbel/out/a1_w75_tw450_b512/causal_path_search/parcorr/deterministic_confusion_matrix.png",
+    "graphs_summary_json": "/Users/geryo/github/csi-vae-gumbel/out/a1_w75_tw450_b512/causal_path_search/parcorr/graphs_summary.json",
+    "raw_graphs_manifest": "/Users/geryo/github/csi-vae-gumbel/out/a1_w75_tw450_b512/causal_graphs_raw/parcorr/manifest.json"
+  },
+  "latent_variables": 24
+}

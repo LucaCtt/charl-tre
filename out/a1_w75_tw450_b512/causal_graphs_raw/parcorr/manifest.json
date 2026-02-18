@@ -1,0 +1,88 @@
+{
+  "study_path": "out/a1_w75_tw450_b512",
+  "independence_test": "parcorr",
+  "tau_min": 1,
+  "tau_max": 5,
+  "pc_alpha": 0.001,
+  "stride": 75,
+  "latent_representation": "onehot_flat",
+  "latent_dim": 6,
+  "n_categories": 4,
+  "n_latent_variables": 24,
+  "var_names": [
+    "Z0_C0",
+    "Z0_C1",
+    "Z0_C2",
+    "Z0_C3",
+    "Z1_C0",
+    "Z1_C1",
+    "Z1_C2",
+    "Z1_C3",
+    "Z2_C0",
+    "Z2_C1",
+    "Z2_C2",
+    "Z2_C3",
+    "Z3_C0",
+    "Z3_C1",
+    "Z3_C2",
+    "Z3_C3",
+    "Z4_C0",
+    "Z4_C1",
+    "Z4_C2",
+    "Z4_C3",
+    "Z5_C0",
+    "Z5_C1",
+    "Z5_C2",
+    "Z5_C3"
+  ],
+  "activities": {
+    "Walk": {
+      "activity_id": 0,
+      "raw_graph_json": "Walk/raw_graph.json"
+    },
+    "Run": {
+      "activity_id": 1,
+      "raw_graph_json": "Run/raw_graph.json"
+    },
+    "Jump": {
+      "activity_id": 2,
+      "raw_graph_json": "Jump/raw_graph.json"
+    },
+    "Sit": {
+      "activity_id": 3,
+      "raw_graph_json": "Sit/raw_graph.json"
+    },
+    "Empty": {
+      "activity_id": 4,
+      "raw_graph_json": "Empty/raw_graph.json"
+    },
+    "Stand": {
+      "activity_id": 5,
+      "raw_graph_json": "Stand/raw_graph.json"
+    },
+    "Waving": {
+      "activity_id": 6,
+      "raw_graph_json": "Waving/raw_graph.json"
+    },
+    "Clap": {
+      "activity_id": 7,
+      "raw_graph_json": "Clap/raw_graph.json"
+    },
+    "Lay down": {
+      "activity_id": 8,
+      "raw_graph_json": "Lay_down/raw_graph.json"
+    },
+    "Wipe": {
+      "activity_id": 9,
+      "raw_graph_json": "Wipe/raw_graph.json"
+    },
+    "Squat": {
+      "activity_id": 10,
+      "raw_graph_json": "Squat/raw_graph.json"
+    },
+    "Stretch": {
+      "activity_id": 11,
+      "raw_graph_json": "Stretch/raw_graph.json"
+    }
+  }
+}
