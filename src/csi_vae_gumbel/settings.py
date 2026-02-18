@@ -63,7 +63,7 @@ class Settings(BaseSettings):
     """Directory to save model checkpoints."""
 
     # Optuna hyperparameter search space
-    latent_dim_min: int = 1
+    latent_dim_min: int = 2
     """Minimum latent dimension size."""
     latent_dim_max: int = 6
     """Maximum latent dimension size."""
@@ -73,11 +73,11 @@ class Settings(BaseSettings):
     """Maximum final KL divergence weight in loss computation."""
     final_cap_min: float = 0.5
     """Minimum final capacity in loss computation."""
-    final_cap_max: float = 4
+    final_cap_max: float = 3
     """Maximum final capacity in loss computation."""
     start_gumbel_temp_min: float = 2
     """Minimum Gumbel-Softmax temperature."""
-    start_gumbel_temp_max: float = 5
+    start_gumbel_temp_max: float = 4
     """Maximum Gumbel-Softmax temperature."""
 
     @property
