@@ -132,10 +132,10 @@ class Trainer:
                 entropy_per_dim = -(p * (p + 1e-8).log()).sum(dim=-1)
                 entropy = entropy_per_dim.sum()
 
-            metrics[0] += loss
-            metrics[1] += recon_loss
-            metrics[2] += kl_loss
-            metrics[3] += entropy
+            metrics[0] += loss.detach()
+            metrics[1] += recon_loss.detach()
+            metrics[2] += kl_loss.detach()
+            metrics[3] += entropy.detach()
             n_latents += entropy_per_dim.numel()
 
         # Synchronize metrics across all processes
