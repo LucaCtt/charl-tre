@@ -31,7 +31,7 @@ class Settings(BaseSettings):
         "Squat",
         "Stretch",
     ]
-    train_window_size: int = 150
+    train_window_size: int = 75
     """Size of the window of CSI in a VAE train sample, where 150 CSI = 1 second of data."""
     test_window_size: int = 450
     """Size of the window of CSI in a classifier test sample, where 150 CSI = 1 second of data."""
