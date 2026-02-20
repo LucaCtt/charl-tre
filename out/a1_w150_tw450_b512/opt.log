@@ -1,0 +1,318 @@
+[02/19/26 11:31:44] INFO     Loading dataset from dataset/S1...                                                                                     
+[02/19/26 11:32:39] INFO     Dataset loaded with 99012 training samples                                                                             
+[02/19/26 11:32:50] INFO     A new study created in memory with name: a1_w150_tw450_b512                                                            
+[Gloo] Rank 0 is connected to 2 peer ranks. Expected number of connected peer ranks is : 2
+[Gloo] Rank 2 is connected to 2 peer ranks. Expected number of connected peer ranks is : 2
+[Gloo] Rank 1 is connected to 2 peer ranks. Expected number of connected peer ranks is : 2
+                    INFO     Starting trial 0                                                                                                       
+[02/19/26 11:43:54] INFO     Trial 0 pruned. Pruned at epoch 50.                                                                                    
+                    INFO     Starting trial 1                                                                                                       
+[02/19/26 11:55:14] INFO     Trial 1 pruned. Pruned at epoch 50.                                                                                    
+                    INFO     Starting trial 2                                                                                                       
+[02/19/26 12:06:38] INFO     Trial 2 pruned. Pruned at epoch 50.                                                                                    
+[02/19/26 12:06:39] INFO     Starting trial 3                                                                                                       
+[02/19/26 12:29:47] INFO     VAE training completed for trial 3 with loss 0.6494, recon_loss 0.6493, kl_loss 0.4038                                 
+                    INFO     Trial 3 finished with value: 0.6493480801582336 and parameters: {'final_kl_weight': 0.2311294500510414, 'latent_dim':  
+                             3, 'final_cap': 0.9, 'start_gumbel_temp': 2.3668090197068676}. Best is trial 3 with value: 0.6493480801582336.         
+                    INFO     Starting trial 4                                                                                                       
+[02/19/26 12:41:32] INFO     Trial 4 pruned. Pruned at epoch 50.                                                                                    
+                    INFO     Starting trial 5                                                                                                       
+[02/19/26 12:53:14] INFO     Trial 5 pruned. Pruned at epoch 50.                                                                                    
+                    INFO     Starting trial 6                                                                                                       
+[02/19/26 13:16:17] INFO     VAE training completed for trial 6 with loss 0.6463, recon_loss 0.6458, kl_loss 0.6857                                 
+                    INFO     Trial 6 finished with value: 0.6458057165145874 and parameters: {'final_kl_weight': 0.040842279473800806, 'latent_dim':
+                             5, 'final_cap': 0.9, 'start_gumbel_temp': 3.0284688768272234}. Best is trial 6 with value: 0.6458057165145874.         
+                    INFO     Starting trial 7                                                                                                       
+[02/19/26 13:27:59] INFO     Trial 7 pruned. Pruned at epoch 50.                                                                                    
+                    INFO     Starting trial 8                                                                                                       
+[02/19/26 13:39:45] INFO     Trial 8 pruned. Pruned at epoch 50.                                                                                    
+                    INFO     Starting trial 9                                                                                                       
+[02/19/26 13:51:34] INFO     Trial 9 pruned. Pruned at epoch 50.                                                                                    
+                    INFO     Starting trial 10                                                                                                      
+[02/19/26 14:14:33] INFO     VAE training completed for trial 10 with loss 0.6486, recon_loss 0.6485, kl_loss 0.4660                                
+                    INFO     Trial 10 finished with value: 0.6485432386398315 and parameters: {'final_kl_weight': 0.3883676908118524, 'latent_dim': 
+                             4, 'final_cap': 1.3, 'start_gumbel_temp': 3.27959638625347}. Best is trial 6 with value: 0.6458057165145874.           
+                    INFO     Starting trial 11                                                                                                      
+[02/19/26 14:37:39] INFO     VAE training completed for trial 11 with loss 0.6487, recon_loss 0.6487, kl_loss 0.4807                                
+                    INFO     Trial 11 finished with value: 0.6486784219741821 and parameters: {'final_kl_weight': 0.37195091668333374, 'latent_dim':
+                             4, 'final_cap': 1.3, 'start_gumbel_temp': 3.2481670543447305}. Best is trial 6 with value: 0.6458057165145874.         
+                    INFO     Starting trial 12                                                                                                      
+[02/19/26 15:00:45] INFO     VAE training completed for trial 12 with loss 0.6487, recon_loss 0.6486, kl_loss 0.5988                                
+                    INFO     Trial 12 finished with value: 0.6486489772796631 and parameters: {'final_kl_weight': 0.1845989585890419, 'latent_dim': 
+                             5, 'final_cap': 0.9, 'start_gumbel_temp': 3.339814870955064}. Best is trial 6 with value: 0.6458057165145874.          
+[02/19/26 15:00:46] INFO     Starting trial 13                                                                                                      
+[02/19/26 15:23:45] INFO     VAE training completed for trial 13 with loss 0.6452, recon_loss 0.6442, kl_loss 0.6920                                
+                    INFO     Trial 13 finished with value: 0.6441640853881836 and parameters: {'final_kl_weight': 0.040246983712466544,             
+                             'latent_dim': 5, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 3.083632832806177}. Best is trial 13 with value:
+                             0.6441640853881836.                                                                                                    
+                    INFO     Starting trial 14                                                                                                      
+[02/19/26 15:46:49] INFO     VAE training completed for trial 14 with loss 0.6455, recon_loss 0.6429, kl_loss 0.7377                                
+                    INFO     Trial 14 finished with value: 0.6429296135902405 and parameters: {'final_kl_weight': 0.04214385176025112, 'latent_dim':
+                             5, 'final_cap': 2.5, 'start_gumbel_temp': 3.036318331328637}. Best is trial 14 with value: 0.6429296135902405.         
+                    INFO     Starting trial 15                                                                                                      
+[02/19/26 15:58:32] INFO     Trial 15 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 16                                                                                                      
+[02/19/26 16:21:29] INFO     VAE training completed for trial 16 with loss 0.6434, recon_loss 0.6420, kl_loss 1.1453                                
+                    INFO     Trial 16 finished with value: 0.6420255303382874 and parameters: {'final_kl_weight': 0.013152736711041627,             
+                             'latent_dim': 6, 'final_cap': 2.5, 'start_gumbel_temp': 2.9965363135634004}. Best is trial 16 with value:              
+                             0.6420255303382874.                                                                                                    
+                    INFO     Starting trial 17                                                                                                      
+[02/19/26 16:33:16] INFO     Trial 17 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 18                                                                                                      
+[02/19/26 16:44:58] INFO     Trial 18 pruned. Pruned at epoch 50.                                                                                   
+[02/19/26 16:44:59] INFO     Starting trial 19                                                                                                      
+[02/19/26 16:56:45] INFO     Trial 19 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 20                                                                                                      
+[02/19/26 17:08:30] INFO     Trial 20 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 21                                                                                                      
+[02/19/26 17:20:19] INFO     Trial 21 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 22                                                                                                      
+[02/19/26 17:32:05] INFO     Trial 22 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 23                                                                                                      
+[02/19/26 17:43:50] INFO     Trial 23 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 24                                                                                                      
+[02/19/26 17:55:34] INFO     Trial 24 pruned. Pruned at epoch 50.                                                                                   
+[02/19/26 17:55:35] INFO     Starting trial 25                                                                                                      
+[02/19/26 18:18:38] INFO     VAE training completed for trial 25 with loss 0.6429, recon_loss 0.6409, kl_loss 1.1022                                
+                    INFO     Trial 25 finished with value: 0.6409431099891663 and parameters: {'final_kl_weight': 0.009325913236636866,             
+                             'latent_dim': 5, 'final_cap': 2.7, 'start_gumbel_temp': 2.775478871438061}. Best is trial 25 with value:               
+                             0.6409431099891663.                                                                                                    
+                    INFO     Starting trial 26                                                                                                      
+[02/19/26 18:41:36] INFO     VAE training completed for trial 26 with loss 0.6429, recon_loss 0.6412, kl_loss 1.3784                                
+[02/19/26 18:41:37] INFO     Trial 26 finished with value: 0.641159176826477 and parameters: {'final_kl_weight': 0.008181592438897024, 'latent_dim':
+                             6, 'final_cap': 2.7, 'start_gumbel_temp': 2.7115292388042285}. Best is trial 25 with value: 0.6409431099891663.        
+                    INFO     Starting trial 27                                                                                                      
+[02/19/26 18:53:25] INFO     Trial 27 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 28                                                                                                      
+[02/19/26 19:16:31] INFO     VAE training completed for trial 28 with loss 0.6796, recon_loss 0.6469, kl_loss 5.4285                                
+                    INFO     Trial 28 finished with value: 0.6469389200210571 and parameters: {'final_kl_weight': 0.009103590669251937,             
+                             'latent_dim': 6, 'final_cap': 2.9, 'start_gumbel_temp': 2.730417808952845}. Best is trial 25 with value:               
+                             0.6409431099891663.                                                                                                    
+[02/19/26 19:16:32] INFO     Starting trial 29                                                                                                      
+[02/19/26 19:28:18] INFO     Trial 29 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 30                                                                                                      
+[02/19/26 19:40:05] INFO     Trial 30 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 31                                                                                                      
+[02/19/26 19:51:48] INFO     Trial 31 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 32                                                                                                      
+[02/19/26 20:14:52] INFO     VAE training completed for trial 32 with loss 0.6435, recon_loss 0.6430, kl_loss 0.7467                                
+                    INFO     Trial 32 finished with value: 0.643022358417511 and parameters: {'final_kl_weight': 0.02867365614208546, 'latent_dim': 
+                             5, 'final_cap': 2.7, 'start_gumbel_temp': 2.9609443545295826}. Best is trial 25 with value: 0.6409431099891663.        
+[02/19/26 20:14:53] INFO     Starting trial 33                                                                                                      
+[02/19/26 20:37:49] INFO     VAE training completed for trial 33 with loss 0.6431, recon_loss 0.6421, kl_loss 0.8406                                
+                    INFO     Trial 33 finished with value: 0.6420689225196838 and parameters: {'final_kl_weight': 0.010879192705564563,             
+                             'latent_dim': 4, 'final_cap': 2.1, 'start_gumbel_temp': 2.6374851919923135}. Best is trial 25 with value:              
+                             0.6409431099891663.                                                                                                    
+                    INFO     Starting trial 34                                                                                                      
+[02/19/26 21:00:46] INFO     VAE training completed for trial 34 with loss 0.6430, recon_loss 0.6420, kl_loss 0.6644                                
+                    INFO     Trial 34 finished with value: 0.6420269012451172 and parameters: {'final_kl_weight': 0.009473487429820016,             
+                             'latent_dim': 3, 'final_cap': 2.1, 'start_gumbel_temp': 2.605108394533096}. Best is trial 25 with value:               
+                             0.6409431099891663.                                                                                                    
+                    INFO     Starting trial 35                                                                                                      
+[02/19/26 21:23:41] INFO     VAE training completed for trial 35 with loss 0.6421, recon_loss 0.6414, kl_loss 0.6655                                
+                    INFO     Trial 35 finished with value: 0.641384482383728 and parameters: {'final_kl_weight': 0.006514965703777937, 'latent_dim':
+                             3, 'final_cap': 2.3, 'start_gumbel_temp': 2.446167879256979}. Best is trial 25 with value: 0.6409431099891663.         
+                    INFO     Starting trial 36                                                                                                      
+[02/19/26 21:35:25] INFO     Trial 36 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 37                                                                                                      
+[02/19/26 21:58:20] INFO     VAE training completed for trial 37 with loss 0.6415, recon_loss 0.6408, kl_loss 0.6867                                
+                    INFO     Trial 37 finished with value: 0.6407994031906128 and parameters: {'final_kl_weight': 0.006637172268959585,             
+                             'latent_dim': 3, 'final_cap': 2.9, 'start_gumbel_temp': 3.97892251106423}. Best is trial 37 with value:                
+                             0.6407994031906128.                                                                                                    
+                    INFO     Starting trial 38                                                                                                      
+[02/19/26 22:10:01] INFO     Trial 38 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 39                                                                                                      
+[02/19/26 22:21:42] INFO     Trial 39 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 40                                                                                                      
+[02/19/26 22:33:24] INFO     Trial 40 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 41                                                                                                      
+[02/19/26 22:45:06] INFO     Trial 41 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 42                                                                                                      
+[02/19/26 23:08:05] INFO     VAE training completed for trial 42 with loss 0.6421, recon_loss 0.6416, kl_loss 0.7345                                
+                    INFO     Trial 42 finished with value: 0.6416198015213013 and parameters: {'final_kl_weight': 0.008857306941352071,             
+                             'latent_dim': 4, 'final_cap': 2.5, 'start_gumbel_temp': 2.467418630523815}. Best is trial 37 with value:               
+                             0.6407994031906128.                                                                                                    
+                    INFO     Starting trial 43                                                                                                      
+[02/19/26 23:19:46] INFO     Trial 43 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 44                                                                                                      
+[02/19/26 23:42:42] INFO     VAE training completed for trial 44 with loss 0.6421, recon_loss 0.6413, kl_loss 0.9569                                
+                    INFO     Trial 44 finished with value: 0.6413050889968872 and parameters: {'final_kl_weight': 0.0050354088714639166,            
+                             'latent_dim': 4, 'final_cap': 2.9, 'start_gumbel_temp': 2.2775440325378105}. Best is trial 37 with value:              
+                             0.6407994031906128.                                                                                                    
+                    INFO     Starting trial 45                                                                                                      
+[02/19/26 23:54:26] INFO     Trial 45 pruned. Pruned at epoch 50.                                                                                   
+[02/19/26 23:54:27] INFO     Starting trial 46                                                                                                      
+[02/20/26 00:06:09] INFO     Trial 46 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 47                                                                                                      
+[02/20/26 00:17:54] INFO     Trial 47 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 48                                                                                                      
+[02/20/26 00:29:39] INFO     Trial 48 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 49                                                                                                      
+[02/20/26 00:52:38] INFO     VAE training completed for trial 49 with loss 0.6433, recon_loss 0.6428, kl_loss 0.3194                                
+                    INFO     Trial 49 finished with value: 0.6428139209747314 and parameters: {'final_kl_weight': 0.022877742882724844,             
+                             'latent_dim': 2, 'final_cap': 2.7, 'start_gumbel_temp': 2.323317115598448}. Best is trial 37 with value:               
+                             0.6407994031906128.                                                                                                    
+                    INFO     Starting trial 50                                                                                                      
+[02/20/26 01:04:21] INFO     Trial 50 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 51                                                                                                      
+[02/20/26 01:16:05] INFO     Trial 51 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 52                                                                                                      
+[02/20/26 01:39:05] INFO     VAE training completed for trial 52 with loss 0.6428, recon_loss 0.6421, kl_loss 0.8700                                
+                    INFO     Trial 52 finished with value: 0.6420609951019287 and parameters: {'final_kl_weight': 0.010476160544500518,             
+                             'latent_dim': 4, 'final_cap': 2.9, 'start_gumbel_temp': 3.8319828465187205}. Best is trial 37 with value:              
+                             0.6407994031906128.                                                                                                    
+                    INFO     Starting trial 53                                                                                                      
+[02/20/26 01:50:50] INFO     Trial 53 pruned. Pruned at epoch 50.                                                                                   
+[02/20/26 01:50:51] INFO     Starting trial 54                                                                                                      
+[02/20/26 02:02:37] INFO     Trial 54 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 55                                                                                                      
+[02/20/26 02:14:21] INFO     Trial 55 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 56                                                                                                      
+[02/20/26 02:26:06] INFO     Trial 56 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 57                                                                                                      
+[02/20/26 02:49:08] INFO     VAE training completed for trial 57 with loss 0.6433, recon_loss 0.6425, kl_loss 1.0347                                
+[02/20/26 02:49:09] INFO     Trial 57 finished with value: 0.6424675583839417 and parameters: {'final_kl_weight': 0.014813243219807884,             
+                             'latent_dim': 5, 'final_cap': 2.9, 'start_gumbel_temp': 2.14008676874004}. Best is trial 37 with value:                
+                             0.6407994031906128.                                                                                                    
+                    INFO     Starting trial 58                                                                                                      
+[02/20/26 03:00:50] INFO     Trial 58 pruned. Pruned at epoch 50.                                                                                   
+[02/20/26 03:00:51] INFO     Starting trial 59                                                                                                      
+[02/20/26 03:23:56] INFO     VAE training completed for trial 59 with loss 0.6435, recon_loss 0.6422, kl_loss 0.9231                                
+                    INFO     Trial 59 finished with value: 0.642180860042572 and parameters: {'final_kl_weight': 0.011726966644832588, 'latent_dim':
+                             4, 'final_cap': 2.3, 'start_gumbel_temp': 3.4322951425306147}. Best is trial 37 with value: 0.6407994031906128.        
+                    INFO     Starting trial 60                                                                                                      
+[02/20/26 03:46:55] INFO     VAE training completed for trial 60 with loss 0.6437, recon_loss 0.6424, kl_loss 0.8969                                
+                    INFO     Trial 60 finished with value: 0.6424223780632019 and parameters: {'final_kl_weight': 0.006073636875045757,             
+                             'latent_dim': 3, 'final_cap': 2.7, 'start_gumbel_temp': 2.8953466175405245}. Best is trial 37 with value:              
+                             0.6407994031906128.                                                                                                    
+[02/20/26 03:46:56] INFO     Starting trial 61                                                                                                      
+[02/20/26 04:09:55] INFO     VAE training completed for trial 61 with loss 0.6423, recon_loss 0.6400, kl_loss 1.3505                                
+                    INFO     Trial 61 finished with value: 0.6400490999221802 and parameters: {'final_kl_weight': 0.007176964661377725,             
+                             'latent_dim': 6, 'final_cap': 2.5, 'start_gumbel_temp': 3.142352499658216}. Best is trial 61 with value:               
+                             0.6400490999221802.                                                                                                    
+                    INFO     Starting trial 62                                                                                                      
+[02/20/26 04:32:53] INFO     VAE training completed for trial 62 with loss 0.6632, recon_loss 0.6450, kl_loss 4.1665                                
+                    INFO     Trial 62 finished with value: 0.6450331807136536 and parameters: {'final_kl_weight': 0.007111037104810766,             
+                             'latent_dim': 6, 'final_cap': 1.5, 'start_gumbel_temp': 3.575263349002781}. Best is trial 61 with value:               
+                             0.6400490999221802.                                                                                                    
+                    INFO     Starting trial 63                                                                                                      
+[02/20/26 04:55:51] INFO     VAE training completed for trial 63 with loss 0.6630, recon_loss 0.6458, kl_loss 3.9019                                
+                    INFO     Trial 63 finished with value: 0.6457998752593994 and parameters: {'final_kl_weight': 0.007101041028145753,             
+                             'latent_dim': 5, 'final_cap': 2.5, 'start_gumbel_temp': 3.6978119311464384}. Best is trial 61 with value:              
+                             0.6400490999221802.                                                                                                    
+                    INFO     Starting trial 64                                                                                                      
+[02/20/26 05:18:45] INFO     VAE training completed for trial 64 with loss 0.6430, recon_loss 0.6405, kl_loss 1.2298                                
+                    INFO     Trial 64 finished with value: 0.6405154466629028 and parameters: {'final_kl_weight': 0.009701103771780838,             
+                             'latent_dim': 6, 'final_cap': 2.9, 'start_gumbel_temp': 3.1454866242302484}. Best is trial 61 with value:              
+                             0.6400490999221802.                                                                                                    
+                    INFO     Starting trial 65                                                                                                      
+[02/20/26 05:41:38] INFO     VAE training completed for trial 65 with loss 0.6415, recon_loss 0.6397, kl_loss 1.4082                                
+                    INFO     Trial 65 finished with value: 0.639718770980835 and parameters: {'final_kl_weight': 0.0058178507442015965,             
+                             'latent_dim': 6, 'final_cap': 2.9, 'start_gumbel_temp': 3.296823433256831}. Best is trial 65 with value:               
+                             0.639718770980835.                                                                                                     
+[02/20/26 05:41:39] INFO     Starting trial 66                                                                                                      
+[02/20/26 06:04:32] INFO     VAE training completed for trial 66 with loss 0.6414, recon_loss 0.6396, kl_loss 1.3877                                
+                    INFO     Trial 66 finished with value: 0.639599621295929 and parameters: {'final_kl_weight': 0.005805844647322389, 'latent_dim':
+                             6, 'final_cap': 2.9, 'start_gumbel_temp': 3.1855389046413842}. Best is trial 66 with value: 0.639599621295929.         
+[02/20/26 06:04:33] INFO     Starting trial 67                                                                                                      
+[02/20/26 06:27:26] INFO     VAE training completed for trial 67 with loss 0.6487, recon_loss 0.6486, kl_loss 0.7373                                
+                    INFO     Trial 67 finished with value: 0.6486422419548035 and parameters: {'final_kl_weight': 0.266073150843259, 'latent_dim':  
+                             6, 'final_cap': 2.9, 'start_gumbel_temp': 3.258394662414011}. Best is trial 66 with value: 0.639599621295929.          
+                    INFO     Starting trial 68                                                                                                      
+[02/20/26 06:39:06] INFO     Trial 68 pruned. Pruned at epoch 50.                                                                                   
+[02/20/26 06:39:07] INFO     Starting trial 69                                                                                                      
+[02/20/26 07:02:01] INFO     VAE training completed for trial 69 with loss 0.6439, recon_loss 0.6407, kl_loss 1.2112                                
+                    INFO     Trial 69 finished with value: 0.6407169103622437 and parameters: {'final_kl_weight': 0.01203236927564836, 'latent_dim':
+                             6, 'final_cap': 2.7, 'start_gumbel_temp': 3.363789410395779}. Best is trial 66 with value: 0.639599621295929.          
+                    INFO     Starting trial 70                                                                                                      
+[02/20/26 07:13:42] INFO     Trial 70 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 71                                                                                                      
+[02/20/26 07:25:25] INFO     Trial 71 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 72                                                                                                      
+[02/20/26 07:48:17] INFO     VAE training completed for trial 72 with loss 0.6592, recon_loss 0.6435, kl_loss 4.4468                                
+                    INFO     Trial 72 finished with value: 0.6435427665710449 and parameters: {'final_kl_weight': 0.005736610611442461,             
+                             'latent_dim': 6, 'final_cap': 2.7, 'start_gumbel_temp': 3.3300947885110013}. Best is trial 66 with value:              
+                             0.639599621295929.                                                                                                     
+                    INFO     Starting trial 73                                                                                                      
+[02/20/26 07:59:57] INFO     Trial 73 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 74                                                                                                      
+[02/20/26 08:11:35] INFO     Trial 74 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 75                                                                                                      
+[02/20/26 08:23:12] INFO     Trial 75 pruned. Pruned at epoch 50.                                                                                   
+[02/20/26 08:23:13] INFO     Starting trial 76                                                                                                      
+[02/20/26 08:34:49] INFO     Trial 76 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 77                                                                                                      
+[02/20/26 08:57:44] INFO     VAE training completed for trial 77 with loss 0.6425, recon_loss 0.6405, kl_loss 1.3016                                
+                    INFO     Trial 77 finished with value: 0.6405413150787354 and parameters: {'final_kl_weight': 0.0080966870501128, 'latent_dim': 
+                             6, 'final_cap': 2.7, 'start_gumbel_temp': 2.9520206123935573}. Best is trial 66 with value: 0.639599621295929.         
+                    INFO     Starting trial 78                                                                                                      
+[02/20/26 09:09:21] INFO     Trial 78 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 79                                                                                                      
+[02/20/26 09:32:03] INFO     VAE training completed for trial 79 with loss 0.6468, recon_loss 0.6432, kl_loss 0.7823                                
+                    INFO     Trial 79 finished with value: 0.6431845426559448 and parameters: {'final_kl_weight': 0.062172534975398666,             
+                             'latent_dim': 6, 'final_cap': 2.9, 'start_gumbel_temp': 2.9379876325836403}. Best is trial 66 with value:              
+                             0.639599621295929.                                                                                                     
+                    INFO     Starting trial 80                                                                                                      
+[02/20/26 09:43:38] INFO     Trial 80 pruned. Pruned at epoch 50.                                                                                   
+[02/20/26 09:43:39] INFO     Starting trial 81                                                                                                      
+[02/20/26 10:06:23] INFO     VAE training completed for trial 81 with loss 0.6424, recon_loss 0.6401, kl_loss 1.3662                                
+                    INFO     Trial 81 finished with value: 0.6400588154792786 and parameters: {'final_kl_weight': 0.007663680876557713,             
+                             'latent_dim': 6, 'final_cap': 2.7, 'start_gumbel_temp': 3.289185033209742}. Best is trial 66 with value:               
+                             0.639599621295929.                                                                                                     
+                    INFO     Starting trial 82                                                                                                      
+[02/20/26 10:29:04] INFO     VAE training completed for trial 82 with loss 0.6453, recon_loss 0.6420, kl_loss 1.3631                                
+                    INFO     Trial 82 finished with value: 0.6419681310653687 and parameters: {'final_kl_weight': 0.011404815066954082,             
+                             'latent_dim': 6, 'final_cap': 2.5, 'start_gumbel_temp': 3.2893150740715}. Best is trial 66 with value:                 
+                             0.639599621295929.                                                                                                     
+                    INFO     Starting trial 83                                                                                                      
+[02/20/26 10:40:37] INFO     Trial 83 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 84                                                                                                      
+[02/20/26 10:51:55] INFO     Trial 84 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 85                                                                                                      
+[02/20/26 11:03:25] INFO     Trial 85 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 86                                                                                                      
+[02/20/26 11:14:55] INFO     Trial 86 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 87                                                                                                      
+[02/20/26 11:37:22] INFO     VAE training completed for trial 87 with loss 0.6417, recon_loss 0.6396, kl_loss 1.3483                                
+                    INFO     Trial 87 finished with value: 0.6396477222442627 and parameters: {'final_kl_weight': 0.006873256458456418,             
+                             'latent_dim': 6, 'final_cap': 2.9, 'start_gumbel_temp': 2.8720756318707514}. Best is trial 66 with value:              
+                             0.639599621295929.                                                                                                     
+                    INFO     Starting trial 88                                                                                                      
+[02/20/26 11:59:47] INFO     VAE training completed for trial 88 with loss 0.6417, recon_loss 0.6397, kl_loss 1.3007                                
+                    INFO     Trial 88 finished with value: 0.6397061944007874 and parameters: {'final_kl_weight': 0.0065496116772234105,            
+                             'latent_dim': 6, 'final_cap': 2.9, 'start_gumbel_temp': 2.8689745220974157}. Best is trial 66 with value:              
+                             0.639599621295929.                                                                                                     
+[02/20/26 11:59:48] INFO     Starting trial 89                                                                                                      
+[02/20/26 12:11:09] INFO     Trial 89 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 90                                                                                                      
+[02/20/26 12:22:46] INFO     Trial 90 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 91                                                                                                      
+[02/20/26 12:45:51] INFO     VAE training completed for trial 91 with loss 0.6426, recon_loss 0.6413, kl_loss 1.5514                                
+                    INFO     Trial 91 finished with value: 0.6413313746452332 and parameters: {'final_kl_weight': 0.006510841636851514,             
+                             'latent_dim': 6, 'final_cap': 2.9, 'start_gumbel_temp': 2.838793292015844}. Best is trial 66 with value:               
+                             0.639599621295929.                                                                                                     
+                    INFO     Starting trial 92                                                                                                      
+[02/20/26 13:08:56] INFO     VAE training completed for trial 92 with loss 0.6417, recon_loss 0.6398, kl_loss 1.3268                                
+                    INFO     Trial 92 finished with value: 0.6398094892501831 and parameters: {'final_kl_weight': 0.0068309930188121286,            
+                             'latent_dim': 6, 'final_cap': 2.9, 'start_gumbel_temp': 2.9759834108116903}. Best is trial 66 with value:              
+                             0.639599621295929.                                                                                                     
+                    INFO     Starting trial 93                                                                                                      
+[02/20/26 13:20:38] INFO     Trial 93 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 94                                                                                                      
+[02/20/26 13:43:28] INFO     VAE training completed for trial 94 with loss 0.6423, recon_loss 0.6401, kl_loss 1.2603                                
+                    INFO     Trial 94 finished with value: 0.6400642395019531 and parameters: {'final_kl_weight': 0.008248758578753825,             
+                             'latent_dim': 6, 'final_cap': 2.9, 'start_gumbel_temp': 3.2253940985112104}. Best is trial 66 with value:              
+                             0.639599621295929.                                                                                                     
+                    INFO     Starting trial 95                                                                                                      
+[02/20/26 13:55:06] INFO     Trial 95 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 96                                                                                                      
+[02/20/26 14:06:40] INFO     Trial 96 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 97                                                                                                      
+[02/20/26 14:18:16] INFO     Trial 97 pruned. Pruned at epoch 50.                                                                                   
+[02/20/26 14:18:17] INFO     Starting trial 98                                                                                                      
+[02/20/26 14:29:45] INFO     Trial 98 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Starting trial 99                                                                                                      
+[02/20/26 14:41:10] INFO     Trial 99 pruned. Pruned at epoch 50.                                                                                   
+                    INFO     Study done with 100 trials: 59 pruned, 41 complete.                                                                    
+                    INFO     Best trial #66: value=0.6396, params={'final_kl_weight': 0.005805844647322389, 'latent_dim': 6, 'final_cap': 2.9,      
+                             'start_gumbel_temp': 3.1855389046413842}                                                                               
