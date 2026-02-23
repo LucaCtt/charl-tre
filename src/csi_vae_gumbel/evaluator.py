@@ -135,35 +135,45 @@ class Evaluator:
 
             x_r = split_test_window(x.to(self.__gpu_id), self.__sample_window_size, self.__overlap_size)
 
-            _, z_hard, latents = self.__vae(x_r)
+            _, _, _, z_hard, logits = self.__vae(x_r)
 
             # (B * n_windows, latent_dim, n_categories) → (B, latent_dim * n_categories * n_windows)
             n_windows = x_r.shape[0] // original_batch_size
             z_hard = z_hard.view(original_batch_size, n_windows, -1)
             z_hard = z_hard.reshape(original_batch_size, -1)
-            latents = latents.view(original_batch_size, n_windows, -1)
-            latents = latents.reshape(original_batch_size, -1)
+            logits = logits.view(original_batch_size, n_windows, -1)
+            logits = logits.reshape(original_batch_size, -1)
 
             preds = torch.argmax(self.__classifier(z_hard), dim=1)
             accuracy_metric.update(preds, y.to(self.__gpu_id))
             confusion_matrix_metric.update(preds, y.to(self.__gpu_id))
 
             # Use the original latent vectors and labels for t-SNE visualization
-            all_latents.append(latents.cpu().numpy())
-            all_labels.append(y.cpu().numpy())
+            all_latents.append(logits)
+            all_labels.append(y.to(self.__gpu_id))
 
-        conf_matrix = confusion_matrix_metric.compute().cpu().numpy()
+        conf_matrix = confusion_matrix_metric.compute()
+        accuracy = accuracy_metric.compute()
+        latents_single = torch.cat(all_latents, dim=0)
+        labels_single = torch.cat(all_labels, dim=0)
+        latents = torch.zeros(
+            latents_single.shape[0] * dist.get_world_size(),
+            *latents_single.shape[1:],
+            device=self.__gpu_id,
+        )
+        labels = torch.zeros(
+            labels_single.shape[0] * dist.get_world_size(),
+            device=self.__gpu_id,
+            dtype=labels_single.dtype,
+        )
 
-        latent_array = np.concatenate(all_latents, axis=0)
-        label_array = np.concatenate(all_labels, axis=0)
+        dist.all_reduce(conf_matrix, op=dist.ReduceOp.SUM)
+        dist.all_reduce(accuracy, op=dist.ReduceOp.AVG)
+        dist.all_gather_into_tensor(latents, latents_single)
+        dist.all_gather_into_tensor(labels, labels_single)
 
         if self.__gpu_id == 0 and self.__out_dir is not None:
-            _plot_confusion_matrix(conf_matrix, self.__classes, self.__out_dir)
-            _plot_latent_tsne(latent_array, label_array, self.__classes, self.__out_dir)
-
-        accuracy = accuracy_metric.compute()
-
-        dist.all_reduce(accuracy, op=dist.ReduceOp.SUM)
-        accuracy /= dist.get_world_size()
+            _plot_confusion_matrix(conf_matrix.cpu().numpy(), self.__classes, self.__out_dir)
+            _plot_latent_tsne(latents.cpu().numpy(), labels.cpu().numpy(), self.__classes, self.__out_dir)
 
         return accuracy.item()

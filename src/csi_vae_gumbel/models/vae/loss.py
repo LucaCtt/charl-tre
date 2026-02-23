@@ -19,8 +19,6 @@ def vae_loss(
         logits (torch.Tensor): Logits tensor for the categorical latent variables.
         kl_weight (float): Weight for the KL divergence term.
         capacity (float): Capacity threshold for KL divergence.
-        entropy_weight (float): Weight for the entropy term.
-        entropy_mode (Literal["none", "penalty", "bonus"]): Mode for entropy term.
 
     Returns:
         tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]: Total loss, reconstruction loss,

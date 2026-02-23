@@ -41,7 +41,7 @@ class Trainer:
         self.__dataloader = dataloader
         self.__optimizer = torch.optim.AdamW(
             self.__model.parameters(),
-            lr=3e-3,
+            lr=1e-3,
             weight_decay=1e-4,
         )
         self.__lr_annealer = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -82,7 +82,7 @@ class Trainer:
         """
         self.__optimizer.zero_grad()
 
-        x_recon, _, logits = self.__model(x_true, tau)
+        x_recon, _, _, _, logits = self.__model(x_true, tau)
 
         loss, recon_loss, kl_loss = vae_loss(
             x_recon,
@@ -188,7 +188,7 @@ class Trainer:
                 self.__trial.set_user_attr("entropy_history", var_history)
 
                 if self.__trial.should_prune():
-                    msg = f"Pruned at epoch {epoch}."
+                    msg = f"Collapsed at epoch {epoch}."
                     raise optuna.TrialPruned(msg)
 
         total_metrics /= epochs

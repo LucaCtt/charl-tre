@@ -39,13 +39,13 @@ class Settings(BaseSettings):
     """Number of frames to overlap between train windows when splitting the test window."""
     test_ratio: float = 0.3
     """Proportion of the dataset to be used for testing."""
-    n_antennas: int = 1
+    n_antennas: int = 4
     """Total number of antennas used."""
     antenna_select: int = 0
     """Specific antenna to select if only one is needed (0-indexed)."""
     n_subcarriers: int = 2048 // 8  # 2048 is original size, downsampled by 8
     """Number of subcarriers in each CSI sample."""
-    train_batch_size: int = 512
+    train_batch_size: int = 144
     """Batch size per GPU for training both VAE and classifier."""
     vae_n_epochs: int = 100
     """Number of training epochs for the VAE."""

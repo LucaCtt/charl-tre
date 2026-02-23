@@ -93,7 +93,8 @@ def _objective(single_trial: BaseTrial | None, rank: int, train_dl: DataLoader) 
     )
 
     # Build and train VAE
-    vae_model = vae.SingleAntennaVAE(
+    vae_model = vae.MultiAntennaVAE(
+        settings.n_antennas,
         settings.train_window_size,
         settings.n_subcarriers,
         settings.n_categories,
@@ -215,7 +216,8 @@ def _run_test(
     best_model_path = util.get_best_model_path(Path(settings.study_path))
     best_params = util.get_vae_params(best_model_path)
 
-    vae_model = vae.SingleAntennaVAE(
+    vae_model = vae.MultiAntennaVAE(
+        settings.n_antennas,
         settings.train_window_size,
         settings.n_subcarriers,
         settings.n_categories,

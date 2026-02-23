@@ -1,118 +1,155 @@
+from typing import cast
+
 import torch
 import torch.nn.functional as func
 from torch import nn
 
-from csi_vae_gumbel.models.vae.single_antenna_vae import SingleAntennaVAE
 
-
-class MultiAntennaVAE(nn.Module):
-    """Multi-antenna categorical VAE with Gumbel-Softmax reparameterization."""
-
-    def __init__(
-        self,
-        window_size: int,
-        n_subcarriers: int,
-        n_antennas: int,
-        n_categories: int,
-        latent_dim: int,
-    ) -> None:
-        """Initialize the multi-antenna VAE model.
-
-        Arguments:
-            window_size: Size of the time window in the input data.
-            n_subcarriers: Number of subcarriers in the input data.
-            n_antennas: Number of antennas (views) in the input data.
-            n_categories: Number of categories for the categorical latent variables.
-            latent_dim: Dimensionality of the latent space.
-
-        """
+class AntennaEncoder(nn.Module):
+    def __init__(self, window_size: int, n_subcarriers: int, antenna_latent_dim: int) -> None:
         super().__init__()
         self.__window_size = window_size
         self.__n_subcarriers = n_subcarriers
-        self.__n_antennas = n_antennas
-        self.__n_categories = n_categories
-        self.__latent_dim = latent_dim
 
-        self.__antenna_vaes = nn.ModuleList(
-            [SingleAntennaVAE(window_size, n_subcarriers, n_categories, latent_dim) for _ in range(n_antennas)],
+        self.__conv = nn.Sequential(
+            nn.Conv2d(1, 16, kernel_size=(3, 8), stride=(2, 4), padding=(1, 2)),
+            nn.ReLU(),
+            nn.Conv2d(16, 32, kernel_size=(3, 5), stride=(2, 4), padding=(1, 2)),
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=3, stride=(2, 2), padding=1),
+            nn.ReLU(),
+            nn.Conv2d(64, 32, kernel_size=3, stride=(2, 3), padding=1),
+            nn.ReLU(),
+            nn.Flatten(),
+        )
+        _, flat_dim = self.get_shapes()
+
+        self.__mu = nn.Linear(flat_dim, antenna_latent_dim)
+        self.__logvar = nn.Linear(flat_dim, antenna_latent_dim)
+
+    def get_shapes(self) -> tuple[tuple, int]:
+        """Mock pass to find flattened size and required output_paddings."""
+        with torch.no_grad():
+            x = torch.zeros(1, 1, self.__window_size, self.__n_subcarriers)
+
+            # Trace Layer 1
+            l1 = self.__conv[0](x)
+            # Trace Layer 2
+            l2 = self.__conv[2](l1)
+            # Trace Layer 3
+            l3 = self.__conv[4](l2)
+            # Trace Layer 4
+            l4 = self.__conv[6](l3)
+
+            latent_feat_shape = l4.shape[1:]
+            flat_dim = int(torch.prod(torch.tensor(latent_feat_shape)).item())
+
+            return latent_feat_shape, flat_dim
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        x = x.unsqueeze(1)  # Add channel dimension: (Batch, 1, window_size, n_subcarriers)
+        z = self.__conv(x)
+        return self.__mu(z), self.__logvar(z)
+
+
+class AntennaDecoder(nn.Module):
+    def __init__(
+        self,
+        latent_feat_shape: tuple,
+        flat_dim: int,
+        antenna_latent_dim: int,
+    ) -> None:
+        super().__init__()
+
+        self.__latent_feat_shape = latent_feat_shape
+
+        # Decoder group
+        self.__fc = nn.Linear(antenna_latent_dim, flat_dim)
+        self.__deconv = nn.Sequential(
+            nn.ConvTranspose2d(32, 64, kernel_size=3, stride=(2, 3), padding=1, output_padding=(1, 1)),
+            nn.ReLU(),
+            nn.ConvTranspose2d(64, 32, kernel_size=3, stride=(2, 2), padding=1, output_padding=(0, 1)),
+            nn.ReLU(),
+            nn.ConvTranspose2d(32, 16, kernel_size=(3, 5), stride=(2, 4), padding=(1, 2), output_padding=(1, 3)),
+            nn.ReLU(),
+            nn.ConvTranspose2d(16, 1, kernel_size=(3, 8), stride=(2, 4), padding=(1, 2), output_padding=(0, 0)),
         )
 
-        self.__encoder_bottleneck = nn.Linear(n_antennas * n_categories * latent_dim, n_categories * latent_dim)
+    def forward(self, z: torch.Tensor) -> torch.Tensor:
+        # Map back to 4D tensor: [Batch, Channels, H, W]
+        z = func.relu(self.__fc(z))
+        z = z.view(-1, *self.__latent_feat_shape)
+        z = self.__deconv(z)
+        return z.squeeze(1)  # Remove channel dimension: (Batch, window_size, n_subcarriers)
 
-        self.__decoder_bottleneck = nn.Linear(n_categories * latent_dim, n_antennas * n_categories * latent_dim)
 
-    def encode(self, x: torch.Tensor) -> tuple[torch.Tensor, list[torch.Tensor]]:
-        """Encode input into logits for categorical distribution.
-
-        Arguments:
-            x: Input tensor of shape (batch_size, n_antennas, window_size, n_subcarriers)
-
-        Returns:
-            Logits tensor of shape (batch_size, n_antennas * latent_dim * n_categories)
-            The same logits but in list form, each item of shape (batch_size, latent_dim * n_categories)
-
-        """
-        logits = []
-        for i, vae in enumerate(self.__antenna_vaes):
-            logit = x[:, i : i + 1, :, :]  # Shape: (batch_size, 1, window_size, n_subcarriers)
-            logit = vae.encode(logit)  # pyright: ignore[reportCallIssue]
-            logits.append(logit)
-
-        return torch.cat(logits, dim=1), logits
-
-    def decode(self, z: torch.Tensor) -> tuple[torch.Tensor, list[torch.Tensor]]:
-        """Decode latent representation back to input space.
-
-        Arguments:
-            z: Latent tensor of shape (batch_size, latent_dim * n_categories)
-
-        Returns:
-            Reconstructed tensor of shape (batch_size, 1, window_size, n_subcarriers)
-            The latents input to each antenna's decoder, in list form,
-            each item of shape (batch_size, latent_dim * n_categories)
-
-        """
-        recon = []
-        latents_input = []
-        for i, vae in enumerate(self.__antenna_vaes):
-            zi = z[:, i * self.__n_categories * self.__latent_dim : (i + 1) * self.__n_categories * self.__latent_dim]
-            latents_input.append(zi)
-            zi = vae.decode(zi)  # pyright: ignore[reportCallIssue]
-            recon.append(zi)
-
-        return torch.cat(recon, dim=1), latents_input
-
-    def forward(
+class MultiAntennaVAE(nn.Module):
+    def __init__(
         self,
-        x: torch.Tensor,
-        tau: float = 1.0,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, list[torch.Tensor], list[torch.Tensor]]:
-        """Forward pass through the VAE.
+        n_antennas: int,
+        window_size: int,
+        n_subcarriers: int,
+        n_categories: int,
+        latent_dim: int,
+        antenna_latent_dim: int = 2,
+    ) -> None:
+        super().__init__()
 
-        Arguments:
-            x: Input tensor of shape (batch_size, 1, window_size, n_subcarriers)
-            tau: Temperature parameter for Gumbel-Softmax
+        self.__n_antennas = n_antennas
 
-        Returns:
-            recon: Reconstructed tensor of shape (batch_size, 1, window_size, n_subcarriers)
-            z_hard: One-hot latent tensor of shape (batch_size, latent_dim, n_categories)
-            logits: Logits tensor of shape (batch_size, latent_dim, n_categories)
-            encoder_latents: List of intermediate logits for each antenna
-            decoder_recons: List of intermediate reconstructions for each antenna
+        self.__antenna_encoders = nn.ModuleList(
+            [AntennaEncoder(window_size, n_subcarriers, antenna_latent_dim) for _ in range(n_antennas)],
+        )
+        self.__encoder_fc = nn.Linear(n_antennas * antenna_latent_dim, n_categories * latent_dim)
 
-        """
-        logits, logits_per_antenna = self.encode(x)
+        self.__decoder_fc = nn.Linear(n_categories * latent_dim, n_antennas * antenna_latent_dim)
+        latent_feat_shape, flat_dim = cast(
+            "AntennaEncoder",
+            self.__antenna_encoders[0],
+        ).get_shapes()
+        self.__antenna_decoders = nn.ModuleList(
+            [AntennaDecoder(latent_feat_shape, flat_dim, antenna_latent_dim) for _ in range(n_antennas)],
+        )
 
-        # Map to categorical logits
-        logits = self.__encoder_bottleneck(logits)
+    def __reparameterize(self, mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
+        std = torch.exp(0.5 * logvar.clamp(-10, 10))
+        eps = torch.randn_like(std)
+        return mu + eps * std
 
-        # Gumbel-Softmax sampling
+    def forward(self, x: torch.Tensor, tau: float = 1.0):
+        # x shape: (batch, n_antennas, input_dim)
+        batch_size = x.size(0)
+        all_mus, all_logvars, all_zs = [], [], []
+
+        # Step 1: Encode each antenna individually
+        for i in range(self.__n_antennas):
+            mu, logvar = self.__antenna_encoders[i](x[:, i])
+            z = self.__reparameterize(mu, logvar)
+            all_mus.append(mu)
+            all_logvars.append(logvar)
+            all_zs.append(z)
+
+        # Stack to (Batch, n_antennas, antenna_latent_dim)
+        mus = torch.stack(all_mus, dim=1)
+        logvars = torch.stack(all_logvars, dim=1)
+        zs = torch.stack(all_zs, dim=1)
+
+        # Step 2: Global Categorical Sampling
+        # Flatten latents: (Batch, n_antennas * antenna_latent_dim)
+        z_flattened = zs.view(batch_size, -1)
+        logits = self.__encoder_fc(z_flattened)
+
         z_hard = func.gumbel_softmax(logits, tau=tau, hard=True)
 
-        # Map back to combined latent space
-        recon = self.__decoder_bottleneck(z_hard)
+        recon = self.__decoder_fc(z_hard)
+        recon = recon.view(batch_size, self.__n_antennas, -1)
 
-        # Decode and stack
-        recon, latents_input = self.decode(recon)
+        # Reconstruction (Using the continuous latents zs)
+        all_recons = []
+        for i in range(self.__n_antennas):
+            recon_i = self.__antenna_decoders[i](recon[:, i])
+            all_recons.append(recon_i)
 
-        return recon, z_hard, logits, logits_per_antenna, latents_input
+        recons = torch.stack(all_recons, dim=1)  # (Batch, n_antennas, window_size, n_subcarriers)
+
+        return recons, mus, logvars, z_hard, logits
