@@ -8,6 +8,8 @@ def vae_loss(
     x_recon: torch.Tensor,
     x_true: torch.Tensor,
     logits: torch.Tensor,
+    mus: torch.Tensor,
+    logvars: torch.Tensor,
     kl_weight: float,
     capacity: float,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -17,6 +19,8 @@ def vae_loss(
         x_recon (torch.Tensor): Reconstructed input.
         x_true (torch.Tensor): True input.
         logits (torch.Tensor): Logits tensor for the categorical latent variables.
+        mus (torch.Tensor): Mean tensor for the Gaussian latents.
+        logvars (torch.Tensor): Log-variance tensor for the Gaussian latents.
         kl_weight (float): Weight for the KL divergence term.
         capacity (float): Capacity threshold for KL divergence.
 
@@ -38,10 +42,14 @@ def vae_loss(
     # KL(q || p), per sample
     kl_per_sample = dist.kl_divergence(q, p)
     kl_per_sample = kl_per_sample.view(logits.size(0), -1).sum(dim=1)
+
     if capacity > 0.0:
         kl_per_sample = nn.functional.relu(kl_per_sample - capacity)
     kl = kl_per_sample.mean()
 
-    total_loss = recon + kl_weight * kl
+    kl_gauss = -0.5 * torch.sum(1 + logvars - mus.pow(2) - logvars.exp(), dim=-1)
+    kl_gauss = kl_gauss.mean()
+
+    total_loss = recon + kl_weight * kl + 1e-8 * kl_gauss
 
     return total_loss, recon, kl

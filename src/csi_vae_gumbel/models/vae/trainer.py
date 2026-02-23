@@ -82,12 +82,14 @@ class Trainer:
         """
         self.__optimizer.zero_grad()
 
-        x_recon, _, _, _, logits = self.__model(x_true, tau)
+        x_recon, mus, logvars, _, logits = self.__model(x_true, tau)
 
         loss, recon_loss, kl_loss = vae_loss(
             x_recon,
             x_true,
             logits,
+            mus,
+            logvars,
             kl_weight=kl_weight,
             capacity=capacity,
         )

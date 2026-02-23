@@ -6,11 +6,22 @@ from torch import nn
 
 
 class AntennaEncoder(nn.Module):
+    """Encode a single-antenna CSI window into mean and log-variance vectors."""
+
     def __init__(self, window_size: int, n_subcarriers: int, antenna_latent_dim: int) -> None:
+        """Initialize the AntennaEncoder with convolutional layers and linear heads.
+
+        Arguments:
+            window_size: The size of the time window for CSI input.
+            n_subcarriers: The number of subcarriers in the CSI input.
+            antenna_latent_dim: The dimensionality of the latent space for each antenna
+
+        """
         super().__init__()
         self.__window_size = window_size
         self.__n_subcarriers = n_subcarriers
 
+        # Convolutional feature extractor over time-frequency input
         self.__conv = nn.Sequential(
             nn.Conv2d(1, 16, kernel_size=(3, 8), stride=(2, 4), padding=(1, 2)),
             nn.ReLU(),
@@ -22,43 +33,65 @@ class AntennaEncoder(nn.Module):
             nn.ReLU(),
             nn.Flatten(),
         )
+        # Infer flattened feature dimension for linear heads
         _, flat_dim = self.get_shapes()
 
+        # Linear heads for Gaussian parameters
         self.__mu = nn.Linear(flat_dim, antenna_latent_dim)
         self.__logvar = nn.Linear(flat_dim, antenna_latent_dim)
 
     def get_shapes(self) -> tuple[tuple, int]:
-        """Mock pass to find flattened size and required output_paddings."""
+        """Return the latent feature map shape and its flattened size.
+
+        Returns:
+            latent_feat_shape: The shape of the feature map after convolution (Channels, H, W).
+            flat_dim: The total number of features when the feature map is flattened.
+
+        """
         with torch.no_grad():
+            # Mock input to trace conv output shape
             x = torch.zeros(1, 1, self.__window_size, self.__n_subcarriers)
+            x = self.__conv[:-1](x)
 
-            # Trace Layer 1
-            l1 = self.__conv[0](x)
-            # Trace Layer 2
-            l2 = self.__conv[2](l1)
-            # Trace Layer 3
-            l3 = self.__conv[4](l2)
-            # Trace Layer 4
-            l4 = self.__conv[6](l3)
-
-            latent_feat_shape = l4.shape[1:]
+            latent_feat_shape = x.shape[1:]
             flat_dim = int(torch.prod(torch.tensor(latent_feat_shape)).item())
 
             return latent_feat_shape, flat_dim
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        x = x.unsqueeze(1)  # Add channel dimension: (Batch, 1, window_size, n_subcarriers)
+        """Compute mean and log-variance for a single-antenna input.
+
+        Arguments:
+            x: Input tensor of shape (batch_size, window_size, n_subcarriers) for one antenna.
+
+        Returns:
+            mu: Tensor of shape (batch_size, antenna_latent_dim) representing the mean of the latent distribution.
+            logvar: Tensor of shape (batch_size, antenna_latent_dim)
+
+        """
+        # Add channel dimension: (batch_size, 1, window_size, n_subcarriers)
+        x = x.unsqueeze(1)
         z = self.__conv(x)
         return self.__mu(z), self.__logvar(z)
 
 
 class AntennaDecoder(nn.Module):
+    """Decode a latent vector back into a CSI window for a single antenna."""
+
     def __init__(
         self,
         latent_feat_shape: tuple,
         flat_dim: int,
         antenna_latent_dim: int,
     ) -> None:
+        """Initialize the AntennaDecoder with linear and deconvolutional layers.
+
+        Arguments:
+            latent_feat_shape: The shape of the feature map before flattening in the encoder (Channels, H, W).
+            flat_dim: The total number of features when the feature map is flattened.
+            antenna_latent_dim: The dimensionality of the latent space for each antenna.
+
+        """
         super().__init__()
 
         self.__latent_feat_shape = latent_feat_shape
@@ -76,7 +109,16 @@ class AntennaDecoder(nn.Module):
         )
 
     def forward(self, z: torch.Tensor) -> torch.Tensor:
-        # Map back to 4D tensor: [Batch, Channels, H, W]
+        """Decode the latent vector into a CSI window.
+
+        Arguments:
+            z: Input tensor of shape (batch_size, antenna_latent_dim) representing the latent vector for one antenna.
+
+        Returns:
+            recon: Tensor of shape (batch_size, window_size, n_subcarriers)
+                   representing the reconstructed CSI window for one antenna.
+
+        """
         z = func.relu(self.__fc(z))
         z = z.view(-1, *self.__latent_feat_shape)
         z = self.__deconv(z)
@@ -84,6 +126,8 @@ class AntennaDecoder(nn.Module):
 
 
 class MultiAntennaVAE(nn.Module):
+    """VAE architecture that encodes multiple antennas separately and samples a global categorical latent variable."""
+
     def __init__(
         self,
         n_antennas: int,
@@ -91,11 +135,24 @@ class MultiAntennaVAE(nn.Module):
         n_subcarriers: int,
         n_categories: int,
         latent_dim: int,
-        antenna_latent_dim: int = 2,
+        antenna_latent_dim: int = 3,
     ) -> None:
+        """Initialize the MultiAntennaVAE with separate encoders/decoders for each antenna and a global sampling layer.
+
+        Arguments:
+            n_antennas: The total number of antennas in the input data.
+            window_size: The size of the time window for CSI input.
+            n_subcarriers: The number of subcarriers in the CSI input.
+            n_categories: The number of categories for the Gumbel-Softmax distribution (global latent variable).
+            latent_dim: The dimensionality of the global latent space after sampling.
+            antenna_latent_dim: The dimensionality of the latent space for each individual antenna.
+
+        """
         super().__init__()
 
         self.__n_antennas = n_antennas
+        self.__n_categories = n_categories
+        self.__latent_dim = latent_dim
 
         self.__antenna_encoders = nn.ModuleList(
             [AntennaEncoder(window_size, n_subcarriers, antenna_latent_dim) for _ in range(n_antennas)],
@@ -112,12 +169,35 @@ class MultiAntennaVAE(nn.Module):
         )
 
     def __reparameterize(self, mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
+        """Reparameterization trick to sample from the Gaussian distribution defined by mu and logvar."""
         std = torch.exp(0.5 * logvar.clamp(-10, 10))
         eps = torch.randn_like(std)
         return mu + eps * std
 
-    def forward(self, x: torch.Tensor, tau: float = 1.0):
-        # x shape: (batch, n_antennas, input_dim)
+    def forward(
+        self,
+        x: torch.Tensor,
+        tau: float = 1.0,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Encode the input, sample a global categorical latent variable, and decode to reconstruct the input.
+
+        Arguments:
+            x: Input tensor of shape (batch_size, n_antennas, window_size, n_subcarriers).
+            tau: The temperature parameter for the Gumbel-Softmax sampling.
+
+        Returns:
+            recons: Tensor of shape (batch_size, n_antennas, window_size, n_subcarriers)
+                    representing the reconstructed CSI windows for all antennas.
+            mus: Tensor of shape (batch_size, n_antennas, antenna_latent_dim)
+                 containing the mean vectors from each antenna encoder.
+            logvars: Tensor of shape (batch_size, n_antennas, antenna_latent_dim)
+                     containing the log-variance vectors from each antenna encoder.
+            z_hard: Tensor of shape (batch_size, n_categories, latent_dim)
+                    representing the one-hot encoded global latent variable sampled via Gumbel-Softmax.
+            logits: Tensor of shape (batch_size, n_categories, latent_dim)
+                    representing the pre-softmax logits for the global latent variable.
+
+        """
         batch_size = x.size(0)
         all_mus, all_logvars, all_zs = [], [], []
 
@@ -129,19 +209,20 @@ class MultiAntennaVAE(nn.Module):
             all_logvars.append(logvar)
             all_zs.append(z)
 
-        # Stack to (Batch, n_antennas, antenna_latent_dim)
+        # Stack to (batch_size, n_antennas, antenna_latent_dim)
         mus = torch.stack(all_mus, dim=1)
         logvars = torch.stack(all_logvars, dim=1)
         zs = torch.stack(all_zs, dim=1)
 
         # Step 2: Global Categorical Sampling
-        # Flatten latents: (Batch, n_antennas * antenna_latent_dim)
+        # Flatten latents: (batch_size, n_antennas * antenna_latent_dim)
         z_flattened = zs.view(batch_size, -1)
         logits = self.__encoder_fc(z_flattened)
 
-        z_hard = func.gumbel_softmax(logits, tau=tau, hard=True)
+        logits = logits.view(batch_size, self.__latent_dim, self.__n_categories)
+        z_hard = func.gumbel_softmax(logits, tau=tau, hard=True, dim=-1)
 
-        recon = self.__decoder_fc(z_hard)
+        recon = self.__decoder_fc(z_hard.view(batch_size, -1))
         recon = recon.view(batch_size, self.__n_antennas, -1)
 
         # Reconstruction (Using the continuous latents zs)
@@ -150,6 +231,6 @@ class MultiAntennaVAE(nn.Module):
             recon_i = self.__antenna_decoders[i](recon[:, i])
             all_recons.append(recon_i)
 
-        recons = torch.stack(all_recons, dim=1)  # (Batch, n_antennas, window_size, n_subcarriers)
+        recons = torch.stack(all_recons, dim=1)  # (batch_size, n_antennas, window_size, n_subcarriers)
 
         return recons, mus, logvars, z_hard, logits
