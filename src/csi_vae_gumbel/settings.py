@@ -45,9 +45,9 @@ class Settings(BaseSettings):
     """Specific antenna to select if only one is needed (0-indexed)."""
     n_subcarriers: int = 2048 // 8  # 2048 is original size, downsampled by 8
     """Number of subcarriers in each CSI sample."""
-    train_batch_size: int = 144
+    train_batch_size: int = 512
     """Batch size per GPU for training both VAE and classifier."""
-    vae_n_epochs: int = 150
+    vae_n_epochs: int = 100
     """Number of training epochs for the VAE."""
     classifier_n_epochs: int = 50
     """Number of training epochs for the classifier."""
@@ -67,17 +67,17 @@ class Settings(BaseSettings):
     """Minimum latent dimension size."""
     latent_dim_max: int = 5
     """Maximum latent dimension size."""
-    final_kl_weight_min: float = 5e-3
+    final_kl_weight_min: float = 5e-4
     """Minimum final KL divergence weight in loss computation."""
-    final_kl_weight_max: float = 5e-1
+    final_kl_weight_max: float = 5e-3
     """Maximum final KL divergence weight in loss computation."""
     final_cap_min: float = 0.5
     """Minimum final capacity in loss computation."""
-    final_cap_max: float = 3
+    final_cap_max: float = 2
     """Maximum final capacity in loss computation."""
     start_gumbel_temp_min: float = 2
     """Minimum Gumbel-Softmax temperature."""
-    start_gumbel_temp_max: float = 4
+    start_gumbel_temp_max: float = 3
     """Maximum Gumbel-Softmax temperature."""
 
     @property

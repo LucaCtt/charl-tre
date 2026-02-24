@@ -1,6 +1,5 @@
 import torch
 from torch import distributions as dist
-from torch import nn
 from torch.nn import functional as func
 
 
@@ -30,26 +29,20 @@ def vae_loss(
 
     """
     # Reconstruction loss
-    recon = func.binary_cross_entropy_with_logits(x_recon, x_true, reduction="mean")
+    recon = func.mse_loss(x_recon, x_true, reduction="mean")
 
-    # Posterior q(y|x)
-    q = dist.Categorical(logits=logits)
-
-    # Prior p(y): uniform categorical
+    # Categorical KL with capacity control
     num_classes = logits.size(-1)
+    q = dist.Categorical(logits=logits)
     p = dist.Categorical(probs=torch.full_like(logits, 1.0 / num_classes))
-
-    # KL(q || p), per sample
-    kl_per_sample = dist.kl_divergence(q, p)
-    kl_per_sample = kl_per_sample.view(logits.size(0), -1).sum(dim=1)
-
+    kl_cat = dist.kl_divergence(q, p).view(logits.size(0), -1).sum(dim=1).mean()
     if capacity > 0.0:
-        kl_per_sample = nn.functional.relu(kl_per_sample - capacity)
-    kl = kl_per_sample.mean()
+        kl_cat = torch.clamp(kl_cat - capacity, min=0.0)
 
-    kl_gauss = -0.5 * torch.sum(1 + logvars - mus.pow(2) - logvars.exp(), dim=-1)
-    kl_gauss = kl_gauss.mean()
+    # Gaussian KL for antenna latents
+    logvars = logvars.clamp(-10, 10)  # Clamp for numerical stability
+    kl_gauss = -0.5 * torch.sum(1 + logvars - mus.pow(2) - logvars.exp(), dim=(1, 2)).mean()
 
-    total_loss = recon + kl_weight * kl + 1e-8 * kl_gauss
+    total_loss = recon + kl_weight * (kl_cat + 1e-3 * kl_gauss)
 
-    return total_loss, recon, kl
+    return total_loss, recon, kl_cat

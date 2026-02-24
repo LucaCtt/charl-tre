@@ -18,8 +18,7 @@ from torch.utils.data import DataLoader, DistributedSampler
 from csi_vae_gumbel import util
 from csi_vae_gumbel.collapse_pruner import CollapsePruner
 from csi_vae_gumbel.dataset import CSIDataset, load_datasets
-from csi_vae_gumbel.evaluator import Evaluator
-from csi_vae_gumbel.models import classifier, vae
+from csi_vae_gumbel.models import Evaluator, classifier, vae
 from csi_vae_gumbel.settings import Settings
 
 settings = Settings()
@@ -214,7 +213,7 @@ def _run_test(
     )
 
     best_model_path = util.get_best_model_path(Path(settings.study_path))
-    best_params = util.get_vae_params(best_model_path)
+    best_params = vae.Parameters(**util.get_vae_params(best_model_path))
 
     vae_model = vae.MultiAntennaVAE(
         settings.n_antennas,

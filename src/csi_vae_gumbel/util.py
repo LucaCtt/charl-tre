@@ -5,8 +5,6 @@ from pathlib import Path
 import torch
 from torch import distributed as dist
 
-from csi_vae_gumbel.models import vae
-
 
 def split_test_window(x: torch.Tensor, sample_window_size: int, overlap_size: int) -> torch.Tensor:
     """Split every x along the window size dimension into separate samples.
@@ -73,25 +71,27 @@ def get_best_model_path(study_path: Path) -> Path:
     return Path(study_path) / f"trial_{best_trial_number}"
 
 
-def get_vae_params(model_path: Path) -> vae.Parameters:
+def get_vae_params(model_path: Path) -> dict:
     """Get the VAE parameters from the given model path.
+
+    Note: this does not return a vae.Parameters object to avoid a circular dependency.
 
     Arguments:
         model_path: Path to the model directory containing the results.json file.
 
     Returns:
-        The VAE parameters as a vae.Parameters object.
+        The VAE parameters as a dictionary.
 
     """
     with (model_path / "results.json").open("r") as f:
         info = json.load(f)
 
-    return vae.Parameters(
-        final_cap=info["final_cap"],
-        start_gumbel_temp=info["start_gumbel_temp"],
-        final_kl_weight=info["final_kl_weight"],
-        latent_dim=info["latent_dim"],
-    )
+    return {
+        "final_cap": info["final_cap"],
+        "start_gumbel_temp": info["start_gumbel_temp"],
+        "final_kl_weight": info["final_kl_weight"],
+        "latent_dim": info["latent_dim"],
+    }
 
 
 def setup_ddp(rank: int, world_size: int) -> None:
@@ -105,7 +105,7 @@ def setup_ddp(rank: int, world_size: int) -> None:
     if "MASTER_ADDR" not in os.environ:
         os.environ["MASTER_ADDR"] = "localhost"
     if "MASTER_PORT" not in os.environ:
-        os.environ["MASTER_PORT"] = "12355"
+        os.environ["MASTER_PORT"] = "12356"
 
     acc = torch.accelerator.current_accelerator()
     if acc is None:

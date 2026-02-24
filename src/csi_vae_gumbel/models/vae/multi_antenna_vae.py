@@ -23,14 +23,12 @@ class AntennaEncoder(nn.Module):
 
         # Convolutional feature extractor over time-frequency input
         self.__conv = nn.Sequential(
-            nn.Conv2d(1, 16, kernel_size=(3, 8), stride=(2, 4), padding=(1, 2)),
-            nn.ReLU(),
-            nn.Conv2d(16, 32, kernel_size=(3, 5), stride=(2, 4), padding=(1, 2)),
-            nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=3, stride=(2, 2), padding=1),
-            nn.ReLU(),
-            nn.Conv2d(64, 32, kernel_size=3, stride=(2, 3), padding=1),
-            nn.ReLU(),
+            nn.Conv2d(1, 32, kernel_size=(5, 8), stride=(5, 8)),
+            nn.GELU(),
+            nn.Conv2d(32, 32, kernel_size=(5, 8), stride=(5, 8)),
+            nn.GELU(),
+            nn.Conv2d(32, 32, kernel_size=(3, 4), stride=(1, 1)),
+            nn.GELU(),
             nn.Flatten(),
         )
         # Infer flattened feature dimension for linear heads
@@ -99,13 +97,11 @@ class AntennaDecoder(nn.Module):
         # Decoder group
         self.__fc = nn.Linear(antenna_latent_dim, flat_dim)
         self.__deconv = nn.Sequential(
-            nn.ConvTranspose2d(32, 64, kernel_size=3, stride=(2, 3), padding=1, output_padding=(1, 1)),
-            nn.ReLU(),
-            nn.ConvTranspose2d(64, 32, kernel_size=3, stride=(2, 2), padding=1, output_padding=(0, 1)),
-            nn.ReLU(),
-            nn.ConvTranspose2d(32, 16, kernel_size=(3, 5), stride=(2, 4), padding=(1, 2), output_padding=(1, 3)),
-            nn.ReLU(),
-            nn.ConvTranspose2d(16, 1, kernel_size=(3, 8), stride=(2, 4), padding=(1, 2), output_padding=(0, 0)),
+            nn.ConvTranspose2d(32, 32, kernel_size=(3, 4), stride=(1, 1)),
+            nn.GELU(),
+            nn.ConvTranspose2d(32, 32, kernel_size=(5, 8), stride=(5, 8)),
+            nn.GELU(),
+            nn.ConvTranspose2d(32, 1, kernel_size=(5, 8), stride=(5, 8)),
         )
 
     def forward(self, z: torch.Tensor) -> torch.Tensor:
@@ -119,7 +115,7 @@ class AntennaDecoder(nn.Module):
                    representing the reconstructed CSI window for one antenna.
 
         """
-        z = func.relu(self.__fc(z))
+        z = func.gelu(self.__fc(z))
         z = z.view(-1, *self.__latent_feat_shape)
         z = self.__deconv(z)
         return z.squeeze(1)  # Remove channel dimension: (Batch, window_size, n_subcarriers)
@@ -159,11 +155,9 @@ class MultiAntennaVAE(nn.Module):
         )
         self.__encoder_fc = nn.Linear(n_antennas * antenna_latent_dim, n_categories * latent_dim)
 
+        latent_feat_shape, flat_dim = cast("AntennaEncoder", self.__antenna_encoders[0]).get_shapes()
+
         self.__decoder_fc = nn.Linear(n_categories * latent_dim, n_antennas * antenna_latent_dim)
-        latent_feat_shape, flat_dim = cast(
-            "AntennaEncoder",
-            self.__antenna_encoders[0],
-        ).get_shapes()
         self.__antenna_decoders = nn.ModuleList(
             [AntennaDecoder(latent_feat_shape, flat_dim, antenna_latent_dim) for _ in range(n_antennas)],
         )
@@ -199,38 +193,40 @@ class MultiAntennaVAE(nn.Module):
 
         """
         batch_size = x.size(0)
-        all_mus, all_logvars, all_zs = [], [], []
+        antenna_mus, antenna_logvars, antenna_latents = [], [], []
 
-        # Step 1: Encode each antenna individually
+        # Encode each antenna
         for i in range(self.__n_antennas):
             mu, logvar = self.__antenna_encoders[i](x[:, i])
             z = self.__reparameterize(mu, logvar)
-            all_mus.append(mu)
-            all_logvars.append(logvar)
-            all_zs.append(z)
+            antenna_mus.append(mu)
+            antenna_logvars.append(logvar)
+            antenna_latents.append(z)
 
         # Stack to (batch_size, n_antennas, antenna_latent_dim)
-        mus = torch.stack(all_mus, dim=1)
-        logvars = torch.stack(all_logvars, dim=1)
-        zs = torch.stack(all_zs, dim=1)
+        mus = torch.stack(antenna_mus, dim=1)
+        logvars = torch.stack(antenna_logvars, dim=1)
+        latents = torch.stack(antenna_latents, dim=1)
 
-        # Step 2: Global Categorical Sampling
-        # Flatten latents: (batch_size, n_antennas * antenna_latent_dim)
-        z_flattened = zs.view(batch_size, -1)
-        logits = self.__encoder_fc(z_flattened)
+        # Flatten and compute logits for global categorical sampling
+        flattened_latents = latents.view(batch_size, -1)
+        logits = self.__encoder_fc(flattened_latents)
 
+        # Global categorical sampling
         logits = logits.view(batch_size, self.__latent_dim, self.__n_categories)
         z_hard = func.gumbel_softmax(logits, tau=tau, hard=True, dim=-1)
 
-        recon = self.__decoder_fc(z_hard.view(batch_size, -1))
-        recon = recon.view(batch_size, self.__n_antennas, -1)
+        # Decode using the sampled global latent variable and unflatten
+        decoded_latents = self.__decoder_fc(z_hard.view(batch_size, -1))
+        decoded_latents = decoded_latents.view(batch_size, self.__n_antennas, -1)
 
-        # Reconstruction (Using the continuous latents zs)
-        all_recons = []
+        # Decode each antenna
+        antenna_recons = []
         for i in range(self.__n_antennas):
-            recon_i = self.__antenna_decoders[i](recon[:, i])
-            all_recons.append(recon_i)
+            recon_i = self.__antenna_decoders[i](decoded_latents[:, i])
+            antenna_recons.append(recon_i)
 
-        recons = torch.stack(all_recons, dim=1)  # (batch_size, n_antennas, window_size, n_subcarriers)
+        # Stack reconstructions to get (batch_size, n_antennas, window_size, n_subcarriers)
+        recon = torch.stack(antenna_recons, dim=1)
 
-        return recons, mus, logvars, z_hard, logits
+        return recon, mus, logvars, z_hard, logits

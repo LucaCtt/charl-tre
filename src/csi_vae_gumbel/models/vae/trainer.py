@@ -41,7 +41,7 @@ class Trainer:
         self.__dataloader = dataloader
         self.__optimizer = torch.optim.AdamW(
             self.__model.parameters(),
-            lr=1e-3,
+            lr=3e-3,
             weight_decay=1e-4,
         )
         self.__lr_annealer = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -90,8 +90,8 @@ class Trainer:
             logits,
             mus,
             logvars,
-            kl_weight=kl_weight,
-            capacity=capacity,
+            kl_weight,
+            capacity,
         )
 
         loss.backward()
