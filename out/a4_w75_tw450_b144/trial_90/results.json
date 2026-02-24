@@ -1,1 +1,0 @@
-{"trial_number": 90, "final_kl_weight": 0.15086424350738525, "latent_dim": 5, "final_cap": 2.5, "start_gumbel_temp": 3.239413022994995, "loss": 0.573112964630127, "recon_loss": 0.5723272562026978, "kl_loss": 0.3219313323497772}

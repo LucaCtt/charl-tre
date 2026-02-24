@@ -105,7 +105,7 @@ def setup_ddp(rank: int, world_size: int) -> None:
     if "MASTER_ADDR" not in os.environ:
         os.environ["MASTER_ADDR"] = "localhost"
     if "MASTER_PORT" not in os.environ:
-        os.environ["MASTER_PORT"] = "12356"
+        os.environ["MASTER_PORT"] = "12355"
 
     acc = torch.accelerator.current_accelerator()
     if acc is None:
