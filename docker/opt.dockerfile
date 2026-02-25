@@ -31,4 +31,4 @@ COPY README.md .
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev
 
-ENTRYPOINT ["uv", "run", "--no-dev", "train"]
+ENTRYPOINT ["uv", "run", "--no-dev", "opt"]

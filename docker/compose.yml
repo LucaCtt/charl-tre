@@ -4,10 +4,10 @@ services:
   train:
     build:
       context: ..
-      dockerfile: docker/dockerfile
-    container_name: csi_vae_gumbel_train
+      dockerfile: docker/opt.dockerfile
+    container_name: charl_tre_opt
     environment:
-      - MASTER_ADDR=csi_vae_gumbel_train
+      - MASTER_ADDR=charl_tre_opt
       - MASTER_PORT=12345
     env_file:
       - path: .env

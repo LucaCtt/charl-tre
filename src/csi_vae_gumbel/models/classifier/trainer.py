@@ -40,7 +40,7 @@ class Trainer:
         self.__gpu_id = gpu_id
         self.__criterion = nn.CrossEntropyLoss()
 
-        self.__optimizer = optim.Adam(self.__model.parameters(), lr=3e-3)
+        self.__optimizer = optim.Adam(self.__model.parameters(), lr=1e-3)
 
     def __run_batch(self, x: torch.Tensor, y: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Run a single training batch."""
