@@ -77,7 +77,7 @@ class CSIDataset(Dataset):
             self.__labels.append(label)
 
             # Build lazy sliding-window index
-            for start in range(csi.shape[0] - window_size + 1):
+            for start in range(0, csi.shape[0] - window_size + 1, window_size - 40):
                 self.__index_map.append((file_id, start))
 
     def __len__(self) -> int:

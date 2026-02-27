@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     """Specific antenna to select if only one is needed (0-indexed)."""
     n_subcarriers: int = 2048 // 8  # 2048 is original size, downsampled by 8
     """Number of subcarriers in each CSI sample."""
-    train_batch_size: int = 144
+    train_batch_size: int = 512
     """Batch size per GPU for training both VAE and classifier."""
     vae_n_epochs: int = 100
     """Number of training epochs for the VAE."""
@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     """Number of training epochs for the classifier."""
 
     # Optuna study settings
-    n_trials: int = 100
+    n_trials: int = 20
     """Number of Optuna trials for hyperparameter optimization."""
     n_categories: int = math.ceil(math.log2(len(activities)))
     """Number of categories for the Gumbel-Softmax distribution."""
