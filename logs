@@ -1,0 +1,13 @@
+[02/27/26 13:45:15] INFO     Loading dataset from dataset/S1...                                                                                         
+[02/27/26 13:46:10] INFO     Dataset loaded with 99912 training samples                                                                                 
+[02/27/26 13:46:21] INFO     A new study created in memory with name: a1_w75_tw450_b512_2                                                               
+[Gloo] Rank 0 is connected to 2 peer ranks. Expected number of connected peer ranks is : 2
+[Gloo] Rank 2 is connected to 2 peer ranks. Expected number of connected peer ranks is : 2
+[Gloo] Rank 1 is connected to 2 peer ranks. Expected number of connected peer ranks is : 2
+                    INFO     Starting trial 0                                                                                                           
+[02/27/26 13:57:40] INFO     VAE training completed for trial 0 with loss 0.6653, recon_loss 0.5406, kl_loss 6.4158                                     
+                    INFO     Trial 0 finished with value: 0.5406064987182617 and parameters: {'final_kl_weight': 0.028057582076672527, 'latent_dim': 6, 
+                             'final_cap': 2.9, 'start_gumbel_temp': 3.46398788362281}. Best is trial 0 with value: 0.5406064987182617.                  
+[02/27/26 13:57:41] INFO     Study done with 1 trials: 0 pruned, 1 complete.                                                                            
+                    INFO     Best trial #0: value=0.5406, params={'final_kl_weight': 0.028057582076672527, 'latent_dim': 6, 'final_cap': 2.9,           
+                             'start_gumbel_temp': 3.46398788362281}                                                                                     

@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     """Proportion of the dataset to be used for testing."""
     n_antennas: int = 1
     """Total number of antennas used."""
-    antenna_select: int = 0
+    antenna_select: int = 1
     """Specific antenna to select if only one is needed (0-indexed)."""
     n_subcarriers: int = 2048 // 8  # 2048 is original size, downsampled by 8
     """Number of subcarriers in each CSI sample."""
@@ -53,17 +53,17 @@ class Settings(BaseSettings):
     """Number of training epochs for the classifier."""
 
     # Optuna study settings
-    n_trials: int = 100
+    n_trials: int = 1
     """Number of Optuna trials for hyperparameter optimization."""
     n_categories: int = math.ceil(math.log2(len(activities)))
     """Number of categories for the Gumbel-Softmax distribution."""
-    study_name: str = f"a{n_antennas}_w{train_window_size}_tw{test_window_size}_b{train_batch_size}"
+    study_name: str = f"a{n_antennas}_w{train_window_size}_tw{test_window_size}_b{train_batch_size}_2"
     """Name of the VAE model, used for checkpointing."""
     study_path: str = f"out/{study_name}"
     """Directory to save model checkpoints."""
 
     # Optuna hyperparameter search space
-    latent_dim_min: int = 2
+    latent_dim_min: int = 6
     """Minimum latent dimension size."""
     latent_dim_max: int = 6
     """Maximum latent dimension size."""
