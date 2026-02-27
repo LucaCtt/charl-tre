@@ -35,18 +35,22 @@ class Settings(BaseSettings):
     """Size of the window of CSI in a VAE train sample, where 150 CSI = 1 second of data."""
     test_window_size: int = 450
     """Size of the window of CSI in a classifier test sample, where 150 CSI = 1 second of data."""
-    test_overlap_size: int = 50
-    """Number of frames to overlap between train windows when splitting the test window."""
     test_ratio: float = 0.3
     """Proportion of the dataset to be used for testing."""
+    test_overlap_size: int = 50
+    """Overlap size between test windows."""
+    stride: int = 35
+    """Stride for sliding windows creation, for both train and testing."""
     n_antennas: int = 4
     """Total number of antennas used."""
     antenna_select: int = 0
     """Specific antenna to select if only one is needed (0-indexed)."""
     n_subcarriers: int = 2048 // 8  # 2048 is original size, downsampled by 8
     """Number of subcarriers in each CSI sample."""
-    train_batch_size: int = 144
-    """Batch size per GPU for training both VAE and classifier."""
+    antenna_latent_dim: int = 128
+    """Dimensionality of the latent space for each antenna in the VAE."""
+    batch_size: int = 144
+    """Batch size per GPU for training both VAE and classifier, and also for evaluation."""
     vae_n_epochs: int = 100
     """Number of training epochs for the VAE."""
     classifier_n_epochs: int = 50
@@ -57,19 +61,19 @@ class Settings(BaseSettings):
     """Number of Optuna trials for hyperparameter optimization."""
     n_categories: int = math.ceil(math.log2(len(activities)))
     """Number of categories for the Gumbel-Softmax distribution."""
-    study_name: str = f"a{n_antennas}_w{train_window_size}_tw{test_window_size}_b{train_batch_size}"
+    study_name: str = f"a{n_antennas}_w{train_window_size}_tw{test_window_size}_b{batch_size}_s{stride}"
     """Name of the VAE model, used for checkpointing."""
     study_path: str = f"out/{study_name}"
     """Directory to save model checkpoints."""
 
     # Optuna hyperparameter search space
-    latent_dim_min: int = 1
+    latent_dim_min: int = 40
     """Minimum latent dimension size."""
-    latent_dim_max: int = 5
+    latent_dim_max: int = 50
     """Maximum latent dimension size."""
-    final_kl_weight_min: float = 5e-4
+    final_kl_weight_min: float = 5e-3
     """Minimum final KL divergence weight in loss computation."""
-    final_kl_weight_max: float = 5e-3
+    final_kl_weight_max: float = 5e-2
     """Maximum final KL divergence weight in loss computation."""
     final_cap_min: float = 0.5
     """Minimum final capacity in loss computation."""

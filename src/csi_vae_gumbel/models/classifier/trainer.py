@@ -53,7 +53,7 @@ class Trainer:
             # so that we can feed them into the VAE.
             x_r = split_test_window(x, self.__sample_window_size, self.__overlap_size)
 
-            _, _, _, z_hard, _ = self.__vae(x_r)
+            _, z_hard, _, _ , _  = self.__vae(x_r)
 
             # (B * n_windows, latent_dim, n_categories) → (B, latent_dim * n_categories * n_windows)
             n_windows = x_r.shape[0] // original_batch_size

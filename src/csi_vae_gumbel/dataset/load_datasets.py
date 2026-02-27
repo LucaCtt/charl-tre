@@ -53,6 +53,7 @@ def load_datasets(
     n_antennas: int,
     antenna_select: int,
     test_ratio: float,
+    stride: int,
     seed: int,
 ) -> tuple[CSIDataset, CSIDataset]:
     """Build the CSI train/test datasets.
@@ -64,6 +65,7 @@ def load_datasets(
         n_antennas: Number of antennas to use from the CSI data.
         antenna_select: Antenna selection strategy.
         test_ratio: Ratio of the dataset to allocate to the test set (default: 0.3).
+        stride: Stride of the sliding window.
         seed: Random seed for reproducibility of dataset creation and augmentation (default: 42).
 
     Returns:
@@ -81,6 +83,7 @@ def load_datasets(
         window_size=window_size,
         n_antennas=n_antennas,
         antenna_select=antenna_select,
+        stride=stride,
         seed=seed,
     )
 
@@ -89,8 +92,9 @@ def load_datasets(
         window_size=window_size,
         n_antennas=n_antennas,
         antenna_select=antenna_select,
-        augment_probability=0.0,
+        stride=stride,
         seed=seed,
+        augment_probability=0.0,
     )
 
     return train_dataset, test_dataset

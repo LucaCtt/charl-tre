@@ -28,6 +28,7 @@ dev = [
 ]
 
 [project.scripts]
+train-antennas = "csi_vae_gumbel.main:train_antennas"
 opt = "csi_vae_gumbel.main:opt"
 test = "csi_vae_gumbel.main:test"
 causal-full = "csi_vae_gumbel.causal_analysis_full:main"

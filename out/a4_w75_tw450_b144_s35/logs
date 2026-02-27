@@ -1,0 +1,451 @@
+[02/27/26 01:03:39] INFO     Loading dataset from dataset/S1...                 
+[02/27/26 01:04:35] INFO     Dataset loaded with 2856 training samples          
+[02/27/26 01:04:48] INFO     A new study created in memory with name: a4_w75_tw450_b144_s35                                                             
+[Gloo] Rank 0 is connected to 2 peer ranks. Expected number of connected peer ranks is : 2
+[Gloo] Rank 1 is connected to 2 peer ranks. Expected number of connected peer ranks is : 2
+[Gloo] Rank 2 is connected to 2 peer ranks. Expected number of connected peer ranks is : 2
+                    INFO     Starting trial 0                                                                                                           
+[02/27/26 01:06:11] INFO     VAE training completed for trial 0 with loss 0.0910, recon_loss 0.0740, kl_loss 0.6413                                     
+                    INFO     Trial 0 finished with value: 0.07403714954853058 and parameters: {'final_kl_weight': 0.01184431975182039, 'latent_dim': 50,
+                             'final_cap': 1.5, 'start_gumbel_temp': 2.5986584841970366}. Best is trial 0 with value: 0.07403714954853058.               
+                    INFO     Starting trial 1                                                                                                           
+[02/27/26 01:07:32] INFO     VAE training completed for trial 1 with loss 0.0901, recon_loss 0.0733, kl_loss 0.7047                                     
+                    INFO     Trial 1 finished with value: 0.07327602058649063 and parameters: {'final_kl_weight': 0.007161246859115127, 'latent_dim':   
+                             41, 'final_cap': 0.5, 'start_gumbel_temp': 2.866176145774935}. Best is trial 1 with value: 0.07327602058649063.            
+                    INFO     Starting trial 2                                                                                                           
+[02/27/26 01:08:53] INFO     VAE training completed for trial 2 with loss 0.0909, recon_loss 0.0742, kl_loss 0.4405                                     
+                    INFO     Trial 2 finished with value: 0.07424122840166092 and parameters: {'final_kl_weight': 0.019956529392808398, 'latent_dim':   
+                             47, 'final_cap': 0.5, 'start_gumbel_temp': 2.969909852161994}. Best is trial 1 with value: 0.07327602058649063.            
+                    INFO     Starting trial 3                                                                                                           
+[02/27/26 01:10:15] INFO     VAE training completed for trial 3 with loss 0.0909, recon_loss 0.0742, kl_loss 0.6345                                     
+                    INFO     Trial 3 finished with value: 0.07420047372579575 and parameters: {'final_kl_weight': 0.033994812107955644, 'latent_dim':   
+                             42, 'final_cap': 0.7, 'start_gumbel_temp': 2.1834045098534336}. Best is trial 1 with value: 0.07327602058649063.           
+[02/27/26 01:10:16] INFO     Starting trial 4                                                                                                           
+[02/27/26 01:11:38] INFO     VAE training completed for trial 4 with loss 0.0901, recon_loss 0.0734, kl_loss 0.9397                                     
+                    INFO     Trial 4 finished with value: 0.07335001230239868 and parameters: {'final_kl_weight': 0.010074238942079334, 'latent_dim':   
+                             45, 'final_cap': 1.1, 'start_gumbel_temp': 2.291229140198042}. Best is trial 1 with value: 0.07327602058649063.            
+[02/27/26 01:11:39] INFO     Starting trial 5                                                                                                           
+[02/27/26 01:13:02] INFO     VAE training completed for trial 5 with loss 0.0911, recon_loss 0.0743, kl_loss 0.7348                                     
+                    INFO     Trial 5 finished with value: 0.07433344423770905 and parameters: {'final_kl_weight': 0.020456102872218926, 'latent_dim':   
+                             41, 'final_cap': 0.9, 'start_gumbel_temp': 2.3663618432936917}. Best is trial 1 with value: 0.07327602058649063.           
+                    INFO     Starting trial 6                                                                                                           
+[02/27/26 01:14:24] INFO     VAE training completed for trial 6 with loss 0.0905, recon_loss 0.0738, kl_loss 0.4497                                     
+[02/27/26 01:14:25] INFO     Trial 6 finished with value: 0.0738271027803421 and parameters: {'final_kl_weight': 0.014290255329034685, 'latent_dim': 48,
+                             'final_cap': 0.7, 'start_gumbel_temp': 2.5142344384136117}. Best is trial 1 with value: 0.07327602058649063.               
+                    INFO     Starting trial 7                                                                                                           
+[02/27/26 01:15:46] INFO     VAE training completed for trial 7 with loss 0.0902, recon_loss 0.0735, kl_loss 0.8863                                     
+[02/27/26 01:15:47] INFO     Trial 7 finished with value: 0.07354190200567245 and parameters: {'final_kl_weight': 0.019560708142748476, 'latent_dim':   
+                             40, 'final_cap': 1.3, 'start_gumbel_temp': 2.1705241236872914}. Best is trial 1 with value: 0.07327602058649063.           
+                    INFO     Starting trial 8                                                                                                           
+[02/27/26 01:17:09] INFO     VAE training completed for trial 8 with loss 0.0902, recon_loss 0.0734, kl_loss 0.8047                                     
+                    INFO     Trial 8 finished with value: 0.07341710478067398 and parameters: {'final_kl_weight': 0.005807932994623226, 'latent_dim':   
+                             50, 'final_cap': 1.9, 'start_gumbel_temp': 2.8083973481164612}. Best is trial 1 with value: 0.07327602058649063.           
+                    INFO     Starting trial 9                                                                                                           
+[02/27/26 01:18:31] INFO     VAE training completed for trial 9 with loss 0.0894, recon_loss 0.0727, kl_loss 0.8724                                     
+[02/27/26 01:18:32] INFO     Trial 9 finished with value: 0.07270226627588272 and parameters: {'final_kl_weight': 0.0100828608459043, 'latent_dim': 41, 
+                             'final_cap': 1.5, 'start_gumbel_temp': 2.4401524937396015}. Best is trial 9 with value: 0.07270226627588272.               
+                    INFO     Starting trial 10                                                                                                          
+[02/27/26 01:19:54] INFO     VAE training completed for trial 10 with loss 0.0909, recon_loss 0.0742, kl_loss 1.3036                                    
+                    INFO     Trial 10 finished with value: 0.07417269796133041 and parameters: {'final_kl_weight': 0.044066296123673326, 'latent_dim':  
+                             44, 'final_cap': 1.9, 'start_gumbel_temp': 2.0179618756148194}. Best is trial 9 with value: 0.07270226627588272.           
+                    INFO     Starting trial 11                                                                                                          
+[02/27/26 01:21:16] INFO     VAE training completed for trial 11 with loss 0.0896, recon_loss 0.0729, kl_loss 0.9207                                    
+                    INFO     Trial 11 finished with value: 0.07286848872900009 and parameters: {'final_kl_weight': 0.006615308670978365, 'latent_dim':  
+                             43, 'final_cap': 1.5, 'start_gumbel_temp': 2.6891090388809067}. Best is trial 9 with value: 0.07270226627588272.           
+                    INFO     Starting trial 12                                                                                                          
+[02/27/26 01:22:38] INFO     VAE training completed for trial 12 with loss 0.0908, recon_loss 0.0740, kl_loss 0.7611                                    
+                    INFO     Trial 12 finished with value: 0.0740271657705307 and parameters: {'final_kl_weight': 0.007901327967216232, 'latent_dim':   
+                             43, 'final_cap': 1.5, 'start_gumbel_temp': 2.6971558983400943}. Best is trial 9 with value: 0.07270226627588272.           
+[02/27/26 01:22:39] INFO     Starting trial 13                                                                                                          
+[02/27/26 01:24:02] INFO     VAE training completed for trial 13 with loss 0.0892, recon_loss 0.0726, kl_loss 0.5278                                    
+                    INFO     Trial 13 finished with value: 0.07264940440654755 and parameters: {'final_kl_weight': 0.005502072259373537, 'latent_dim':  
+                             43, 'final_cap': 1.5, 'start_gumbel_temp': 2.416715103869677}. Best is trial 13 with value: 0.07264940440654755.           
+                    INFO     Starting trial 14                                                                                                          
+[02/27/26 01:25:25] INFO     VAE training completed for trial 14 with loss 0.0895, recon_loss 0.0727, kl_loss 0.7962                                    
+                    INFO     Trial 14 finished with value: 0.07269392162561417 and parameters: {'final_kl_weight': 0.005229920261340088, 'latent_dim':  
+                             40, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.40004105979641}. Best is trial 13 with value:                  
+                             0.07264940440654755.                                                                                                       
+                    INFO     Starting trial 15                                                                                                          
+[02/27/26 01:26:47] INFO     VAE training completed for trial 15 with loss 0.0894, recon_loss 0.0727, kl_loss 0.6737                                    
+                    INFO     Trial 15 finished with value: 0.07272041589021683 and parameters: {'final_kl_weight': 0.0057650666044566055, 'latent_dim': 
+                             45, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.2802385898319972}. Best is trial 13 with value:                
+                             0.07264940440654755.                                                                                                       
+[02/27/26 01:26:48] INFO     Starting trial 16                                                                                                          
+[02/27/26 01:28:10] INFO     VAE training completed for trial 16 with loss 0.0898, recon_loss 0.0730, kl_loss 1.0454                                    
+                    INFO     Trial 16 finished with value: 0.07298048585653305 and parameters: {'final_kl_weight': 0.005178605883279787, 'latent_dim':  
+                             40, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.4982681567817}. Best is trial 13 with value:                   
+                             0.07264940440654755.                                                                                                       
+                    INFO     Starting trial 17                                                                                                          
+[02/27/26 01:29:32] INFO     VAE training completed for trial 17 with loss 0.0898, recon_loss 0.0731, kl_loss 1.5498                                    
+                    INFO     Trial 17 finished with value: 0.07308123260736465 and parameters: {'final_kl_weight': 0.008766878045448616, 'latent_dim':  
+                             43, 'final_cap': 1.3, 'start_gumbel_temp': 2.0152203367770625}. Best is trial 13 with value: 0.07264940440654755.          
+[02/27/26 01:29:33] INFO     Starting trial 18                                                                                                          
+[02/27/26 01:30:54] INFO     VAE training completed for trial 18 with loss 0.0894, recon_loss 0.0725, kl_loss 0.8870                                    
+                    INFO     Trial 18 finished with value: 0.07254613935947418 and parameters: {'final_kl_weight': 0.005302974016230136, 'latent_dim':  
+                             47, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.379093316140067}. Best is trial 18 with value:                 
+                             0.07254613935947418.                                                                                                       
+                    INFO     Starting trial 19                                                                                                          
+[02/27/26 01:32:16] INFO     VAE training completed for trial 19 with loss 0.0900, recon_loss 0.0733, kl_loss 0.5830                                    
+                    INFO     Trial 19 finished with value: 0.07328639924526215 and parameters: {'final_kl_weight': 0.026841379588859734, 'latent_dim':  
+                             48, 'final_cap': 1.1, 'start_gumbel_temp': 2.5972821933555754}. Best is trial 18 with value: 0.07254613935947418.          
+                    INFO     Starting trial 20                                                                                                          
+[02/27/26 01:33:38] INFO     VAE training completed for trial 20 with loss 0.0900, recon_loss 0.0731, kl_loss 0.6587                                    
+[02/27/26 01:33:39] INFO     Trial 20 finished with value: 0.07312412559986115 and parameters: {'final_kl_weight': 0.012953409762615513, 'latent_dim':  
+                             46, 'final_cap': 1.9, 'start_gumbel_temp': 2.1655562813853777}. Best is trial 18 with value: 0.07254613935947418.          
+                    INFO     Starting trial 21                                                                                                          
+[02/27/26 01:35:01] INFO     VAE training completed for trial 21 with loss 0.0894, recon_loss 0.0727, kl_loss 1.0167                                    
+                    INFO     Trial 21 finished with value: 0.07271482795476913 and parameters: {'final_kl_weight': 0.005473367985368236, 'latent_dim':  
+                             47, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.3773940326632954}. Best is trial 18 with value:                
+                             0.07254613935947418.                                                                                                       
+                    INFO     Starting trial 22                                                                                                          
+[02/27/26 01:36:23] INFO     VAE training completed for trial 22 with loss 0.0897, recon_loss 0.0728, kl_loss 0.5937                                    
+                    INFO     Trial 22 finished with value: 0.07280396670103073 and parameters: {'final_kl_weight': 0.006720601320511137, 'latent_dim':  
+                             46, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.2961020792877718}. Best is trial 18 with value:                
+                             0.07254613935947418.                                                                                                       
+                    INFO     Starting trial 23                                                                                                          
+[02/27/26 01:37:45] INFO     VAE training completed for trial 23 with loss 0.0903, recon_loss 0.0731, kl_loss 0.6419                                    
+                    INFO     Trial 23 finished with value: 0.07309320569038391 and parameters: {'final_kl_weight': 0.005061314379260729, 'latent_dim':  
+                             44, 'final_cap': 1.3, 'start_gumbel_temp': 2.4131721414592495}. Best is trial 18 with value: 0.07254613935947418.          
+[02/27/26 01:37:46] INFO     Starting trial 24                                                                                                          
+[02/27/26 01:39:08] INFO     VAE training completed for trial 24 with loss 0.0911, recon_loss 0.0741, kl_loss 0.6200                                    
+                    INFO     Trial 24 finished with value: 0.0741015300154686 and parameters: {'final_kl_weight': 0.008980455632612043, 'latent_dim':   
+                             42, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.5160286386845208}. Best is trial 18 with value:                
+                             0.07254613935947418.                                                                                                       
+                    INFO     Starting trial 25                                                                                                          
+[02/27/26 01:40:31] INFO     VAE training completed for trial 25 with loss 0.0901, recon_loss 0.0733, kl_loss 0.9596                                    
+                    INFO     Trial 25 finished with value: 0.07332751154899597 and parameters: {'final_kl_weight': 0.0068270814613682635, 'latent_dim': 
+                             49, 'final_cap': 1.5, 'start_gumbel_temp': 2.2579729174566188}. Best is trial 18 with value: 0.07254613935947418.          
+                    INFO     Starting trial 26                                                                                                          
+[02/27/26 01:41:52] INFO     VAE training completed for trial 26 with loss 0.0898, recon_loss 0.0727, kl_loss 0.5689                                    
+                    INFO     Trial 26 finished with value: 0.07274145632982254 and parameters: {'final_kl_weight': 0.007766781715141869, 'latent_dim':  
+                             45, 'final_cap': 1.9, 'start_gumbel_temp': 2.6264789135516162}. Best is trial 18 with value: 0.07254613935947418.          
+                    INFO     Starting trial 27                                                                                                          
+[02/27/26 01:43:14] INFO     VAE training completed for trial 27 with loss 0.0895, recon_loss 0.0728, kl_loss 0.8216                                    
+                    INFO     Trial 27 finished with value: 0.07284688949584961 and parameters: {'final_kl_weight': 0.00632610795895286, 'latent_dim':   
+                             42, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.461072920011811}. Best is trial 18 with value:                 
+                             0.07254613935947418.                                                                                                       
+                    INFO     Starting trial 28                                                                                                          
+[02/27/26 01:44:37] INFO     VAE training completed for trial 28 with loss 0.0911, recon_loss 0.0744, kl_loss 0.8047                                    
+                    INFO     Trial 28 finished with value: 0.07439902424812317 and parameters: {'final_kl_weight': 0.010738628186170092, 'latent_dim':  
+                             46, 'final_cap': 1.3, 'start_gumbel_temp': 2.356703969708071}. Best is trial 18 with value: 0.07254613935947418.           
+                    INFO     Starting trial 29                                                                                                          
+[02/27/26 01:45:58] INFO     VAE training completed for trial 29 with loss 0.0898, recon_loss 0.0728, kl_loss 0.8268                                    
+                    INFO     Trial 29 finished with value: 0.07284119725227356 and parameters: {'final_kl_weight': 0.00506015362336017, 'latent_dim':   
+                             49, 'final_cap': 1.5, 'start_gumbel_temp': 2.576854780122964}. Best is trial 18 with value: 0.07254613935947418.           
+[02/27/26 01:45:59] INFO     Starting trial 30                                                                                                          
+[02/27/26 01:47:20] INFO     VAE training completed for trial 30 with loss 0.0901, recon_loss 0.0732, kl_loss 0.7520                                    
+                    INFO     Trial 30 finished with value: 0.07319515943527222 and parameters: {'final_kl_weight': 0.008459334822081886, 'latent_dim':  
+                             44, 'final_cap': 1.9, 'start_gumbel_temp': 2.0926213858292093}. Best is trial 18 with value: 0.07254613935947418.          
+[02/27/26 01:47:21] INFO     Starting trial 31                                                                                                          
+[02/27/26 01:48:43] INFO     VAE training completed for trial 31 with loss 0.0905, recon_loss 0.0737, kl_loss 1.3141                                    
+                    INFO     Trial 31 finished with value: 0.07366017997264862 and parameters: {'final_kl_weight': 0.010000011459081148, 'latent_dim':  
+                             41, 'final_cap': 1.5, 'start_gumbel_temp': 2.4374891874649913}. Best is trial 18 with value: 0.07254613935947418.          
+                    INFO     Starting trial 32                                                                                                          
+[02/27/26 01:50:04] INFO     VAE training completed for trial 32 with loss 0.0904, recon_loss 0.0738, kl_loss 0.6436                                    
+                    INFO     Trial 32 finished with value: 0.07376886159181595 and parameters: {'final_kl_weight': 0.011941172671827146, 'latent_dim':  
+                             40, 'final_cap': 1.5, 'start_gumbel_temp': 2.3417838774168387}. Best is trial 18 with value: 0.07254613935947418.          
+[02/27/26 01:50:05] INFO     Starting trial 33                                                                                                          
+[02/27/26 01:51:27] INFO     VAE training completed for trial 33 with loss 0.0895, recon_loss 0.0728, kl_loss 1.0687                                    
+                    INFO     Trial 33 finished with value: 0.07275989651679993 and parameters: {'final_kl_weight': 0.006062715577554234, 'latent_dim':  
+                             41, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.4429642086276178}. Best is trial 18 with value:                
+                             0.07254613935947418.                                                                                                       
+                    INFO     Starting trial 34                                                                                                          
+[02/27/26 01:52:49] INFO     VAE training completed for trial 34 with loss 0.0896, recon_loss 0.0730, kl_loss 1.1383                                    
+                    INFO     Trial 34 finished with value: 0.07297467440366745 and parameters: {'final_kl_weight': 0.007728398319806111, 'latent_dim':  
+                             42, 'final_cap': 1.5, 'start_gumbel_temp': 2.227330451957974}. Best is trial 18 with value: 0.07254613935947418.           
+                    INFO     Starting trial 35                                                                                                          
+[02/27/26 01:54:11] INFO     VAE training completed for trial 35 with loss 0.0918, recon_loss 0.0745, kl_loss 0.6895                                    
+                    INFO     Trial 35 finished with value: 0.07452891021966934 and parameters: {'final_kl_weight': 0.017265165021609283, 'latent_dim':  
+                             40, 'final_cap': 1.1, 'start_gumbel_temp': 2.5454283591043665}. Best is trial 18 with value: 0.07254613935947418.          
+                    INFO     Starting trial 36                                                                                                          
+[02/27/26 01:55:33] INFO     VAE training completed for trial 36 with loss 0.0899, recon_loss 0.0731, kl_loss 0.7898                                    
+                    INFO     Trial 36 finished with value: 0.07307492941617966 and parameters: {'final_kl_weight': 0.007133966726106444, 'latent_dim':  
+                             41, 'final_cap': 1.3, 'start_gumbel_temp': 2.397346168811429}. Best is trial 18 with value: 0.07254613935947418.           
+                    INFO     Starting trial 37                                                                                                          
+[02/27/26 01:56:55] INFO     VAE training completed for trial 37 with loss 0.0911, recon_loss 0.0745, kl_loss 0.6462                                    
+                    INFO     Trial 37 finished with value: 0.07447222620248795 and parameters: {'final_kl_weight': 0.009484965570585853, 'latent_dim':  
+                             41, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.989461255532115}. Best is trial 18 with value:                 
+                             0.07254613935947418.                                                                                                       
+                    INFO     Starting trial 38                                                                                                          
+[02/27/26 01:58:17] INFO     VAE training completed for trial 38 with loss 0.0912, recon_loss 0.0743, kl_loss 0.8562                                    
+                    INFO     Trial 38 finished with value: 0.07427506148815155 and parameters: {'final_kl_weight': 0.011425080636275562, 'latent_dim':  
+                             43, 'final_cap': 0.9, 'start_gumbel_temp': 2.6638896383707005}. Best is trial 18 with value: 0.07254613935947418.          
+                    INFO     Starting trial 39                                                                                                          
+[02/27/26 01:59:39] INFO     VAE training completed for trial 39 with loss 0.0908, recon_loss 0.0741, kl_loss 0.9474                                    
+                    INFO     Trial 39 finished with value: 0.07414457201957703 and parameters: {'final_kl_weight': 0.015099817069171679, 'latent_dim':  
+                             42, 'final_cap': 1.5, 'start_gumbel_temp': 2.3259723918910606}. Best is trial 18 with value: 0.07254613935947418.          
+                    INFO     Starting trial 40                                                                                                          
+[02/27/26 02:01:01] INFO     VAE training completed for trial 40 with loss 0.0900, recon_loss 0.0730, kl_loss 0.6572                                    
+                    INFO     Trial 40 finished with value: 0.07303155958652496 and parameters: {'final_kl_weight': 0.005885530045759983, 'latent_dim':  
+                             40, 'final_cap': 1.9, 'start_gumbel_temp': 2.742948832936198}. Best is trial 18 with value: 0.07254613935947418.           
+                    INFO     Starting trial 41                                                                                                          
+[02/27/26 02:02:23] INFO     VAE training completed for trial 41 with loss 0.0899, recon_loss 0.0732, kl_loss 0.7660                                    
+                    INFO     Trial 41 finished with value: 0.07315836101770401 and parameters: {'final_kl_weight': 0.005367313956635376, 'latent_dim':  
+                             47, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.4671715959821836}. Best is trial 18 with value:                
+                             0.07254613935947418.                                                                                                       
+                    INFO     Starting trial 42                                                                                                          
+[02/27/26 02:03:45] INFO     VAE training completed for trial 42 with loss 0.0899, recon_loss 0.0731, kl_loss 0.7870                                    
+                    INFO     Trial 42 finished with value: 0.07312944531440735 and parameters: {'final_kl_weight': 0.005647984254999176, 'latent_dim':  
+                             47, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.388583667557246}. Best is trial 18 with value:                 
+                             0.07254613935947418.                                                                                                       
+                    INFO     Starting trial 43                                                                                                          
+[02/27/26 02:05:07] INFO     VAE training completed for trial 43 with loss 0.0904, recon_loss 0.0734, kl_loss 0.8802                                    
+                    INFO     Trial 43 finished with value: 0.07335875183343887 and parameters: {'final_kl_weight': 0.00636560367612338, 'latent_dim':   
+                             47, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.2040701458815004}. Best is trial 18 with value:                
+                             0.07254613935947418.                                                                                                       
+                    INFO     Starting trial 44                                                                                                          
+[02/27/26 02:06:29] INFO     VAE training completed for trial 44 with loss 0.0911, recon_loss 0.0744, kl_loss 0.8856                                    
+                    INFO     Trial 44 finished with value: 0.0743732899427414 and parameters: {'final_kl_weight': 0.02450272650489192, 'latent_dim': 49,
+                             'final_cap': 1.9, 'start_gumbel_temp': 2.3359878646738848}. Best is trial 18 with value: 0.07254613935947418.              
+                    INFO     Starting trial 45                                                                                                          
+[02/27/26 02:07:51] INFO     VAE training completed for trial 45 with loss 0.0905, recon_loss 0.0738, kl_loss 0.8294                                    
+                    INFO     Trial 45 finished with value: 0.0737970843911171 and parameters: {'final_kl_weight': 0.0074319426848693335, 'latent_dim':  
+                             48, 'final_cap': 0.5, 'start_gumbel_temp': 2.503181511897057}. Best is trial 18 with value: 0.07254613935947418.           
+                    INFO     Starting trial 46                                                                                                          
+[02/27/26 02:09:13] INFO     VAE training completed for trial 46 with loss 0.0898, recon_loss 0.0729, kl_loss 0.4443                                    
+                    INFO     Trial 46 finished with value: 0.07292657345533371 and parameters: {'final_kl_weight': 0.005571078757019266, 'latent_dim':  
+                             48, 'final_cap': 1.5, 'start_gumbel_temp': 2.4191589211774094}. Best is trial 18 with value: 0.07254613935947418.          
+                    INFO     Starting trial 47                                                                                                          
+[02/27/26 02:10:35] INFO     VAE training completed for trial 47 with loss 0.0910, recon_loss 0.0743, kl_loss 0.4862                                    
+                    INFO     Trial 47 finished with value: 0.07429243624210358 and parameters: {'final_kl_weight': 0.04245774304890073, 'latent_dim':   
+                             46, 'final_cap': 1.5, 'start_gumbel_temp': 2.3011245309811117}. Best is trial 18 with value: 0.07254613935947418.          
+                    INFO     Starting trial 48                                                                                                          
+[02/27/26 02:11:56] INFO     VAE training completed for trial 48 with loss 0.0892, recon_loss 0.0725, kl_loss 0.5568                                    
+                    INFO     Trial 48 finished with value: 0.07250290364027023 and parameters: {'final_kl_weight': 0.006292485997461441, 'latent_dim':  
+                             45, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.245994170989573}. Best is trial 48 with value:                 
+                             0.07250290364027023.                                                                                                       
+                    INFO     Starting trial 49                                                                                                          
+[02/27/26 02:13:17] INFO     VAE training completed for trial 49 with loss 0.0914, recon_loss 0.0745, kl_loss 0.7833                                    
+                    INFO     Trial 49 finished with value: 0.0744955986738205 and parameters: {'final_kl_weight': 0.0084471255341488, 'latent_dim': 44, 
+                             'final_cap': 1.3, 'start_gumbel_temp': 2.245721965376223}. Best is trial 48 with value: 0.07250290364027023.               
+                    INFO     Starting trial 50                                                                                                          
+[02/27/26 02:14:40] INFO     VAE training completed for trial 50 with loss 0.0904, recon_loss 0.0736, kl_loss 0.8211                                    
+                    INFO     Trial 50 finished with value: 0.07361768186092377 and parameters: {'final_kl_weight': 0.013420800679124524, 'latent_dim':  
+                             45, 'final_cap': 1.9, 'start_gumbel_temp': 2.1402016995404556}. Best is trial 48 with value: 0.07250290364027023.          
+                    INFO     Starting trial 51                                                                                                          
+[02/27/26 02:16:01] INFO     VAE training completed for trial 51 with loss 0.0897, recon_loss 0.0730, kl_loss 0.8224                                    
+                    INFO     Trial 51 finished with value: 0.07298596948385239 and parameters: {'final_kl_weight': 0.005005639560215597, 'latent_dim':  
+                             46, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.363993896596305}. Best is trial 48 with value:                 
+                             0.07250290364027023.                                                                                                       
+                    INFO     Starting trial 52                                                                                                          
+[02/27/26 02:17:23] INFO     VAE training completed for trial 52 with loss 0.0896, recon_loss 0.0729, kl_loss 0.6144                                    
+                    INFO     Trial 52 finished with value: 0.07290427386760712 and parameters: {'final_kl_weight': 0.006316428567325345, 'latent_dim':  
+                             47, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.481182680433555}. Best is trial 48 with value:                 
+                             0.07250290364027023.                                                                                                       
+                    INFO     Starting trial 53                                                                                                          
+[02/27/26 02:18:44] INFO     VAE training completed for trial 53 with loss 0.0895, recon_loss 0.0728, kl_loss 0.7390                                    
+                    INFO     Trial 53 finished with value: 0.07282736897468567 and parameters: {'final_kl_weight': 0.006932572252111467, 'latent_dim':  
+                             43, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.5365094485213646}. Best is trial 48 with value:                
+                             0.07250290364027023.                                                                                                       
+                    INFO     Starting trial 54                                                                                                          
+[02/27/26 02:20:06] INFO     VAE training completed for trial 54 with loss 0.0899, recon_loss 0.0730, kl_loss 0.5522                                    
+                    INFO     Trial 54 finished with value: 0.07300468534231186 and parameters: {'final_kl_weight': 0.005531794970902829, 'latent_dim':  
+                             45, 'final_cap': 1.5, 'start_gumbel_temp': 2.3800803729483198}. Best is trial 48 with value: 0.07250290364027023.          
+                    INFO     Starting trial 55                                                                                                          
+[02/27/26 02:21:28] INFO     VAE training completed for trial 55 with loss 0.0898, recon_loss 0.0730, kl_loss 0.6400                                    
+                    INFO     Trial 55 finished with value: 0.07298630475997925 and parameters: {'final_kl_weight': 0.005767530882856059, 'latent_dim':  
+                             44, 'final_cap': 1.9, 'start_gumbel_temp': 2.2756819798482617}. Best is trial 48 with value: 0.07250290364027023.          
+                    INFO     Starting trial 56                                                                                                          
+[02/27/26 02:22:49] INFO     VAE training completed for trial 56 with loss 0.0904, recon_loss 0.0732, kl_loss 0.5002                                    
+                    INFO     Trial 56 finished with value: 0.07323241233825684 and parameters: {'final_kl_weight': 0.006233539410657837, 'latent_dim':  
+                             50, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.8645440342049153}. Best is trial 48 with value:                
+                             0.07250290364027023.                                                                                                       
+[02/27/26 02:22:50] INFO     Starting trial 57                                                                                                          
+[02/27/26 02:24:10] INFO     VAE training completed for trial 57 with loss 0.0900, recon_loss 0.0732, kl_loss 0.6066                                    
+                    INFO     Trial 57 finished with value: 0.07323825359344482 and parameters: {'final_kl_weight': 0.0071975802848871515, 'latent_dim': 
+                             41, 'final_cap': 1.5, 'start_gumbel_temp': 2.0922751349959032}. Best is trial 48 with value: 0.07250290364027023.          
+[02/27/26 02:24:11] INFO     Starting trial 58                                                                                                          
+[02/27/26 02:25:32] INFO     VAE training completed for trial 58 with loss 0.0906, recon_loss 0.0741, kl_loss 0.8014                                    
+                    INFO     Trial 58 finished with value: 0.0740799754858017 and parameters: {'final_kl_weight': 0.005369368840654025, 'latent_dim':   
+                             48, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.3195475407480926}. Best is trial 48 with value:                
+                             0.07250290364027023.                                                                                                       
+[02/27/26 02:25:33] INFO     Starting trial 59                                                                                                          
+[02/27/26 02:26:53] INFO     VAE training completed for trial 59 with loss 0.0898, recon_loss 0.0730, kl_loss 0.5135                                    
+                    INFO     Trial 59 finished with value: 0.07298260927200317 and parameters: {'final_kl_weight': 0.006534304844026834, 'latent_dim':  
+                             40, 'final_cap': 1.3, 'start_gumbel_temp': 2.439482772301823}. Best is trial 48 with value: 0.07250290364027023.           
+                    INFO     Starting trial 60                                                                                                          
+[02/27/26 02:28:14] INFO     VAE training completed for trial 60 with loss 0.0901, recon_loss 0.0731, kl_loss 0.6739                                    
+                    INFO     Trial 60 finished with value: 0.07313922047615051 and parameters: {'final_kl_weight': 0.007819926583429811, 'latent_dim':  
+                             42, 'final_cap': 1.9, 'start_gumbel_temp': 2.5795266955125205}. Best is trial 48 with value: 0.07250290364027023.          
+                    INFO     Starting trial 61                                                                                                          
+[02/27/26 02:29:36] INFO     VAE training completed for trial 61 with loss 0.0900, recon_loss 0.0731, kl_loss 0.5424                                    
+                    INFO     Trial 61 finished with value: 0.07310383021831512 and parameters: {'final_kl_weight': 0.005930511338066167, 'latent_dim':  
+                             46, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.2784180606459294}. Best is trial 48 with value:                
+                             0.07250290364027023.                                                                                                       
+                    INFO     Starting trial 62                                                                                                          
+[02/27/26 02:30:57] INFO     VAE training completed for trial 62 with loss 0.0894, recon_loss 0.0727, kl_loss 0.4319                                    
+                    INFO     Trial 62 finished with value: 0.07270202040672302 and parameters: {'final_kl_weight': 0.005018247039618895, 'latent_dim':  
+                             44, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.2041856093850396}. Best is trial 48 with value:                
+                             0.07250290364027023.                                                                                                       
+                    INFO     Starting trial 63                                                                                                          
+[02/27/26 02:32:19] INFO     VAE training completed for trial 63 with loss 0.0912, recon_loss 0.0741, kl_loss 1.1654                                    
+                    INFO     Trial 63 finished with value: 0.07410316169261932 and parameters: {'final_kl_weight': 0.005262150064676348, 'latent_dim':  
+                             44, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.207797200813355}. Best is trial 48 with value:                 
+                             0.07250290364027023.                                                                                                       
+                    INFO     Starting trial 64                                                                                                          
+[02/27/26 02:33:41] INFO     VAE training completed for trial 64 with loss 0.0904, recon_loss 0.0733, kl_loss 0.6915                                    
+                    INFO     Trial 64 finished with value: 0.07333596795797348 and parameters: {'final_kl_weight': 0.0050953733924579605, 'latent_dim': 
+                             45, 'final_cap': 1.5, 'start_gumbel_temp': 2.1111045400564477}. Best is trial 48 with value: 0.07250290364027023.          
+                    INFO     Starting trial 65                                                                                                          
+[02/27/26 02:35:01] INFO     VAE training completed for trial 65 with loss 0.0913, recon_loss 0.0742, kl_loss 0.8380                                    
+                    INFO     Trial 65 finished with value: 0.07419423758983612 and parameters: {'final_kl_weight': 0.006711242089555922, 'latent_dim':  
+                             43, 'final_cap': 1.9, 'start_gumbel_temp': 2.409064637196667}. Best is trial 48 with value: 0.07250290364027023.           
+[02/27/26 02:35:02] INFO     Starting trial 66                                                                                                          
+[02/27/26 02:36:23] INFO     VAE training completed for trial 66 with loss 0.0895, recon_loss 0.0728, kl_loss 1.1620                                    
+                    INFO     Trial 66 finished with value: 0.07279576361179352 and parameters: {'final_kl_weight': 0.005955635883906941, 'latent_dim':  
+                             44, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.18325920166131}. Best is trial 48 with value:                  
+                             0.07250290364027023.                                                                                                       
+                    INFO     Starting trial 67                                                                                                          
+[02/27/26 02:37:45] INFO     VAE training completed for trial 67 with loss 0.0901, recon_loss 0.0733, kl_loss 1.0299                                    
+                    INFO     Trial 67 finished with value: 0.07325509190559387 and parameters: {'final_kl_weight': 0.008280146447882965, 'latent_dim':  
+                             45, 'final_cap': 1.5, 'start_gumbel_temp': 2.234396231923649}. Best is trial 48 with value: 0.07250290364027023.           
+                    INFO     Starting trial 68                                                                                                          
+[02/27/26 02:39:06] INFO     VAE training completed for trial 68 with loss 0.0904, recon_loss 0.0738, kl_loss 0.6758                                    
+                    INFO     Trial 68 finished with value: 0.0738225132226944 and parameters: {'final_kl_weight': 0.00933031110459263, 'latent_dim': 43,
+                             'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.3628129425205326}. Best is trial 48 with value:                    
+                             0.07250290364027023.                                                                                                       
+                    INFO     Starting trial 69                                                                                                          
+[02/27/26 02:40:26] INFO     VAE training completed for trial 69 with loss 0.0899, recon_loss 0.0730, kl_loss 0.9374                                    
+                    INFO     Trial 69 finished with value: 0.07302801311016083 and parameters: {'final_kl_weight': 0.0054733474489632485, 'latent_dim': 
+                             40, 'final_cap': 0.9, 'start_gumbel_temp': 2.057221053557878}. Best is trial 48 with value: 0.07250290364027023.           
+                    INFO     Starting trial 70                                                                                                          
+[02/27/26 02:41:47] INFO     VAE training completed for trial 70 with loss 0.0901, recon_loss 0.0732, kl_loss 1.4551                                    
+                    INFO     Trial 70 finished with value: 0.07323598116636276 and parameters: {'final_kl_weight': 0.005006375785166835, 'latent_dim':  
+                             42, 'final_cap': 1.1, 'start_gumbel_temp': 2.3012232165482382}. Best is trial 48 with value: 0.07250290364027023.          
+                    INFO     Starting trial 71                                                                                                          
+[02/27/26 02:43:08] INFO     VAE training completed for trial 71 with loss 0.0909, recon_loss 0.0742, kl_loss 0.5670                                    
+                    INFO     Trial 71 finished with value: 0.07423324137926102 and parameters: {'final_kl_weight': 0.006106688029627211, 'latent_dim':  
+                             45, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.2618766283642233}. Best is trial 48 with value:                
+                             0.07250290364027023.                                                                                                       
+                    INFO     Starting trial 72                                                                                                          
+[02/27/26 02:44:29] INFO     VAE training completed for trial 72 with loss 0.0901, recon_loss 0.0729, kl_loss 1.3358                                    
+                    INFO     Trial 72 finished with value: 0.07291827350854874 and parameters: {'final_kl_weight': 0.006837878353591647, 'latent_dim':  
+                             44, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.1527640188089547}. Best is trial 48 with value:                
+                             0.07250290364027023.                                                                                                       
+[02/27/26 02:44:30] INFO     Starting trial 73                                                                                                          
+[02/27/26 02:45:51] INFO     VAE training completed for trial 73 with loss 0.0901, recon_loss 0.0734, kl_loss 0.6104                                    
+                    INFO     Trial 73 finished with value: 0.07342257350683212 and parameters: {'final_kl_weight': 0.0056621475184673205, 'latent_dim': 
+                             45, 'final_cap': 1.9, 'start_gumbel_temp': 2.318454493802404}. Best is trial 48 with value: 0.07250290364027023.           
+                    INFO     Starting trial 74                                                                                                          
+[02/27/26 02:47:12] INFO     VAE training completed for trial 74 with loss 0.0902, recon_loss 0.0734, kl_loss 0.8092                                    
+                    INFO     Trial 74 finished with value: 0.073447085916996 and parameters: {'final_kl_weight': 0.007260302346649848, 'latent_dim': 46,
+                             'final_cap': 1.5, 'start_gumbel_temp': 2.466888099725305}. Best is trial 48 with value: 0.07250290364027023.               
+                    INFO     Starting trial 75                                                                                                          
+[02/27/26 02:48:33] INFO     VAE training completed for trial 75 with loss 0.0895, recon_loss 0.0727, kl_loss 0.8056                                    
+                    INFO     Trial 75 finished with value: 0.0727490782737732 and parameters: {'final_kl_weight': 0.005271288649513634, 'latent_dim':   
+                             44, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.3442404589551473}. Best is trial 48 with value:                
+                             0.07250290364027023.                                                                                                       
+[02/27/26 02:48:34] INFO     Starting trial 76                                                                                                          
+[02/27/26 02:49:55] INFO     VAE training completed for trial 76 with loss 0.0900, recon_loss 0.0730, kl_loss 0.4860                                    
+                    INFO     Trial 76 finished with value: 0.07295321673154831 and parameters: {'final_kl_weight': 0.006506047705012158, 'latent_dim':  
+                             47, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.4217548918706004}. Best is trial 48 with value:                
+                             0.07250290364027023.                                                                                                       
+                    INFO     Starting trial 77                                                                                                          
+[02/27/26 02:51:16] INFO     VAE training completed for trial 77 with loss 0.0915, recon_loss 0.0745, kl_loss 0.8089                                    
+                    INFO     Trial 77 finished with value: 0.0744812935590744 and parameters: {'final_kl_weight': 0.017642800586537978, 'latent_dim':   
+                             45, 'final_cap': 1.9, 'start_gumbel_temp': 2.393276863541248}. Best is trial 48 with value: 0.07250290364027023.           
+                    INFO     Starting trial 78                                                                                                          
+[02/27/26 02:52:37] INFO     VAE training completed for trial 78 with loss 0.0897, recon_loss 0.0729, kl_loss 0.7526                                    
+                    INFO     Trial 78 finished with value: 0.07290399074554443 and parameters: {'final_kl_weight': 0.005834139749150594, 'latent_dim':  
+                             41, 'final_cap': 1.5, 'start_gumbel_temp': 2.2096339217899277}. Best is trial 48 with value: 0.07250290364027023.          
+                    INFO     Starting trial 79                                                                                                          
+[02/27/26 02:53:57] INFO     VAE training completed for trial 79 with loss 0.0916, recon_loss 0.0743, kl_loss 0.5367                                    
+                    INFO     Trial 79 finished with value: 0.07434497028589249 and parameters: {'final_kl_weight': 0.010882795398929298, 'latent_dim':  
+                             46, 'final_cap': 1.5, 'start_gumbel_temp': 2.529313716169063}. Best is trial 48 with value: 0.07250290364027023.           
+[02/27/26 02:53:58] INFO     Starting trial 80                                                                                                          
+[02/27/26 02:55:18] INFO     VAE training completed for trial 80 with loss 0.0892, recon_loss 0.0725, kl_loss 0.6668                                    
+                    INFO     Trial 80 finished with value: 0.07254285365343094 and parameters: {'final_kl_weight': 0.005409417347138101, 'latent_dim':  
+                             43, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.3748287913596773}. Best is trial 48 with value:                
+                             0.07250290364027023.                                                                                                       
+[02/27/26 02:55:19] INFO     Starting trial 81                                                                                                          
+[02/27/26 02:56:40] INFO     VAE training completed for trial 81 with loss 0.0899, recon_loss 0.0729, kl_loss 0.7579                                    
+                    INFO     Trial 81 finished with value: 0.07294373959302902 and parameters: {'final_kl_weight': 0.0054208103213671845, 'latent_dim': 
+                             43, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.492888628827995}. Best is trial 48 with value:                 
+                             0.07250290364027023.                                                                                                       
+                    INFO     Starting trial 82                                                                                                          
+[02/27/26 02:58:01] INFO     VAE training completed for trial 82 with loss 0.0897, recon_loss 0.0727, kl_loss 0.6204                                    
+                    INFO     Trial 82 finished with value: 0.07265080511569977 and parameters: {'final_kl_weight': 0.0061761690266451666, 'latent_dim': 
+                             47, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.374344308187515}. Best is trial 48 with value:                 
+                             0.07250290364027023.                                                                                                       
+                    INFO     Starting trial 83                                                                                                          
+[02/27/26 02:59:22] INFO     VAE training completed for trial 83 with loss 0.0897, recon_loss 0.0730, kl_loss 0.7185                                    
+                    INFO     Trial 83 finished with value: 0.07298470288515091 and parameters: {'final_kl_weight': 0.006099183085366925, 'latent_dim':  
+                             47, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.371847078027078}. Best is trial 48 with value:                 
+                             0.07250290364027023.                                                                                                       
+[02/27/26 02:59:23] INFO     Starting trial 84                                                                                                          
+[02/27/26 03:00:44] INFO     VAE training completed for trial 84 with loss 0.0908, recon_loss 0.0739, kl_loss 0.7181                                    
+                    INFO     Trial 84 finished with value: 0.07391893863677979 and parameters: {'final_kl_weight': 0.007568398735341137, 'latent_dim':  
+                             48, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.4628771699790972}. Best is trial 48 with value:                
+                             0.07250290364027023.                                                                                                       
+                    INFO     Starting trial 85                                                                                                          
+[02/27/26 03:02:05] INFO     VAE training completed for trial 85 with loss 0.0893, recon_loss 0.0727, kl_loss 0.7488                                    
+                    INFO     Trial 85 finished with value: 0.0727461501955986 and parameters: {'final_kl_weight': 0.005628439680969268, 'latent_dim':   
+                             43, 'final_cap': 1.9, 'start_gumbel_temp': 2.444825829181293}. Best is trial 48 with value: 0.07250290364027023.           
+                    INFO     Starting trial 86                                                                                                          
+[02/27/26 03:03:27] INFO     VAE training completed for trial 86 with loss 0.0906, recon_loss 0.0733, kl_loss 0.5739                                    
+                    INFO     Trial 86 finished with value: 0.07330216467380524 and parameters: {'final_kl_weight': 0.006415625254023286, 'latent_dim':  
+                             47, 'final_cap': 1.5, 'start_gumbel_temp': 2.4095456114008598}. Best is trial 48 with value: 0.07250290364027023.          
+                    INFO     Starting trial 87                                                                                                          
+[02/27/26 03:04:48] INFO     VAE training completed for trial 87 with loss 0.0894, recon_loss 0.0726, kl_loss 0.6459                                    
+                    INFO     Trial 87 finished with value: 0.0726265162229538 and parameters: {'final_kl_weight': 0.0050025985741727, 'latent_dim': 41, 
+                             'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.3507827283495293}. Best is trial 48 with value:                    
+                             0.07250290364027023.                                                                                                       
+[02/27/26 03:04:49] INFO     Starting trial 88                                                                                                          
+[02/27/26 03:06:09] INFO     VAE training completed for trial 88 with loss 0.0902, recon_loss 0.0735, kl_loss 0.5973                                    
+                    INFO     Trial 88 finished with value: 0.07348071038722992 and parameters: {'final_kl_weight': 0.005229749048275875, 'latent_dim':  
+                             41, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.3490496140971877}. Best is trial 48 with value:                
+                             0.07250290364027023.                                                                                                       
+                    INFO     Starting trial 89                                                                                                          
+[02/27/26 03:07:31] INFO     VAE training completed for trial 89 with loss 0.0896, recon_loss 0.0728, kl_loss 0.7284                                    
+                    INFO     Trial 89 finished with value: 0.0728452131152153 and parameters: {'final_kl_weight': 0.0059775336421986755, 'latent_dim':  
+                             42, 'final_cap': 1.9, 'start_gumbel_temp': 2.301589423694702}. Best is trial 48 with value: 0.07250290364027023.           
+                    INFO     Starting trial 90                                                                                                          
+[02/27/26 03:08:53] INFO     VAE training completed for trial 90 with loss 0.0913, recon_loss 0.0746, kl_loss 0.9707                                    
+                    INFO     Trial 90 finished with value: 0.07456542551517487 and parameters: {'final_kl_weight': 0.012552258065450203, 'latent_dim':  
+                             40, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.434521055367547}. Best is trial 48 with value:                 
+                             0.07250290364027023.                                                                                                       
+                    INFO     Starting trial 91                                                                                                          
+[02/27/26 03:10:14] INFO     VAE training completed for trial 91 with loss 0.0893, recon_loss 0.0725, kl_loss 1.1131                                    
+                    INFO     Trial 91 finished with value: 0.07253017276525497 and parameters: {'final_kl_weight': 0.005046613838842201, 'latent_dim':  
+                             41, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.377468870819918}. Best is trial 48 with value:                 
+                             0.07250290364027023.                                                                                                       
+                    INFO     Starting trial 92                                                                                                          
+[02/27/26 03:11:35] INFO     VAE training completed for trial 92 with loss 0.0893, recon_loss 0.0726, kl_loss 0.6465                                    
+                    INFO     Trial 92 finished with value: 0.07262329757213593 and parameters: {'final_kl_weight': 0.0053165038115901815, 'latent_dim': 
+                             41, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.388648422617219}. Best is trial 48 with value:                 
+                             0.07250290364027023.                                                                                                       
+[02/27/26 03:11:36] INFO     Starting trial 93                                                                                                          
+[02/27/26 03:12:57] INFO     VAE training completed for trial 93 with loss 0.0895, recon_loss 0.0729, kl_loss 1.0864                                    
+                    INFO     Trial 93 finished with value: 0.07291386276483536 and parameters: {'final_kl_weight': 0.0050062852556654125, 'latent_dim': 
+                             41, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.3913822877813216}. Best is trial 48 with value:                
+                             0.07250290364027023.                                                                                                       
+                    INFO     Starting trial 94                                                                                                          
+[02/27/26 03:14:18] INFO     VAE training completed for trial 94 with loss 0.0899, recon_loss 0.0732, kl_loss 0.6407                                    
+                    INFO     Trial 94 finished with value: 0.07317111641168594 and parameters: {'final_kl_weight': 0.005335090965707527, 'latent_dim':  
+                             40, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.328401652658503}. Best is trial 48 with value:                 
+                             0.07250290364027023.                                                                                                       
+                    INFO     Starting trial 95                                                                                                          
+[02/27/26 03:15:39] INFO     VAE training completed for trial 95 with loss 0.0906, recon_loss 0.0738, kl_loss 0.8563                                    
+                    INFO     Trial 95 finished with value: 0.07377739250659943 and parameters: {'final_kl_weight': 0.034266759956006934, 'latent_dim':  
+                             41, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.3735054169207537}. Best is trial 48 with value:                
+                             0.07250290364027023.                                                                                                       
+                    INFO     Starting trial 96                                                                                                          
+[02/27/26 03:17:01] INFO     VAE training completed for trial 96 with loss 0.0899, recon_loss 0.0731, kl_loss 0.8512                                    
+                    INFO     Trial 96 finished with value: 0.07310172915458679 and parameters: {'final_kl_weight': 0.0056593920434054625, 'latent_dim': 
+                             42, 'final_cap': 1.7000000000000002, 'start_gumbel_temp': 2.264182483749947}. Best is trial 48 with value:                 
+                             0.07250290364027023.                                                                                                       
+                    INFO     Starting trial 97                                                                                                          
+[02/27/26 03:18:22] INFO     VAE training completed for trial 97 with loss 0.0892, recon_loss 0.0725, kl_loss 0.5048                                    
+                    INFO     Trial 97 finished with value: 0.07251357287168503 and parameters: {'final_kl_weight': 0.006200742126334707, 'latent_dim':  
+                             40, 'final_cap': 1.9, 'start_gumbel_temp': 2.3519115003377125}. Best is trial 48 with value: 0.07250290364027023.          
+                    INFO     Starting trial 98                                                                                                          
+[02/27/26 03:19:43] INFO     VAE training completed for trial 98 with loss 0.0897, recon_loss 0.0730, kl_loss 0.7510                                    
+                    INFO     Trial 98 finished with value: 0.07299643009901047 and parameters: {'final_kl_weight': 0.006248375933832043, 'latent_dim':  
+                             40, 'final_cap': 1.9, 'start_gumbel_temp': 2.3402826685724367}. Best is trial 48 with value: 0.07250290364027023.          
+                    INFO     Starting trial 99                                                                                                          
+[02/27/26 03:21:05] INFO     VAE training completed for trial 99 with loss 0.0902, recon_loss 0.0731, kl_loss 0.6567                                    
+                    INFO     Trial 99 finished with value: 0.07305827736854553 and parameters: {'final_kl_weight': 0.006781678561597176, 'latent_dim':  
+                             40, 'final_cap': 1.9, 'start_gumbel_temp': 2.4151322472478243}. Best is trial 48 with value: 0.07250290364027023.          
+                    INFO     Study done with 100 trials: 0 pruned, 100 complete.                                                                        
+                    INFO     Best trial #48: value=0.0725, params={'final_kl_weight': 0.006292485997461441, 'latent_dim': 45, 'final_cap':              
+                             1.7000000000000002, 'start_gumbel_temp': 2.245994170989573}                                                                

@@ -12,6 +12,7 @@ import torch
 from optuna.trial import BaseTrial, TrialState
 from rich.logging import RichHandler
 from torch import distributed as dist
+from torch import nn
 from torch.multiprocessing.spawn import spawn
 from torch.utils.data import DataLoader, DistributedSampler
 
@@ -91,15 +92,31 @@ def _objective(single_trial: BaseTrial | None, rank: int, train_dl: DataLoader) 
         ),
     )
 
+    antennas = nn.ModuleList(
+        [
+            vae.SingleAntennaVAE(
+                settings.train_window_size,
+                settings.n_subcarriers,
+                settings.antenna_latent_dim,
+            )
+            for _ in range(settings.n_antennas)
+        ],
+    )
+    for i, antenna in enumerate(antennas):
+        antenna.to(rank)
+        antenna.load_state_dict(torch.load(Path(settings.study_path) / "antennas" / f"antenna_{i}.pt"))
+
+        for param in antenna.parameters():
+            param.requires_grad = False
+
     # Build and train VAE
     vae_model = vae.MultiAntennaVAE(
-        settings.n_antennas,
-        settings.train_window_size,
-        settings.n_subcarriers,
+        antennas,
         settings.n_categories,
         parameters.latent_dim,
+        settings.antenna_latent_dim,
     )
-    vae_trainer = vae.Trainer(vae_model, train_dl, parameters, rank, trial)
+    vae_trainer = vae.CategoricalTrainer(vae_model, train_dl, parameters, rank, trial)
     loss, recon_loss, kl_loss = vae_trainer.train(settings.vae_n_epochs)
 
     if rank == 0:
@@ -130,12 +147,48 @@ def _objective(single_trial: BaseTrial | None, rank: int, train_dl: DataLoader) 
     return recon_loss
 
 
+def _run_train_antenna(rank: int, world_size: int, train_ds: CSIDataset, antenna_id: int) -> None:
+    util.setup_ddp(rank, world_size)
+
+    train_dl = DataLoader(
+        train_ds,
+        batch_size=settings.batch_size,
+        sampler=DistributedSampler(train_ds, num_replicas=world_size, rank=rank, shuffle=True),
+        pin_memory=True,
+    )
+
+    # Build VAE model
+    vae_model = vae.SingleAntennaVAE(
+        settings.train_window_size,
+        settings.n_subcarriers,
+        settings.antenna_latent_dim,
+    )
+
+    vae_trainer = vae.GaussianTrainer(vae_model, train_dl, rank)
+    loss, kl_loss, recon_loss = vae_trainer.train(settings.vae_n_epochs)
+
+    if rank == 0:
+        logger.info(
+            "Training completed for antenna %d with loss %.4f, recon_loss %.4f, kl_loss %.4f",
+            antenna_id,
+            loss,
+            recon_loss,
+            kl_loss,
+        )
+
+        save_path = Path(settings.study_path) / "antennas"
+        save_path.mkdir(parents=True, exist_ok=True)
+        torch.save(vae_model.state_dict(), save_path / f"antenna_{antenna_id}.pt")
+
+    dist.destroy_process_group()
+
+
 def _run_optimize(rank: int, world_size: int, train_ds: CSIDataset) -> None:
     util.setup_ddp(rank, world_size)
 
     train_dl = DataLoader(
         train_ds,
-        batch_size=settings.train_batch_size,
+        batch_size=settings.batch_size,
         sampler=DistributedSampler(train_ds, num_replicas=world_size, rank=rank, shuffle=True),
         pin_memory=True,
     )
@@ -199,14 +252,14 @@ def _run_test(
 
     train_dl = DataLoader(
         train_ds,
-        batch_size=settings.train_batch_size,
+        batch_size=settings.batch_size,
         shuffle=False,
         sampler=DistributedSampler(train_ds, num_replicas=world_size, rank=rank, shuffle=True),
         pin_memory=True,
     )
     test_dl = DataLoader(
         test_ds,
-        batch_size=settings.train_batch_size,
+        batch_size=settings.batch_size,
         shuffle=False,
         sampler=DistributedSampler(test_ds, num_replicas=world_size, rank=rank, shuffle=False),
         pin_memory=True,
@@ -215,15 +268,34 @@ def _run_test(
     best_model_path = util.get_best_model_path(Path(settings.study_path))
     best_params = vae.Parameters(**util.get_vae_params(best_model_path))
 
+    antennas = nn.ModuleList(
+        [
+            vae.SingleAntennaVAE(
+                settings.train_window_size,
+                settings.n_subcarriers,
+                settings.antenna_latent_dim,
+            )
+            for _ in range(settings.n_antennas)
+        ],
+    )
+    for i, antenna in enumerate(antennas):
+        antenna.to(rank)
+        antenna.load_state_dict(
+            torch.load(Path(settings.study_path) / "antennas" / f"antenna_{i}.pt", weights_only=True),
+        )
+        for param in antenna.parameters():
+            param.requires_grad = False
+
     vae_model = vae.MultiAntennaVAE(
-        settings.n_antennas,
-        settings.train_window_size,
-        settings.n_subcarriers,
+        antennas,
         settings.n_categories,
         best_params.latent_dim,
+        settings.antenna_latent_dim,
     )
     best_model_weights = torch.load(best_model_path / "model.pt", weights_only=True)
     vae_model.load_state_dict(best_model_weights)
+    for param in vae_model.parameters():
+        param.requires_grad = False
 
     classifier_model = classifier.BasicNNClassifier(
         best_params.latent_dim * settings.n_categories * settings.n_train_windows_in_test,
@@ -268,6 +340,30 @@ def _run_test(
     dist.destroy_process_group()
 
 
+def train_antennas() -> None:
+    """Train a separate VAE for each antenna using DDP."""
+    logger.info("Loading dataset from %s...", settings.dataset_path)
+
+    for i in range(settings.n_antennas):
+        logger.info("Training VAE for antenna %d...", i)
+
+        train_ds, _ = load_datasets(
+            dataset_path=Path(settings.dataset_path),
+            window_size=settings.train_window_size,
+            test_ratio=settings.test_ratio,
+            n_activities=settings.n_activities,
+            n_antennas=1,
+            antenna_select=i,
+            stride=settings.stride,
+            seed=settings.seed,
+        )
+        logger.info("Dataset loaded with %d training samples", len(train_ds))
+
+        world_size = torch.cuda.device_count() if torch.cuda.is_available() else 1
+
+        spawn(_run_train_antenna, args=(world_size, train_ds, i), nprocs=world_size, join=True)
+
+
 def opt() -> None:
     """Run optuna optimization and evaluation for the CSI VAE model."""
     # Create datasets once and share across VAE training processes
@@ -279,6 +375,7 @@ def opt() -> None:
         n_activities=settings.n_activities,
         n_antennas=settings.n_antennas,
         antenna_select=settings.antenna_select,
+        stride=settings.stride,
         seed=settings.seed,
     )
     logger.info("Dataset loaded with %d training samples", len(train_ds))
@@ -299,6 +396,7 @@ def test() -> None:
         n_activities=settings.n_activities,
         n_antennas=settings.n_antennas,
         antenna_select=settings.antenna_select,
+        stride=settings.stride,
         seed=settings.seed,
     )
     logger.info("Datasets loaded with %d training samples and %d testing samples", len(train_ds), len(test_ds))

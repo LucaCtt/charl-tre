@@ -17,6 +17,7 @@ class CSIDataset(Dataset):
         window_size: int,
         n_antennas: int,
         antenna_select: int,
+        stride: int,
         seed: int,
         augment_probability: float = 0.3,
         normalize: bool = True,
@@ -29,9 +30,10 @@ class CSIDataset(Dataset):
             window_size: Size of the sliding window to extract from each sample.
             n_antennas: Total number of antennas used, either a single one or all of them.
             antenna_select: Specific antenna to select if only one is needed. If None, use all antennas.
+            stride: Stride of the sliding window.
+            seed: Random seed for reproducibility of data augmentation.
             augment_probability: Probability of applying data augmentation to the CSI data.
             normalize: Whether to normalize the CSI data by the global maximum value.
-            seed: Random seed for reproducibility of data augmentation.
 
         """
         self.__window_size = window_size
@@ -77,7 +79,7 @@ class CSIDataset(Dataset):
             self.__labels.append(label)
 
             # Build lazy sliding-window index
-            for start in range(csi.shape[0] - window_size + 1):
+            for start in range(0, csi.shape[0] - window_size + 1, stride):
                 self.__index_map.append((file_id, start))
 
     def __len__(self) -> int:

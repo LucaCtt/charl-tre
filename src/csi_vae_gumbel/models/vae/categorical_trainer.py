@@ -11,11 +11,11 @@ from csi_vae_gumbel.models.vae.annealers import (
     GumbelTemperatureAnnealer,
     KLWeightAnnealer,
 )
-from csi_vae_gumbel.models.vae.loss import vae_loss
+from csi_vae_gumbel.models.vae.loss import categorical_vae_loss
 from csi_vae_gumbel.models.vae.parameters import Parameters
 
 
-class Trainer:
+class CategoricalTrainer:
     """Trainer class for VAE model using Distributed Data Parallel (DDP)."""
 
     def __init__(
@@ -82,14 +82,14 @@ class Trainer:
         """
         self.__optimizer.zero_grad()
 
-        x_recon, mus, logvars, _, logits = self.__model(x_true, tau)
+        x_recon, _, logits, latents_pre, latents_post = self.__model(x_true, tau)
 
-        loss, recon_loss, kl_loss = vae_loss(
+        loss, recon_loss, kl_loss = categorical_vae_loss(
             x_recon,
             x_true,
             logits,
-            mus,
-            logvars,
+            latents_pre,
+            latents_post,
             kl_weight,
             capacity,
         )
