@@ -1,7 +1,10 @@
 from typing import cast
 
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import torch.nn.functional as func
+from sklearn.manifold import TSNE
 from torch import nn
 
 
@@ -161,6 +164,35 @@ class MultiAntennaVAE(nn.Module):
         self.__antenna_decoders = nn.ModuleList(
             [AntennaDecoder(latent_feat_shape, flat_dim, antenna_latent_dim) for _ in range(n_antennas)],
         )
+
+    def tsne(self, dl):
+        for encoder in self.__antenna_encoders:
+            encoder.eval()
+
+            latent_vectors = []
+            # Generate latent representations from the VAE
+            with torch.no_grad():
+                # Assuming you have input data, encode it to get latent vectors
+                # For demonstration, generating random latent vectors
+                for batch in dl:
+                    x = batch[0]
+                    mu, logvar = encoder(x)
+                    latent_vectors.append(self.__reparameterize(mu, logvar))
+                latent_vectors = torch.cat(latent_vectors, dim=0)
+            latent_np = latent_vectors.cpu().numpy()
+
+            # Apply t-SNE
+            tsne = TSNE(n_components=2, random_state=42)
+            latent_tsne = tsne.fit_transform(latent_np)
+
+            # Plot
+            plt.figure(figsize=(8, 6))
+            plt.scatter(latent_tsne[:, 0], latent_tsne[:, 1], alpha=0.6)
+            plt.xlabel("t-SNE 1")
+            plt.ylabel("t-SNE 2")
+            plt.title("t-SNE of VAE Latent Space")
+            plt.savefig("vae_latent_tsne.png")
+            plt.show()
 
     def __reparameterize(self, mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
         """Reparameterization trick to sample from the Gaussian distribution defined by mu and logvar."""
