@@ -19,7 +19,7 @@ from torch.utils.data import DataLoader, DistributedSampler
 from csi_vae_gumbel import util
 from csi_vae_gumbel.collapse_pruner import CollapsePruner
 from csi_vae_gumbel.dataset import CSIDataset, load_datasets
-from csi_vae_gumbel.models import Evaluator, classifier, vae
+from csi_vae_gumbel.models import Evaluator, categorical, classifier, gaussian
 from csi_vae_gumbel.settings import Settings
 
 settings = Settings()
@@ -66,7 +66,7 @@ def _objective(single_trial: BaseTrial | None, rank: int, train_dl: DataLoader) 
     if rank == 0:
         logger.info("Starting trial %s", trial.number)
 
-    parameters = vae.Parameters(
+    parameters = categorical.Parameters(
         final_kl_weight=trial.suggest_float(
             "final_kl_weight",
             settings.final_kl_weight_min,
@@ -94,7 +94,7 @@ def _objective(single_trial: BaseTrial | None, rank: int, train_dl: DataLoader) 
 
     antennas = nn.ModuleList(
         [
-            vae.SingleAntennaVAE(
+            gaussian.SingleAntennaVAE(
                 settings.train_window_size,
                 settings.n_subcarriers,
                 settings.antenna_latent_dim,
@@ -110,13 +110,13 @@ def _objective(single_trial: BaseTrial | None, rank: int, train_dl: DataLoader) 
             param.requires_grad = False
 
     # Build and train VAE
-    vae_model = vae.MultiAntennaVAE(
+    vae_model = categorical.MultiAntennaVAE(
         antennas,
         settings.n_categories,
         parameters.latent_dim,
         settings.antenna_latent_dim,
     )
-    vae_trainer = vae.CategoricalTrainer(vae_model, train_dl, parameters, rank, trial)
+    vae_trainer = categorical.Trainer(vae_model, train_dl, parameters, rank, trial)
     loss, recon_loss, kl_loss = vae_trainer.train(settings.vae_n_epochs)
 
     if rank == 0:
@@ -158,13 +158,13 @@ def _run_train_antenna(rank: int, world_size: int, train_ds: CSIDataset, antenna
     )
 
     # Build VAE model
-    vae_model = vae.SingleAntennaVAE(
+    vae_model = gaussian.SingleAntennaVAE(
         settings.train_window_size,
         settings.n_subcarriers,
         settings.antenna_latent_dim,
     )
 
-    vae_trainer = vae.GaussianTrainer(vae_model, train_dl, rank)
+    vae_trainer = gaussian.Trainer(vae_model, train_dl, rank)
     loss, kl_loss, recon_loss = vae_trainer.train(settings.vae_n_epochs)
 
     if rank == 0:
@@ -266,11 +266,11 @@ def _run_test(
     )
 
     best_model_path = util.get_best_model_path(Path(settings.study_path))
-    best_params = vae.Parameters(**util.get_vae_params(best_model_path))
+    best_params = categorical.Parameters(**util.get_vae_params(best_model_path))
 
     antennas = nn.ModuleList(
         [
-            vae.SingleAntennaVAE(
+            gaussian.SingleAntennaVAE(
                 settings.train_window_size,
                 settings.n_subcarriers,
                 settings.antenna_latent_dim,
@@ -286,7 +286,7 @@ def _run_test(
         for param in antenna.parameters():
             param.requires_grad = False
 
-    vae_model = vae.MultiAntennaVAE(
+    vae_model = categorical.MultiAntennaVAE(
         antennas,
         settings.n_categories,
         best_params.latent_dim,

@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as func
 from torch import nn
 
-from csi_vae_gumbel.models.vae.single_antenna_vae import SingleAntennaVAE
+from csi_vae_gumbel.models.vae.gaussian.single_antenna_vae import SingleAntennaVAE
 
 
 class MultiAntennaVAE(nn.Module):

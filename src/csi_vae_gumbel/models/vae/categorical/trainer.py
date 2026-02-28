@@ -6,16 +6,16 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from csi_vae_gumbel.models.vae.annealers import (
+from csi_vae_gumbel.models.vae.categorical.annealers import (
     CapacityAnnealer,
     GumbelTemperatureAnnealer,
     KLWeightAnnealer,
 )
-from csi_vae_gumbel.models.vae.loss import categorical_vae_loss
-from csi_vae_gumbel.models.vae.parameters import Parameters
+from csi_vae_gumbel.models.vae.categorical.loss import categorical_vae_loss
+from csi_vae_gumbel.models.vae.categorical.parameters import Parameters
 
 
-class CategoricalTrainer:
+class Trainer:
     """Trainer class for VAE model using Distributed Data Parallel (DDP)."""
 
     def __init__(
@@ -82,14 +82,12 @@ class CategoricalTrainer:
         """
         self.__optimizer.zero_grad()
 
-        x_recon, _, logits, latents_pre, latents_post = self.__model(x_true, tau)
+        x_recon, _, logits = self.__model(x_true, tau)
 
         loss, recon_loss, kl_loss = categorical_vae_loss(
             x_recon,
             x_true,
             logits,
-            latents_pre,
-            latents_post,
             kl_weight,
             capacity,
         )

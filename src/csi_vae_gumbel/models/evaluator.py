@@ -135,7 +135,7 @@ class Evaluator:
 
             x_r = split_test_window(x.to(self.__gpu_id), self.__sample_window_size, self.__overlap_size)
 
-            _, z_hard, logits, _, _ = self.__vae(x_r)
+            _, z_hard, logits = self.__vae(x_r)
 
             # (B * n_windows, latent_dim, n_categories) → (B, latent_dim * n_categories * n_windows)
             n_windows = x_r.shape[0] // original_batch_size

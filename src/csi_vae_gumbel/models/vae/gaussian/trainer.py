@@ -5,10 +5,10 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from csi_vae_gumbel.models.vae.loss import gaussian_vae_loss
+from csi_vae_gumbel.models.vae.gaussian.loss import gaussian_vae_loss
 
 
-class GaussianTrainer:
+class Trainer:
     """Trainer class for VAE model using Distributed Data Parallel (DDP)."""
 
     def __init__(
