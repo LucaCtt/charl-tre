@@ -172,7 +172,7 @@ class Evaluator:
         dist.all_gather_into_tensor(latents, latents_single)
         dist.all_gather_into_tensor(labels, labels_single)
 
-        if self.__gpu_id == 0 and self.__out_dir is not None:
+        if self.__out_dir is not None:
             _plot_confusion_matrix(conf_matrix.cpu().numpy(), self.__classes, self.__out_dir)
             _plot_latent_tsne(latents.cpu().numpy(), labels.cpu().numpy(), self.__classes, self.__out_dir)
 

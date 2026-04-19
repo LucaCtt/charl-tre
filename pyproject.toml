@@ -24,12 +24,13 @@ dependencies = [
 [dependency-groups]
 dev = [
     "ruff>=0.14.13",
-    "ipykernel>=7.1.0",
 ]
 
 [project.scripts]
-opt = "charl_tre.main:opt"
-test = "charl_tre.main:test"
+opt = "charl_tre.scripts.opt:opt"
+test = "charl_tre.scripts.test:test"
+latents = "charl_tre.scripts.latents:latents"
+causal = "charl_tre.scripts.causal:causal"
 
 [build-system]
 requires = ["uv_build>=0.9.26,<0.10.0"]

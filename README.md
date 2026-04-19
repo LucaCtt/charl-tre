@@ -72,8 +72,11 @@ Loads the best VAE checkpoint from `study_results.json`, trains a small MLP clas
 
 ### Stage 1c — Latent Extraction
 
-Open and run `notebooks/compute_latents.ipynb`. This encodes the full dataset with the best VAE and saves:
+```bash
+uv run latents
+```
 
+This will load the best VAE checkpoint and save the following latents for the full dataset:
 ```
 out/<study_name>/latents/
   latents_hard.npy    # (T, latent_dim, n_categories) one-hot hard samples
@@ -83,23 +86,13 @@ out/<study_name>/latents/
 
 ### Stage 2 — Causal Analysis
 
-Open and run `notebooks/causal_analysis.ipynb`. The notebook is split into two independent stages:
-
-**Stage 2a — Raw causal discovery**
-
-```python
-RawDiscoveryPipeline(settings=settings, ind_test_name="parcorr", ...).run()
+```bash
+uv run causal
 ```
 
-Runs LPCMCI (from [Tigramite](https://github.com/jakobrunge/tigramite)) independently for each activity on its latent time-series. Results are saved as JSON to `out/<study_name>/causal_graphs_raw/<ind_test>/`.
+This will first runs LPCMCI (from [Tigramite](https://github.com/jakobrunge/tigramite)) independently for each activity on its latent time-series. Results are saved as JSON to `out/<study_name>/causal_graphs_raw`.
 
-**Stage 2b — Path search and rule mining**
-
-```python
-PathSearchPipeline(settings=settings, raw_dir=raw_dir, ...).run()
-```
-
-Loads the raw graphs, extracts directed causal edges, enumerates discriminative paths via DFS, mines symbolic IF-THEN rules from the edges, calibrates and evaluates a deterministic classifier. Outputs go to `out/<study_name>/causal_path_search/<ind_test>/`:
+The raw graphs are then used to enumerate discriminative paths via DFS, mine symbolic IF-THEN rules from the edges, calibrate and evaluate a deterministic classifier. Outputs go to `out/<study_name>/causal_path_search`:
 
 ```
 out/<study_name>/causal_path_search/parcorr/

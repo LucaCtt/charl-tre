@@ -56,7 +56,6 @@ class RawDiscoveryPipeline:
     def __init__(
         self,
         settings: Settings,
-        ind_test_name: str = "parcorr",
         tau_min: int = 1,
         tau_max: int | None = None,
         pc_alpha: float = 1e-3,
@@ -67,7 +66,6 @@ class RawDiscoveryPipeline:
     ) -> None:
         """Initialize pipeline with settings and tuning parameters."""
         self.settings = settings
-        self.ind_test_name = ind_test_name
         self.tau_min = tau_min
         self.tau_max_arg = tau_max
         self.pc_alpha = pc_alpha
@@ -94,7 +92,7 @@ class RawDiscoveryPipeline:
         )
         lpcmci_results = runner.run_parallel(labelled_data, var_names, self.max_workers)
 
-        out_dir = Path(s.study_path) / "causal_graphs_raw" / self.ind_test_name
+        out_dir = Path(s.study_path) / "causal_graphs_raw"
         writer = ResultsWriter(out_dir)
 
         for activity_id in sorted(lpcmci_results):
@@ -109,7 +107,6 @@ class RawDiscoveryPipeline:
 
         manifest = {
             "study_path": s.study_path,
-            "independence_test": self.ind_test_name,
             "tau_min": self.tau_min,
             "tau_max": tau_max,
             "pc_alpha": self.pc_alpha,
