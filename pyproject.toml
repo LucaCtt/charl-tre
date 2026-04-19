@@ -1,5 +1,5 @@
 [project]
-name = "csi-vae-gumbel"
+name = "charl-tre"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -28,13 +28,8 @@ dev = [
 ]
 
 [project.scripts]
-train-antennas = "csi_vae_gumbel.main:train_antennas"
-opt = "csi_vae_gumbel.main:opt"
-test = "csi_vae_gumbel.main:test"
-causal-full = "csi_vae_gumbel.causal_analysis_full:main"
-causal-raw = "csi_vae_gumbel.causal_discovery_raw:main"
-causal-paths = "csi_vae_gumbel.path_search_from_raw:main"
-causal-classify = "csi_vae_gumbel.classify_with_rules:main"
+opt = "charl_tre.main:opt"
+test = "charl_tre.main:test"
 
 [build-system]
 requires = ["uv_build>=0.9.26,<0.10.0"]
