@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader, DistributedSampler
 
 from charl_tre import util
 from charl_tre.dataset import CSIDataset, load_datasets
-from charl_tre.models import Evaluator, classifier, vae
+from charl_tre.models import Evaluator, fusion, vae
 from charl_tre.settings import Settings
 
 settings = Settings()
@@ -69,12 +69,12 @@ def _run_test(
     best_model_weights = torch.load(best_model_path / "model.pt", weights_only=True)
     vae_model.load_state_dict(best_model_weights)
 
-    classifier_model = classifier.BasicNNClassifier(
+    classifier_model = fusion.BasicNNClassifier(
         best_params.latent_dim * settings.n_categories * settings.n_train_windows_in_test,
         settings.n_activities,
         int(1.5 * best_params.latent_dim * settings.n_categories * settings.n_train_windows_in_test),
     )
-    classifier_trainer = classifier.Trainer(
+    classifier_trainer = fusion.Trainer(
         model=classifier_model,
         dataloader=train_dl,
         vae=vae_model,

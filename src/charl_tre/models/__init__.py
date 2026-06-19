@@ -1,4 +1,3 @@
-from charl_tre.models import classifier, vae
-from charl_tre.models.evaluator import Evaluator
+from charl_tre.models import fusion, vae
 
-__all__ = ["Evaluator", "classifier", "vae"]
+__all__ = ["fusion", "vae"]

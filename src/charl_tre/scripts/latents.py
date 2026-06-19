@@ -72,7 +72,13 @@ def _get_full_dataloader() -> torch.utils.data.DataLoader:
         stride=settings.stride,
     )
 
-    return torch.utils.data.DataLoader(dataset, batch_size=settings.batch_size, shuffle=False)
+    return torch.utils.data.DataLoader(
+        dataset,
+        batch_size=settings.batch_size,
+        shuffle=False,
+        num_workers=settings.num_workers,
+        pin_memory=True,
+    )
 
 
 def latents() -> None:

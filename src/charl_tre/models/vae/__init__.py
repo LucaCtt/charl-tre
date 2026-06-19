@@ -1,6 +1,5 @@
-from charl_tre.models.vae.multi_antenna_vae import MultiAntennaVAE
-from charl_tre.models.vae.parameters import Parameters
-from charl_tre.models.vae.single_antenna_vae import SingleAntennaVAE
-from charl_tre.models.vae.trainer import Trainer
+from charl_tre.models.vae.dirichlet import SingleAntenna
+from charl_tre.models.vae.loss import dirichlet_loss
+from charl_tre.models.vae.trainer import PosteriorCollapseError, Trainer, TrainerParams
 
-__all__ = ["MultiAntennaVAE", "Parameters", "SingleAntennaVAE", "Trainer"]
+__all__ = ["PosteriorCollapseError", "SingleAntenna", "Trainer", "TrainerParams", "dirichlet_loss"]

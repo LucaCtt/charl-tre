@@ -1,3 +1,6 @@
+import contextlib
+from typing import TypedDict
+
 import optuna
 import torch
 from torch import distributed as dist
@@ -6,13 +9,40 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from charl_tre.models.vae.annealers import (
-    CapacityAnnealer,
-    GumbelTemperatureAnnealer,
-    KLWeightAnnealer,
-)
-from charl_tre.models.vae.loss import categorical_vae_loss
-from charl_tre.models.vae.parameters import Parameters
+from charl_tre.models.early_stopping import EarlyStopping
+from charl_tre.models.vae.collapse_detector import CollapseDetector
+from charl_tre.models.vae.kl_annealer import KLAnnealer
+from charl_tre.models.vae.loss import dirichlet_loss
+
+
+def _is_dead(tensor: torch.Tensor) -> bool:
+    """Check if a tensor contains NaN or infinite values."""
+    return bool(torch.isnan(tensor).any() or torch.isinf(tensor).any())
+
+
+class PosteriorCollapseError(Exception):
+    """Raised when the VAE posterior collapses during training."""
+
+    def __init__(self) -> None:
+        """Initialize the error with a default message."""
+        super().__init__("Posterior collapse detected.")
+
+
+class TrainerParams(TypedDict):
+    """Parameters for configuring the VAE trainer."""
+
+    lr: float
+    """Learning rate for the optimizer."""
+    early_stop_patience: int
+    """Patience for early stopping."""
+    early_stop_warmup_epochs: int
+    """Number of epochs to warm up before starting early stopping."""
+    collapse_patience: int
+    """Patience for detecting posterior collapse."""
+    kl_max: float
+    """Maximum KL divergence weight."""
+    prior_alpha: float
+    """Prior alpha for the Dirichlet distribution."""
 
 
 class Trainer:
@@ -21,8 +51,9 @@ class Trainer:
     def __init__(
         self,
         model: nn.Module,
-        dataloader: DataLoader,
-        parameters: Parameters,
+        train_dl: DataLoader,
+        val_dl: DataLoader,
+        params: TrainerParams,
         gpu_id: int,
         trial: optuna.integration.TorchDistributedTrial | None = None,
     ) -> None:
@@ -30,167 +61,198 @@ class Trainer:
 
         Arguments:
             model: VAE model to be trained.
-            dataloader: DataLoader for training data.
-            parameters: VAE training parameters.
+            train_dl: DataLoader for training data.
+            val_dl: DataLoader for validation data.
+            params: VAE training parameters.
             gpu_id: GPU ID for Distributed Data Parallel.
             trial: Optuna trial for hyperparameter optimization (optional).
-            callback: Optional callback function to be called after each epoch.
 
         """
-        self.__model = DistributedDataParallel(model.to(gpu_id), device_ids=[gpu_id])
-        self.__dataloader = dataloader
-        self.__optimizer = torch.optim.AdamW(
-            self.__model.parameters(),
-            lr=1e-3,
-            weight_decay=1e-4,
-        )
-        self.__lr_annealer = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            self.__optimizer,
-            mode="min",
-        )
-        self.__capacity_annealer = CapacityAnnealer(
-            final_capacity=parameters.final_cap,
-        )
-        self.__temperature_annealer = GumbelTemperatureAnnealer(
-            start_tau=parameters.start_gumbel_temp,
-        )
-        self.__kl_weight_annealer = KLWeightAnnealer(
-            max_weight=parameters.final_kl_weight,
-        )
+        self._device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
 
-        self.__gpu_id = gpu_id
-        self.__trial = trial
+        if self._device.type == "cuda":
+            self._model = DistributedDataParallel(model.to(self._device), device_ids=[gpu_id], output_device=gpu_id)
+        else:
+            self._model = DistributedDataParallel(model.to(self._device))
 
-    def __run_batch(
+        self._train_dl = train_dl
+        self._val_dl = val_dl
+        self._params = params
+        self._prior_alpha = params["prior_alpha"]
+        self._trial = trial
+        self._optimizer = torch.optim.Adam(
+            self._model.parameters(),
+            lr=params["lr"],
+        )
+        self._scaler = torch.GradScaler(device=self._device.type)
+        self._early_stopping = EarlyStopping(
+            self._model,
+            params["early_stop_patience"],
+            params["early_stop_warmup_epochs"],
+        )
+        self._collapse_detector = CollapseDetector(params["collapse_patience"])
+
+        self._len_train = len(train_dl)
+        self._len_val = len(val_dl)
+
+    def _run_batch(
         self,
         x_true: torch.Tensor,
-        tau: float,
         kl_weight: float,
-        capacity: float,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Run a single training batch.
 
         Arguments:
             x_true: Ground truth input tensor.
-            tau: Gumbel-Softmax temperature for this batch.
-            kl_weight: KL divergence weight for this batch.
-            capacity: Capacity for KL divergence in this batch.
+            kl_weight: Current KL divergence weight.
 
         Returns:
-            Tuple containing total loss, reconstruction loss, KL divergence loss, and logits.
+            Tuple containing total loss, reconstruction loss, KL divergence loss, and alpha.
 
         """
-        self.__optimizer.zero_grad()
+        self._optimizer.zero_grad(set_to_none=True)
 
-        x_recon, _, logits = self.__model(x_true, tau)
+        with torch.autocast(device_type=self._device.type, dtype=torch.float16):
+            x_recon, alpha = self._model(x_true)
+            loss, recon_loss, kl_loss = dirichlet_loss(
+                x_recon,
+                x_true,
+                alpha,
+                kl_weight=kl_weight,
+                prior_alpha=self._prior_alpha,
+            )
 
-        loss, recon_loss, kl_loss = categorical_vae_loss(
-            x_recon,
-            x_true,
-            logits,
-            kl_weight,
-            capacity,
-        )
+        self._scaler.scale(loss).backward()
+        self._scaler.step(self._optimizer)
+        self._scaler.update()
 
-        loss.backward()
-        self.__optimizer.step()
+        return loss, recon_loss, kl_loss, alpha
 
-        return loss, recon_loss, kl_loss, logits
-
-    def __run_epoch(self, epoch: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    def _run_epoch(self, epoch: int, kl_weight: float) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Run a single training epoch.
 
         Arguments:
             epoch: Current epoch number.
+            kl_weight: Current KL divergence weight.
 
         Returns:
-            Tuple containing average total loss, reconstruction loss,
-            KL divergence loss, and average latent entropy for the epoch.
+            Tuple containing average total loss, reconstruction loss, and KL divergence loss.
 
         """
+        self._model.train()
+
         # Set the epoch for shuffling if using DistributedSampler
-        if isinstance(self.__dataloader.sampler, DistributedSampler):
-            self.__dataloader.sampler.set_epoch(epoch)
+        if isinstance(self._train_dl.sampler, DistributedSampler):
+            self._train_dl.sampler.set_epoch(epoch)
 
-        metrics = torch.zeros(4, device=self.__gpu_id)
-        n_latents = torch.tensor(0, device=self.__gpu_id)
+        metrics = torch.zeros(3, device=self._device)
 
-        tau = self.__temperature_annealer.step(epoch)
-        kl_weight = self.__kl_weight_annealer.step(epoch)
-        capacity = self.__capacity_annealer.step(epoch)
-
-        for x_true, _ in self.__dataloader:
-            loss, recon_loss, kl_loss, logits = self.__run_batch(
-                x_true.to(self.__gpu_id),
-                tau,
-                kl_weight,
-                capacity,
-            )
-
-            with torch.no_grad():
-                p = logits.softmax(dim=-1)
-                entropy_per_dim = -(p * (p + 1e-8).log()).sum(dim=-1)
-                entropy = entropy_per_dim.sum()
+        for x_true, _ in self._train_dl:
+            loss, recon_loss, kl_loss, _ = self._run_batch(x_true.to(self._device), kl_weight)
 
             metrics[0] += loss.detach()
             metrics[1] += recon_loss.detach()
             metrics[2] += kl_loss.detach()
-            metrics[3] += entropy.detach()
-            n_latents += entropy_per_dim.numel()
 
         # Synchronize metrics across all processes
-        dist.all_reduce(metrics, op=dist.ReduceOp.SUM)
-        dist.all_reduce(n_latents, op=dist.ReduceOp.SUM)
+        if dist.is_initialized():
+            dist.all_reduce(metrics, op=dist.ReduceOp.SUM)
 
         # Get total number of batches across all processes to account for batch size differences
-        total_batches = torch.tensor(len(self.__dataloader), device=self.__gpu_id)
-        dist.all_reduce(total_batches, op=dist.ReduceOp.SUM)
+        total_batches = torch.tensor(self._len_train, device=self._device)
+        if dist.is_initialized():
+            dist.all_reduce(total_batches, op=dist.ReduceOp.SUM)
 
         # Average the loss and other metrics
-        mean_metrics = metrics[:3] / total_batches
-        mean_entropy = metrics[3] / n_latents
+        mean_metrics = metrics / total_batches
 
-        # This has to be called after each epoch
-        self.__lr_annealer.step(mean_metrics[0])
+        return mean_metrics[0], mean_metrics[1], mean_metrics[2]
 
-        return mean_metrics[0], mean_metrics[1], mean_metrics[2], mean_entropy.unsqueeze(0)
+    @torch.no_grad()
+    def _run_val_epoch(self, kl_weight: float) -> torch.Tensor:
+        """Run a single validation epoch.
+
+        Arguments:
+            kl_weight: Current KL divergence weight.
+
+        Returns:
+            Average validation loss over the validation dataset.
+
+        """
+        self._model.eval()
+
+        total_loss = torch.tensor(0.0, device=self._device)
+
+        for x_true_cpu, _ in self._val_dl:
+            x_true = x_true_cpu.to(self._device, non_blocking=True)
+
+            with torch.autocast(device_type=self._device.type, dtype=torch.float16):
+                x_recon, alpha = self._model(x_true)
+                loss, _, _ = dirichlet_loss(
+                    x_recon,
+                    x_true,
+                    alpha,
+                    kl_weight=kl_weight,
+                    prior_alpha=self._prior_alpha,
+                )
+
+            total_loss += loss.detach()
+
+        total_batches = torch.tensor(self._len_val, device=self._device)
+        if dist.is_initialized():
+            dist.all_reduce(total_loss, op=dist.ReduceOp.SUM)
+            dist.all_reduce(total_batches, op=dist.ReduceOp.SUM)
+
+        return total_loss / total_batches
 
     def train(self, epochs: int) -> tuple[float, float, float]:
         """Train the VAE model for a specified number of epochs.
 
         Arguments:
             epochs: Number of epochs to train.
-            max_epochs_zero_kl: Maximum number of consecutive epochs with near-zero KL divergence before pruning.
-            eps: Threshold to consider KL divergence as near-zero.
 
         Returns:
-            Tuple containing average total loss, reconstruction loss,
-            and KL divergence loss over all epochs.
+            Tuple containing average total loss, reconstruction loss, and KL divergence loss over all epochs.
 
         """
-        self.__model.train()
-
-        total_metrics = torch.zeros(4, device=self.__gpu_id)
+        total_metrics = torch.zeros(3, device=self._device)
+        annealer = KLAnnealer(epochs, kl_max=self._params["kl_max"])
+        epochs_run = 0
 
         for epoch in range(epochs):
-            epoch_loss, epoch_recon_loss, epoch_kl_loss, epoch_entropy = self.__run_epoch(epoch)
+            annealer.step()
+            epoch_loss, epoch_recon_loss, epoch_kl_loss = self._run_epoch(epoch, annealer.weight)
+
+            if _is_dead(torch.tensor([epoch_loss, epoch_recon_loss, epoch_kl_loss])):
+                raise PosteriorCollapseError
+
+            self._collapse_detector.step(epoch_kl_loss)
+            if self._collapse_detector.is_collapsed():
+                raise PosteriorCollapseError
 
             # Distributed averaging of metrics
-            total_metrics += torch.tensor(
-                [epoch_loss, epoch_recon_loss, epoch_kl_loss, epoch_entropy],
-                device=self.__gpu_id,
-            )
+            total_metrics += torch.stack([epoch_loss, epoch_recon_loss, epoch_kl_loss])
+            epochs_run += 1
 
-            if self.__trial is not None:
-                self.__trial.report(epoch_loss.item(), step=epoch)
-                var_history = self.__trial.user_attrs.get("entropy_history", [])
-                var_history.append(epoch_entropy.item())
-                self.__trial.set_user_attr("entropy_history", var_history)
+            val_loss = self._run_val_epoch(annealer.weight)
+            if _is_dead(val_loss):
+                msg = f"Validation loss is invalid: {val_loss.item()}"
+                raise ValueError(msg)
 
-                if self.__trial.should_prune():
+            self._early_stopping.step(val_loss)
+            if self._early_stopping.should_stop:
+                break
+
+            if self._trial is not None:
+                self._trial.report(epoch_loss.item(), step=epoch)
+
+                if self._trial.should_prune():
                     msg = f"Collapsed at epoch {epoch}."
                     raise optuna.TrialPruned(msg)
 
-        total_metrics /= epochs
+        with contextlib.suppress(RuntimeError):
+            self._early_stopping.restore_best_weights()
 
-        return tuple(total_metrics[:3].tolist())
+        total_metrics /= epochs_run
+
+        return total_metrics[0].item(), total_metrics[1].item(), total_metrics[2].item()

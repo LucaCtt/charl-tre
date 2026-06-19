@@ -16,17 +16,15 @@ from torch.multiprocessing.spawn import spawn
 from torch.utils.data import DataLoader, DistributedSampler
 
 from charl_tre import util
-from charl_tre.collapse_pruner import CollapsePruner
 from charl_tre.dataset import CSIDataset, load_datasets
-from charl_tre.models import vae
+from charl_tre.models import CollapseDetector, vae
 from charl_tre.settings import Settings
 
 settings = Settings()
 
 # Configure logging
-level = logging.DEBUG if settings.debug else logging.INFO
-handler = RichHandler(level=level, show_path=False)
-logging.basicConfig(level=level, handlers=[handler], format="%(message)s")
+handler = RichHandler(level=logging.INFO, show_path=False)
+logging.basicConfig(level=logging.INFO, handlers=[handler], format="%(message)s")
 logger = logging.getLogger("rich")
 
 # Route Optuna logs through app logger
@@ -137,6 +135,7 @@ def _run_optimize(rank: int, world_size: int, train_ds: CSIDataset) -> None:
         batch_size=settings.batch_size,
         sampler=DistributedSampler(train_ds, num_replicas=world_size, rank=rank, shuffle=True),
         pin_memory=True,
+        num_workers=settings.num_workers,
     )
 
     study = None
@@ -145,7 +144,7 @@ def _run_optimize(rank: int, world_size: int, train_ds: CSIDataset) -> None:
             direction="minimize",
             study_name=settings.study_name,
             sampler=optuna.samplers.TPESampler(seed=settings.seed),
-            pruner=CollapsePruner(n_categories=settings.n_categories),
+            pruner=CollapseDetector(settings.patience),
         )
         study.optimize(
             partial(_objective, rank=rank, train_dl=train_dl),
