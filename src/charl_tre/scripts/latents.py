@@ -37,7 +37,7 @@ def _get_best_model() -> SingleAntenna:
         info = json.load(f)
 
     vae_model = SingleAntenna(
-        settings.train_window_size,
+        settings.vae_window_size,
         settings.n_subcarriers,
         info["n_components"],
         CONV_SPECS[info["conv_layers_spec"]],
@@ -52,7 +52,7 @@ def _get_full_dataloader() -> torch.utils.data.DataLoader:
     """Load the full dataset (all splits) for latent extraction, without shuffling."""
     train_ds, val_ds, test_ds = dataset.load(
         dataset_path=Path(settings.dataset_path),
-        window_size=settings.test_window_size,
+        window_size=settings.fusion_window_size,
         n_activities=settings.n_activities,
         stride=settings.stride,
     )
@@ -89,7 +89,7 @@ def latents() -> None:
             # x: (batch_size, test_window_size, n_subcarriers) from SingleAntenna dataset
             # split_test_window expects (batch_size, n_antennas, window_size, n_subcarriers)
             x_r = x.unsqueeze(1).to(device)
-            x_r = split_test_window(x_r, settings.train_window_size, 0)
+            x_r = split_test_window(x_r, settings.vae_window_size, 0)
 
             n_windows = x_r.shape[0] // batch_size
 

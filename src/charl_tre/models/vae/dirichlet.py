@@ -11,9 +11,8 @@ Subcarrier kernel_size and stride are fixed to 1, as we don't want to convolve a
 CONV_SPECS: list[ConvLayerSpec] = [
     [(3, 3)],
     [(5, 5)],
-    # [(5, 5), (3, 3)],
-    # [(3, 3), (5, 5)],
-    # [(5, 5), (3, 2), (3, 3)],
+    [(5, 5), (3, 3)],
+    [(3, 3), (5, 5)],
 ]
 
 

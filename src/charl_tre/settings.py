@@ -1,22 +1,8 @@
-from typing import Literal, NamedTuple
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from charl_tre.models.vae.dirichlet import CONV_SPECS
-
-
-class ParamRange[NumberT](NamedTuple):
-    """Defines a hyperparameter with a name and a range."""
-
-    min: NumberT
-    max: NumberT
-    step: NumberT | None | Literal["log"] = None
-
-
-class ParamCategorical[T](NamedTuple):
-    """Defines a hyperparameter with a name and a list of values."""
-
-    values: list[T]
 
 
 class Settings(BaseSettings):
@@ -46,9 +32,9 @@ class Settings(BaseSettings):
         "Squat",
         "Stretch",
     ]
-    train_window_size: int = 75
+    vae_window_size: int = 75
     """Size of the window of CSI in a VAE train sample, where 150 CSI = 1 second of data."""
-    test_window_size: int = 450
+    fusion_window_size: int = 450
     """Size of the window of CSI in a classifier test sample, where 150 CSI = 1 second of data."""
     stride: int = 25
     """Stride for sliding windows creation, for both train and testing."""
@@ -64,7 +50,7 @@ class Settings(BaseSettings):
     """Number of epochs to wait before early stopping."""
     early_stop_warmup_epochs: int = 10
     """Number of epochs to wait before starting to check for early stopping."""
-    free_bits_start: float  = 1.0
+    free_bits_start: float = 1.0
     """Initial free-bits floor for the KL divergence term."""
     free_bits_end: float = 0.05
     """Final free-bits floor for the KL divergence term."""
@@ -72,7 +58,7 @@ class Settings(BaseSettings):
     # Optuna study settings
     n_trials: int = 100
     """Number of Optuna trials for hyperparameter optimization."""
-    study_name: str = f"a{n_antennas}_w{train_window_size}_tw{test_window_size}"
+    study_name: str = f"a{n_antennas}_w{vae_window_size}_tw{fusion_window_size}"
     """Name of the VAE model, used for checkpointing."""
     study_path: str = f"out/{study_name}"
     """Directory to save model checkpoints."""
@@ -80,22 +66,35 @@ class Settings(BaseSettings):
     """Number of epochs to wait before collapsing the latent space."""
 
     # Optuna hyperparameter search space
-    batch_size: ParamRange[int] = ParamRange(min=32, max=128, step=32)
-    """Batch size per GPU for training and testing both VAE and classifier."""
-    lr: ParamRange[float] = ParamRange(min=1e-3, max=3e-2, step="log")
-    """Learning rate for the optimizer."""
-    kl_max: ParamRange[float] = ParamRange(min=0.5, max=4.0, step=0.5)
-    """Maximum weight for the KL divergence term during annealing."""
-    n_components: ParamRange[int] = ParamRange(min=8, max=64, step=8)
-    """Number of components in the Dirichlet distribution (latent space dimensionality)."""
-    conv_layers_spec: ParamCategorical[int] = ParamCategorical(values=[*range(len(CONV_SPECS))])
-    """Convolutional layers specification for the VAE encoder."""
-    prior_alpha: ParamRange[float] = ParamRange(min=0.1, max=10.0, step="log")
-    """Prior alpha for the Dirichlet distribution."""
-    n_fusion_layers: ParamRange[int] = ParamRange(min=1, max=3, step=1)
-    """Number of layers in the delayed fusion classifier."""
-    fusion_dropout: ParamRange[float] = ParamRange(min=0.0, max=0.3, step=0.1)
-    """Dropout rate to use in the delayed fusion classifier."""
+    hyperparam_batch_size_min: int = 32
+    hyperparam_batch_size_max: int = 128
+    hyperparam_batch_size_step: Literal["log"] | int = 32
+
+    hyperparam_lr_min: float = 1e-3
+    hyperparam_lr_max: float = 3e-2
+    hyperparam_lr_step: Literal["log"] | int = "log"
+
+    hyperparam_kl_final_min: float = 0.5
+    hyperparam_kl_final_max: float = 4.0
+    hyperparam_kl_final_step: Literal["log"] | float = 0.5
+
+    hyperparam_n_components_min: int = 8
+    hyperparam_n_components_max: int = 64
+    hyperparam_n_components_step: Literal["log"] | int = 8
+
+    hyperparam_prior_alpha_min: float = 0.1
+    hyperparam_prior_alpha_max: float = 10.0
+    hyperparam_prior_alpha_step: Literal["log"] | float = "log"
+
+    hyperparam_n_fusion_layers_min: int = 1
+    hyperparam_n_fusion_layers_max: int = 3
+    hyperparam_n_fusion_layers_step: int = 1
+
+    hyperparam_fusion_dropout_min: float = 0.0
+    hyperparam_fusion_dropout_max: float = 0.3
+    hyperparam_fusion_dropout_step: float = 0.1
+
+    hyperparam_conv_layers_spec: list[int] = [*range(len(CONV_SPECS))]
 
     @property
     def n_activities(self) -> int:
@@ -103,11 +102,6 @@ class Settings(BaseSettings):
         return len(self.activities)
 
     @property
-    def n_train_windows_in_test(self) -> int:
-        """Return the number of train windows that compose the test window, counting the overlap."""
-        return (self.test_window_size - self.train_window_size) // self.stride + 1
-
-    @property
     def overlap_size(self) -> int:
         """Return the number of overlapping frames between consecutive test windows."""
-        return self.train_window_size - self.stride
+        return self.vae_window_size - self.stride

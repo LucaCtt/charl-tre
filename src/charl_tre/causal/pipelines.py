@@ -37,11 +37,11 @@ def _make_var_names(latent_dim: int, n_categories: int, use_full_onehot: bool) -
 
 
 def _effective_tau_max(settings: Settings, tau_max: int | None) -> int:
-    return tau_max if tau_max is not None else settings.test_window_size // settings.train_window_size - 1
+    return tau_max if tau_max is not None else settings.fusion_window_size // settings.vae_window_size - 1
 
 
 def _effective_stride(settings: Settings, stride: int | None) -> int:
-    return stride if stride is not None else settings.train_window_size
+    return stride if stride is not None else settings.vae_window_size
 
 
 def _validate_tau(tau_min: int, tau_max: int) -> None:

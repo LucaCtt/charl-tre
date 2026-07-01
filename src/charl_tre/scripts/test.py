@@ -1,15 +1,12 @@
-import copy
 import json
 import logging
-import os
-import random
 from pathlib import Path
 
 import torch
 from rich.logging import RichHandler
 from torch import distributed as dist
 from torch.multiprocessing.spawn import spawn
-from torch.utils.data import DataLoader, DistributedSampler
+from torch.utils.data import DataLoader
 
 from charl_tre import dataset, util
 from charl_tre.models import fusion, vae
@@ -24,52 +21,31 @@ handler = RichHandler(level=logging.INFO, show_path=False)
 logging.basicConfig(level=logging.INFO, handlers=[handler], format="%(message)s")
 logger = logging.getLogger("rich")
 
-# Reproducible seeds
-os.environ.setdefault("PYTHONHASHSEED", str(settings.seed))
-random.seed(settings.seed)
-torch.manual_seed(settings.seed)
-
-
 def _run_test(
     rank: int,
     world_size: int,
-    train_ds: dataset.MultiAntenna,
-    val_ds: dataset.MultiAntenna,
     test_ds: dataset.MultiAntenna,
 ) -> None:
     util.setup_ddp(rank, world_size)
-
-    train_dl = DataLoader(
-        train_ds,
-        batch_size=settings.batch_size.min,
-        sampler=DistributedSampler(train_ds, num_replicas=world_size, rank=rank, shuffle=True),
-        pin_memory=True,
-        num_workers=settings.num_workers,
-    )
-    val_dl = DataLoader(
-        val_ds,
-        batch_size=settings.batch_size.min,
-        sampler=DistributedSampler(val_ds, num_replicas=world_size, rank=rank, shuffle=False),
-        pin_memory=True,
-        num_workers=settings.num_workers,
-    )
 
     best_model_path = util.get_best_model_path(Path(settings.study_path))
 
     with (best_model_path / "results.json").open("r") as f:
         info = json.load(f)
 
-    vae_model = vae.SingleAntenna(
-        settings.train_window_size,
-        settings.n_subcarriers,
-        info["n_components"],
-        CONV_SPECS[info["conv_layers_spec"]],
-    )
-    best_model_weights = torch.load(best_model_path / "model.pt", weights_only=True)
-    vae_model.load_state_dict(best_model_weights)
+    vaes: list[vae.SingleAntenna] = []
+    for antenna_idx in range(settings.n_antennas):
+        vae_model = vae.SingleAntenna(
+            settings.vae_window_size,
+            settings.n_subcarriers,
+            info["n_components"],
+            CONV_SPECS[info["conv_layers_spec"]],
+        )
 
-    # One VAE per antenna; deepcopy to give each antenna its own parameter set
-    vaes = [copy.deepcopy(vae_model) for _ in range(settings.n_antennas)]
+        antenna_model_path = best_model_path / f"vae_{antenna_idx}.pt"
+        best_model_weights = torch.load(antenna_model_path, weights_only=True)
+        vae_model.load_state_dict(best_model_weights)
+        vaes.append(vae_model)
 
     delayed_fusion = fusion.Delayed(
         vaes,
@@ -79,25 +55,11 @@ def _run_test(
         settings.fusion_dropout.min,
     )
 
-    trainer = fusion.Trainer(
-        delayed_fusion,
-        train_dl,
-        val_dl,
-        fusion.TrainerParams(
-            lr=settings.lr.min,
-            early_stop_patience=settings.early_stop_patience,
-            early_stop_warmup_epochs=settings.early_stop_warmup_epochs,
-            sample_window_size=settings.train_window_size,
-            overlap_size=settings.overlap_size,
-        ),
-        rank,
-    )
-    loss, accuracy = trainer.train(settings.n_epochs)
+    fusion_weights = torch.load(best_model_path / "fusion.pt", weights_only=True)
+    delayed_fusion.load_state_dict(fusion_weights)
 
+    accuracy = 0.0
     if rank == 0:
-        logger.info("Fusion training completed with loss %.4f and accuracy %.4f", loss, accuracy)
-        torch.save(delayed_fusion.state_dict(), Path(settings.study_path) / "fusion.pt")
-
         logger.info("Evaluating on test set...")
 
         eval_dl = DataLoader(
@@ -120,27 +82,22 @@ def _run_test(
 
 
 def test() -> None:
-    """Evaluate the best VAE model on the test set using a fusion classifier."""
+    """Evaluate the best saved multi-antenna fusion model on the test set."""
     logger.info("Loading datasets from %s...", settings.dataset_path)
-    train_ds, val_ds, test_ds = dataset.load(
+    _, _, test_ds = dataset.load(
         dataset_path=Path(settings.dataset_path),
-        window_size=settings.test_window_size,
+        window_size=settings.fusion_window_size,
         n_activities=settings.n_activities,
         stride=settings.stride,
     )
-    logger.info(
-        "Datasets loaded with %d training, %d validation, and %d testing samples",
-        len(train_ds),
-        len(val_ds),
-        len(test_ds),
-    )
+    logger.info("Test dataset loaded with %d samples", len(test_ds))
 
     world_size = torch.cuda.device_count() if torch.cuda.is_available() else 1
 
-    logger.info("Training fusion classifier...")
+    logger.info("Evaluating best saved fusion model...")
     spawn(
         _run_test,
-        args=(world_size, train_ds, val_ds, test_ds),
+        args=(world_size, test_ds),
         nprocs=world_size,
         join=True,
     )

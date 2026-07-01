@@ -49,7 +49,7 @@ class TrainerParams(TypedDict):
     """Number of epochs to warm up before starting early stopping."""
     collapse_patience: int
     """Patience for detecting posterior collapse."""
-    kl_max: float
+    kl_final: float
     """Maximum KL divergence weight."""
     prior_alpha: float
     """Prior alpha for the Dirichlet distribution."""
@@ -249,7 +249,7 @@ class Trainer:
 
         """
         total_metrics = torch.zeros(3, device=self._device)
-        annealer = KLAnnealer(epochs, kl_max=self._params["kl_max"])
+        annealer = KLAnnealer(epochs, kl_final=self._params["kl_final"])
 
         # Backward compatibility: if only free_bits is provided, use a flat schedule.
         start_free_bits = self._params.get("free_bits_start", self._params.get("free_bits", 0.0))
