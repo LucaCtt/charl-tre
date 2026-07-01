@@ -12,9 +12,8 @@ settings = Settings()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Configure logging
-level = logging.DEBUG if settings.debug else logging.INFO
-handler = RichHandler(level=level, show_path=False)
-logging.basicConfig(level=level, handlers=[handler], format="%(message)s")
+handler = RichHandler(level=logging.INFO, show_path=False)
+logging.basicConfig(level=logging.INFO, handlers=[handler], format="%(message)s")
 logger = logging.getLogger("rich")
 
 

@@ -10,15 +10,16 @@ from pathlib import Path
 import optuna
 import torch
 from optuna.trial import BaseTrial, TrialState
+from optuna_integration.pytorch_distributed import TorchDistributedTrial
 from rich.logging import RichHandler
 from torch import distributed as dist
 from torch.multiprocessing.spawn import spawn
-from torch.utils.data import DataLoader, DistributedSampler
+from torch.utils.data import DataLoader, Dataset, DistributedSampler
 
-from charl_tre import util
-from charl_tre.dataset import CSIDataset, load_datasets
-from charl_tre.models import CollapseDetector, vae
-from charl_tre.settings import Settings
+from charl_tre import dataset, util
+from charl_tre.models import fusion, vae
+from charl_tre.models.vae.dirichlet import CONV_SPECS
+from charl_tre.settings import ParamRange, Settings
 
 settings = Settings()
 
@@ -35,108 +36,231 @@ optuna.logging.disable_default_handler()
 warnings.filterwarnings("ignore", module="optuna_integration.pytorch_distributed")
 warnings.filterwarnings("ignore", category=optuna.exceptions.ExperimentalWarning)
 
-# Reproducible seeds
-os.environ.setdefault("PYTHONHASHSEED", str(settings.seed))
-random.seed(settings.seed)
-torch.manual_seed(settings.seed)
-
-# DDP debug settings
-if settings.debug:
-    os.environ["TORCH_NCCL_ASYNC_ERROR_HANDLING"] = "1"
-    os.environ["TORCH_DISTRIBUTED_DEBUG"] = "DETAIL"
-    os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+torch.backends.cuda.matmul.allow_tf32 = True  # Allow TensorFloat-32 for faster matrix multiplications
+torch.backends.cudnn.allow_tf32 = True  # Allow TensorFloat-32 for faster convolutions
+torch.backends.cudnn.benchmark = True  # Enable cuDNN auto-tuner for better performance
 
 
-def _objective(single_trial: BaseTrial | None, rank: int, train_dl: DataLoader) -> float:
+def _init_rng(seed: int) -> None:
+    """Initialize random seeds for reproducibility.
+
+    Arguments:
+        seed (int): The random seed to use for all random number generators.
+
+    """
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+
+def _param_to_props(param: ParamRange) -> dict:
+    """Convert a ParamRange to a dictionary of properties for Optuna suggest methods."""
+    props = {"low": param.min, "high": param.max}
+    if param.step == "log":
+        props["log"] = True
+    elif param.step is not None:
+        props["step"] = param.step
+    return props
+
+
+def _make_dl(ds: Dataset, batch_size: int, shuffle: bool, seed: int) -> DataLoader:
+    """Create a DataLoader with common settings.
+
+    Arguments:
+        ds: Dataset to load data from.
+        batch_size: Number of samples per batch.
+        shuffle: Whether to shuffle the data at the beginning of each epoch.
+        seed: Random seed for reproducibility of shuffling.
+
+    Returns:
+        A DataLoader instance for the given dataset and settings.
+
+    """
+    # In spawned DDP+Optuna runs, worker subprocess shutdown can race with trial pruning
+    # and emit QueueFeederThread bad-file-descriptor errors. Keep loading in-process there.
+    num_workers = 0 if dist.is_initialized() else settings.num_workers
+
+    return DataLoader(
+        ds,
+        batch_size=batch_size,
+        shuffle=shuffle if not dist.is_initialized() else False,
+        num_workers=num_workers,
+        persistent_workers=num_workers > 0,
+        pin_memory=True,
+        generator=torch.Generator().manual_seed(seed),
+        sampler=DistributedSampler(ds, shuffle=shuffle, seed=seed) if dist.is_initialized() else None,
+    )
+
+
+def _objective(
+    single_trial: BaseTrial | None,
+    rank: int,
+    train_ds: dataset.MultiAntenna,
+    val_ds: dataset.MultiAntenna,
+) -> float:
     """Objective function for Optuna hyperparameter optimization.
 
     Arguments:
         single_trial: The Optuna trial object
         rank: Unique identifier of each process
-        train_dl: DataLoader for training data
+        train_ds: MultiAntenna training dataset
+        val_ds: MultiAntenna validation dataset
 
     Returns:
-        The reconstruction loss after training
+        The fusion model reconstruction loss after training
 
     """
-    trial = optuna.integration.TorchDistributedTrial(single_trial)
+    trial = TorchDistributedTrial(single_trial)
+
+    lr = trial.suggest_float(
+        "lr",
+        **_param_to_props(settings.lr),
+    )
+
+    vae_params = vae.TrainerParams(
+        early_stop_patience=settings.early_stop_patience,
+        early_stop_warmup_epochs=settings.early_stop_warmup_epochs,
+        collapse_patience=settings.collapse_patience,
+        lr=lr,
+        kl_max=trial.suggest_float(
+            "kl_max",
+            **_param_to_props(settings.kl_max),
+        ),
+        prior_alpha=trial.suggest_float(
+            "prior_alpha",
+            **_param_to_props(settings.prior_alpha),
+        ),
+        free_bits_start=settings.free_bits_start,
+        free_bits_end=settings.free_bits_end,
+    )
+
+    n_components = trial.suggest_int(
+        "n_components",
+        **_param_to_props(settings.n_components),
+    )
+    conv_layers_spec = trial.suggest_categorical(
+        "conv_layers_spec",
+        settings.conv_layers_spec.values,
+    )
+    batch_size = trial.suggest_int(
+        "batch_size",
+        **_param_to_props(settings.batch_size),
+    )
+    n_fusion_layers = trial.suggest_int(
+        "n_fusion_layers",
+        **_param_to_props(settings.n_fusion_layers),
+    )
+    fusion_dropout = trial.suggest_float(
+        "fusion_dropout",
+        **_param_to_props(settings.fusion_dropout),
+    )
+
     if rank == 0:
-        logger.info("Starting trial %s", trial.number)
+        logger.info("Starting trial %s with parameters: %s", trial.number, trial.params)
 
-    parameters = vae.Parameters(
-        final_kl_weight=trial.suggest_float(
-            "final_kl_weight",
-            settings.final_kl_weight_min,
-            settings.final_kl_weight_max,
-            log=True,
-        ),
-        latent_dim=trial.suggest_int(
-            "latent_dim",
-            settings.latent_dim_min,
-            settings.latent_dim_max,
-            step=1,
-        ),
-        final_cap=trial.suggest_float(
-            "final_cap",
-            settings.final_cap_min,
-            settings.final_cap_max,
-            step=0.2,
-        ),
-        start_gumbel_temp=trial.suggest_float(
-            "start_gumbel_temp",
-            settings.start_gumbel_temp_min,
-            settings.start_gumbel_temp_max,
-        ),
+    # Train one VAE per antenna
+    vaes = []
+    for antenna_idx in range(settings.n_antennas):
+        antenna_train_ds = dataset.SingleAntenna(train_ds, antenna_idx)
+        antenna_val_ds = dataset.SingleAntenna(val_ds, antenna_idx)
+        antenna_train_dl = _make_dl(
+            antenna_train_ds,
+            batch_size,
+            shuffle=True,
+            seed=settings.seed,
+        )
+        antenna_val_dl = _make_dl(
+            antenna_val_ds,
+            batch_size,
+            shuffle=False,
+            seed=settings.seed,
+        )
+
+        vae_model = vae.SingleAntenna(
+            settings.train_window_size,
+            settings.n_subcarriers,
+            n_components,
+            CONV_SPECS[conv_layers_spec],
+        )
+
+        vae_trainer = vae.Trainer(
+            vae_model,
+            antenna_train_dl,
+            antenna_val_dl,
+            vae_params,
+            rank,
+            trial,
+        )
+        try:
+            vae_trainer.train(settings.n_epochs)
+        except (vae.PosteriorCollapseError, vae.DeadLossError) as e:
+            raise optuna.TrialPruned(str(e)) from e
+
+        vaes.append(vae_model)
+
+    train_ds, val_ds, _ = dataset.load(
+        dataset_path=Path(settings.dataset_path),
+        window_size=settings.test_window_size,
+        n_activities=settings.n_activities,
+        stride=settings.stride,
     )
 
-    # Build and train VAE
-    vae_model = vae.SingleAntennaVAE(
-        settings.train_window_size,
-        settings.n_subcarriers,
-        settings.n_categories,
-        settings.latent_dim,
+    # Train fusion model on pre-trained VAEs
+    fusion_train_dl = _make_dl(train_ds, batch_size, shuffle=True, seed=settings.seed)
+    fusion_val_dl = _make_dl(val_ds, batch_size, shuffle=False, seed=settings.seed)
+
+    delayed_fusion = fusion.Delayed(
+        vaes,
+        n_components,
+        settings.n_activities,
+        n_fusion_layers,
+        fusion_dropout,
     )
-    vae_trainer = vae.Trainer(vae_model, train_dl, parameters, rank, trial)
-    loss, recon_loss, kl_loss = vae_trainer.train(settings.vae_n_epochs)
+
+    fusion_trainer = fusion.Trainer(
+        delayed_fusion,
+        fusion_train_dl,
+        fusion_val_dl,
+        fusion.TrainerParams(
+            lr=lr,
+            early_stop_patience=settings.early_stop_patience,
+            early_stop_warmup_epochs=settings.early_stop_warmup_epochs,
+            sample_window_size=settings.train_window_size,
+            overlap_size=settings.overlap_size,
+        ),
+        rank,
+    )
+    fusion_loss, fusion_accuracy = fusion_trainer.train(settings.n_epochs)
 
     if rank == 0:
         logger.info(
-            "VAE training completed for trial %s with loss %.4f, recon_loss %.4f, kl_loss %.4f",
+            "Trial %s completed: train loss=%.4f, train accuracy=%.4f",
             trial.number,
-            loss,
-            recon_loss,
-            kl_loss,
+            fusion_loss,
+            fusion_accuracy,
         )
         save_path = Path(settings.study_path) / f"trial_{trial.number}"
         save_path.mkdir(parents=True, exist_ok=True)
-        torch.save(vae_model.state_dict(), save_path / "model.pt")
+        for i, vae_m in enumerate(vaes):
+            torch.save(vae_m.state_dict(), save_path / f"vae_{i}.pt")
+        torch.save(delayed_fusion.state_dict(), save_path / "fusion.pt")
 
         results = {
             "trial_number": trial.number,
-            "final_kl_weight": parameters.final_kl_weight,
-            "latent_dim": parameters.latent_dim,
-            "final_cap": parameters.final_cap,
-            "start_gumbel_temp": parameters.start_gumbel_temp,
-            "loss": loss,
-            "recon_loss": recon_loss,
-            "kl_loss": kl_loss,
+            "n_components": n_components,
+            "conv_layers_spec": conv_layers_spec,
+            "fusion_loss": fusion_loss,
+            "fusion_accuracy": fusion_accuracy,
         }
         with Path.open(save_path / "results.json", "w") as f:
             json.dump(results, f)
 
-    return recon_loss
+    return fusion_loss
 
 
-def _run_optimize(rank: int, world_size: int, train_ds: CSIDataset) -> None:
+def _run_optimize(rank: int, world_size: int, train_ds: dataset.MultiAntenna, val_ds: dataset.MultiAntenna) -> None:
     util.setup_ddp(rank, world_size)
-
-    train_dl = DataLoader(
-        train_ds,
-        batch_size=settings.batch_size,
-        sampler=DistributedSampler(train_ds, num_replicas=world_size, rank=rank, shuffle=True),
-        pin_memory=True,
-        num_workers=settings.num_workers,
-    )
 
     study = None
     if rank == 0:
@@ -144,17 +268,16 @@ def _run_optimize(rank: int, world_size: int, train_ds: CSIDataset) -> None:
             direction="minimize",
             study_name=settings.study_name,
             sampler=optuna.samplers.TPESampler(seed=settings.seed),
-            pruner=CollapseDetector(settings.patience),
         )
         study.optimize(
-            partial(_objective, rank=rank, train_dl=train_dl),
+            partial(_objective, rank=rank, train_ds=train_ds, val_ds=val_ds),
             n_trials=settings.n_trials,
             gc_after_trial=True,
         )
     else:
         for _ in range(settings.n_trials):
             with contextlib.suppress(optuna.TrialPruned):
-                _objective(None, rank, train_dl)
+                _objective(None, rank, train_ds, val_ds)
 
     dist.barrier()
 
@@ -189,16 +312,14 @@ def _run_optimize(rank: int, world_size: int, train_ds: CSIDataset) -> None:
 
 def opt() -> None:
     """Run optuna optimization and evaluation for the CSI VAE model."""
+    _init_rng(settings.seed)
+
     # Create datasets once and share across VAE training processes
     logger.info("Loading dataset from %s...", settings.dataset_path)
-    train_ds, _ = load_datasets(
+    train_ds, val_ds, _ = dataset.load(
         dataset_path=Path(settings.dataset_path),
         window_size=settings.train_window_size,
-        test_ratio=settings.test_ratio,
         n_activities=settings.n_activities,
-        n_antennas=settings.n_antennas,
-        antenna_select=settings.antenna_select,
-        seed=settings.seed,
         stride=settings.stride,
     )
     logger.info("Dataset loaded with %d training samples", len(train_ds))
@@ -206,7 +327,7 @@ def opt() -> None:
     world_size = torch.cuda.device_count() if torch.cuda.is_available() else 1
 
     # Run Optuna optimization
-    spawn(_run_optimize, args=(world_size, train_ds), nprocs=world_size, join=True)
+    spawn(_run_optimize, args=(world_size, train_ds, val_ds), nprocs=world_size, join=True)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 from typing import TypedDict
 
-import optuna
 import torch
+from optuna_integration.pytorch_distributed import TorchDistributedTrial
 from torch import distributed as dist
 from torch import nn
 from torch.utils.data import DataLoader, DistributedSampler
@@ -83,7 +83,7 @@ class Trainer:
         val_dl: DataLoader,
         params: TrainerParams,
         gpu_id: int,
-        trial: optuna.integration.TorchDistributedTrial | None = None,
+        trial: TorchDistributedTrial | None = None,
     ) -> None:
         """Initialize the Trainer with model, data loaders, optimizer, and early stopping.
 

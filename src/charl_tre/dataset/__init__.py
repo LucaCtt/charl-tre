@@ -1,5 +1,5 @@
-from charl_tre.dataset.augmenter import CSIAugmenter
-from charl_tre.dataset.dataset import CSIDataset
-from charl_tre.dataset.load_datasets import load_datasets
+from charl_tre.dataset.load import load
+from charl_tre.dataset.multi_antenna import MultiAntenna
+from charl_tre.dataset.single_antenna import SingleAntenna
 
-__all__ = ["CSIAugmenter", "CSIDataset", "load_datasets"]
+__all__ = ["MultiAntenna", "SingleAntenna", "load"]

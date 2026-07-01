@@ -8,6 +8,13 @@ ConvLayerSpec = list[tuple[int, int]]
 Each entry represents (kernel_size_time, stride_time).
 Subcarrier kernel_size and stride are fixed to 1, as we don't want to convolve across subcarriers.
 """
+CONV_SPECS: list[ConvLayerSpec] = [
+    [(3, 3)],
+    [(5, 5)],
+    # [(5, 5), (3, 3)],
+    # [(3, 3), (5, 5)],
+    # [(5, 5), (3, 2), (3, 3)],
+]
 
 
 class _AntennaEncoder(nn.Module):
@@ -75,7 +82,9 @@ class _AntennaEncoder(nn.Module):
         """
         x = x.permute(0, 2, 1).unsqueeze(-1).contiguous()  # (batch_size, n_subcarriers, window_size, 1)
         z = self._conv(x)
-        return self._alpha(z)
+        raw = self._alpha[0](z)  # linear layer output, before Softplus
+        raw = torch.clamp(raw, min=-20.0, max=20.0)
+        return func.softplus(raw) + 0.1  # eps floor: small alpha causes unstable Gamma reparameterization
 
 
 class _AntennaDecoder(nn.Module):
@@ -173,27 +182,20 @@ class SingleAntenna(nn.Module):
                 msg = f"Decoder output shape {recon.shape} does not match input shape {dummy.shape}"
                 raise ValueError(msg)
 
-    def __reparameterize(self, alpha: torch.Tensor) -> torch.Tensor:
-        """Reparameterization trick to sample from the Dirichlet distribution defined by alpha.
-
-        Uses the Gumbel-max trick with log-Gamma function for stable sampling.
+    def _reparameterize(self, alpha: torch.Tensor) -> torch.Tensor:
+        """Reparameterization trick for Dirichlet distribution.
 
         Arguments:
             alpha: Concentration parameters of shape (batch_size, n_components)
 
         Returns:
-            samples: Sampled simplex vectors of shape (batch_size, n_components)
+            z: Sampled latent variable of shape (batch_size, n_components)
 
         """
-        # Gumbel-max trick for Dirichlet sampling
-        # Sample Gumbel noise
-        u = torch.rand_like(alpha, dtype=alpha.dtype)
-        u = torch.clamp(u, min=1e-8, max=1 - 1e-8)  # Avoid log(0)
-        gumbel_noise = -torch.log(-torch.log(u))
+        gamma_dist = torch.distributions.Gamma(concentration=alpha, rate=torch.ones_like(alpha))
 
-        # Apply concentration parameters and normalize
-        z = torch.log(alpha + 1e-8) + gumbel_noise
-        return func.softmax(z, dim=-1)
+        gamma_samples = gamma_dist.rsample()  # reparameterized, gradients flow through alpha
+        return gamma_samples / gamma_samples.sum(dim=-1, keepdim=True)
 
     def encode(self, x: torch.Tensor) -> torch.Tensor:
         """Encode the input CSI window into concentration parameters (alpha)."""
@@ -219,7 +221,7 @@ class SingleAntenna(nn.Module):
 
         """
         alpha = self.encode(x)
-        z = self.__reparameterize(alpha)
+        z = self._reparameterize(alpha)
         recon = self.decode(z)
 
         return recon, alpha
