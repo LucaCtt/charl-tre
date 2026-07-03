@@ -17,9 +17,6 @@ def dirichlet_kl_divergence(alpha: torch.Tensor, free_bits: float = 0.0) -> torc
         kl_loss: KL divergence averaged over batch of shape (batch_size,)
 
     """
-    # lgamma/digamma are numerically unstable in float16; always compute in float32
-    alpha = alpha.float()
-
     # Prior concentration parameters
     prior_alpha_tensor = torch.full_like(alpha, 1)
 

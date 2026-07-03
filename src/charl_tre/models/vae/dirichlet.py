@@ -50,8 +50,7 @@ class _AntennaEncoder(nn.Module):
         # Infer flattened feature dimension for linear head
         _, flat_dim = self.get_shapes()
 
-        # Linear head for Dirichlet concentration parameters (alpha)
-        # Use softplus to ensure positive values
+        #  Linear head to produce concentration parameters (alpha) for the Dirichlet distribution
         self._alpha = nn.Sequential(nn.Linear(flat_dim, n_components), nn.Softplus())
 
     @torch.no_grad()
@@ -67,11 +66,12 @@ class _AntennaEncoder(nn.Module):
         x = self._conv[:-1](x)
         return x.shape[1:], int(x.numel() // x.shape[0])
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, eps: float = 1e-4) -> torch.Tensor:
         """Compute concentration parameters (alpha) for a single-antenna input.
 
         Arguments:
             x: Input tensor of shape (batch_size, window_size, n_subcarriers) for one antenna.
+            eps: Small constant to add to the output to avoid zero concentration parameters.
 
         Returns:
             alpha: Tensor of shape (batch_size, n_components) representing
@@ -80,7 +80,10 @@ class _AntennaEncoder(nn.Module):
         """
         x = x.permute(0, 2, 1).unsqueeze(-1).contiguous()  # (batch_size, n_subcarriers, window_size, 1)
         z = self._conv(x)
-        return self._alpha(z) + 1
+
+        # Add a small constant to avoid zero concentration parameters,
+        # which can cause numerical issues in the Dirichlet distribution.
+        return self._alpha(z) + eps
 
 
 class _AntennaDecoder(nn.Module):
