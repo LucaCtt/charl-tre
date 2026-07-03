@@ -42,8 +42,6 @@ class HyperParams:
     """Maximum weight for the KL divergence term during annealing."""
     n_components: ParamRange[int]
     """Number of components in the Dirichlet distribution (latent space dimensionality)."""
-    prior_alpha: ParamRange[float]
-    """Prior alpha for the Dirichlet distribution."""
     n_fusion_layers: ParamRange[int]
     """Number of layers in the delayed fusion classifier."""
     fusion_dropout: ParamRange[float]

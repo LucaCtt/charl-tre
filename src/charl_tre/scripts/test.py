@@ -1,4 +1,3 @@
-import json
 import logging
 from pathlib import Path
 
@@ -13,6 +12,7 @@ from charl_tre.models import fusion, vae
 from charl_tre.models.fusion.evaluator import Evaluator
 from charl_tre.models.vae.dirichlet import CONV_SPECS
 from charl_tre.settings import Settings
+from charl_tre.studies import get_best_model, read_study
 
 settings = Settings()
 
@@ -28,31 +28,28 @@ def _run_test(
 ) -> None:
     util.setup_ddp(rank, world_size)
 
-    best_model_path = util.get_best_model_path(Path(settings.study_path))
-
-    with (best_model_path / "results.json").open("r") as f:
-        info = json.load(f)
+    best_model = get_best_model(read_study(settings.study_path))
+    best_model_path = Path(settings.study_path) / f"trial_{best_model.trial_number}"
 
     vaes: list[vae.SingleAntenna] = []
-    for antenna_idx in range(settings.n_antennas):
+    for _ in range(settings.n_antennas):
         vae_model = vae.SingleAntenna(
             settings.vae_window_size,
             settings.n_subcarriers,
-            info["n_components"],
-            CONV_SPECS[info["conv_layers_spec"]],
+            best_model.params["n_components"],
+            CONV_SPECS[best_model.params["conv_layers_spec"]],
         )
 
-        antenna_model_path = best_model_path / f"vae_{antenna_idx}.pt"
-        best_model_weights = torch.load(antenna_model_path, weights_only=True)
-        vae_model.load_state_dict(best_model_weights)
         vaes.append(vae_model)
 
     delayed_fusion = fusion.Delayed(
         vaes,
-        info["n_components"],
+        best_model.params["n_components"],
         settings.n_activities,
-        settings.n_fusion_layers.min,
-        settings.fusion_dropout.min,
+        settings.vae_window_size,
+        settings.overlap_size,
+        best_model.params["n_fusion_layers"],
+        best_model.params["fusion_dropout"],
     )
 
     fusion_weights = torch.load(best_model_path / "fusion.pt", weights_only=True)
@@ -64,7 +61,7 @@ def _run_test(
 
         eval_dl = DataLoader(
             test_ds,
-            batch_size=settings.batch_size.min,
+            batch_size=best_model.params["batch_size"],
             shuffle=False,
             num_workers=settings.num_workers,
             pin_memory=True,
@@ -83,18 +80,17 @@ def _run_test(
 
 def test() -> None:
     """Evaluate the best saved multi-antenna fusion model on the test set."""
-    logger.info("Loading datasets from %s...", settings.dataset_path)
+    logger.info("Loading scenario from %s...", settings.dataset_path)
     _, _, test_ds = dataset.load(
         dataset_path=Path(settings.dataset_path),
         window_size=settings.fusion_window_size,
         n_activities=settings.n_activities,
         stride=settings.stride,
     )
-    logger.info("Test dataset loaded with %d samples", len(test_ds))
+    logger.info("Scenario loaded.")
 
     world_size = torch.cuda.device_count() if torch.cuda.is_available() else 1
 
-    logger.info("Evaluating best saved fusion model...")
     spawn(
         _run_test,
         args=(world_size, test_ds),

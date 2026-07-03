@@ -4,15 +4,13 @@ import torch
 import torch.nn.functional as func
 
 
-def dirichlet_kl_divergence(alpha: torch.Tensor, prior_alpha: float = 1.0, free_bits: float = 0.0) -> torch.Tensor:
+def dirichlet_kl_divergence(alpha: torch.Tensor, free_bits: float = 0.0) -> torch.Tensor:
     """Compute KL divergence between Dirichlet distributions.
 
-    KL(q(z|x) || p(z)) where q(z|x) = Dir(alpha) and p(z) = Dir(prior_alpha)
+    KL(q(z|x) || p(z)) where q(z|x) = Dir(alpha) and p(z) = Dir(1)
 
     Arguments:
         alpha: Concentration parameters of shape (batch_size, n_components)
-        prior_alpha: Concentration parameter for the symmetric Dirichlet prior (default: 1.0)
-                    If 1.0, this is a uniform prior
         free_bits: Number of free bits to allow in the KL divergence (default: 0.0)
 
     Returns:
@@ -23,7 +21,7 @@ def dirichlet_kl_divergence(alpha: torch.Tensor, prior_alpha: float = 1.0, free_
     alpha = alpha.float()
 
     # Prior concentration parameters
-    prior_alpha_tensor = torch.full_like(alpha, prior_alpha)
+    prior_alpha_tensor = torch.full_like(alpha, 1)
 
     # Compute log of Gamma functions
     log_gamma_alpha = torch.lgamma(alpha)
@@ -55,8 +53,6 @@ def dirichlet_loss(
     alpha: torch.Tensor,
     kl_weight: float = 1.0,
     free_bits: float = 0.0,
-    prior_alpha: float = 1.0,
-    reduction: str = "mean",
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Compute the ELBO loss for Dirichlet VAE.
 
@@ -68,8 +64,6 @@ def dirichlet_loss(
         alpha: Concentration parameters of shape (batch_size, n_components)
         kl_weight: Weight for KL divergence term (default: 1.0)
         free_bits: Number of free bits to allow in the KL divergence (default: 0.0)
-        prior_alpha: Concentration parameter for the symmetric Dirichlet prior (default: 1.0)
-        reduction: How to reduce the loss ('mean' or 'sum')
 
     Returns:
         total_loss: Combined ELBO loss
@@ -78,17 +72,11 @@ def dirichlet_loss(
 
     """
     # Reconstruction loss (Mean Squared Error)
-    recon_loss = func.mse_loss(x_recon, x_true, reduction=reduction)
+    recon_loss = func.mse_loss(x_recon, x_true)
 
     # KL divergence loss
-    kl_per_sample = dirichlet_kl_divergence(alpha, prior_alpha, free_bits)
-    if reduction == "mean":
-        kl_loss = kl_per_sample.mean()
-    elif reduction == "sum":
-        kl_loss = kl_per_sample.sum()
-    else:
-        msg = f"Invalid reduction method: {reduction}"
-        raise ValueError(msg)
+    kl_per_sample = dirichlet_kl_divergence(alpha, free_bits)
+    kl_loss = kl_per_sample.mean()
 
     # Total loss (ELBO)
     total_loss = recon_loss + kl_weight * kl_loss

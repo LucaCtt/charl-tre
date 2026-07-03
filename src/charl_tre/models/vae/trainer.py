@@ -1,5 +1,5 @@
 import contextlib
-from typing import NotRequired, TypedDict
+from typing import TypedDict
 
 import optuna
 import torch
@@ -51,14 +51,10 @@ class TrainerParams(TypedDict):
     """Patience for detecting posterior collapse."""
     kl_final: float
     """Maximum KL divergence weight."""
-    prior_alpha: float
-    """Prior alpha for the Dirichlet distribution."""
-    free_bits_start: NotRequired[float]
+    free_bits_start: float
     """Initial free-bits floor for the KL divergence term."""
-    free_bits_end: NotRequired[float]
+    free_bits_end: float
     """Final free-bits floor for the KL divergence term."""
-    free_bits: NotRequired[float]
-    """Backward-compatible constant free-bits floor."""
 
 
 class Trainer:
@@ -94,7 +90,6 @@ class Trainer:
         self._train_dl = train_dl
         self._val_dl = val_dl
         self._params = params
-        self._prior_alpha = params["prior_alpha"]
         self._trial = trial
         self._optimizer = torch.optim.Adam(
             self._model.parameters(),
@@ -138,7 +133,6 @@ class Trainer:
                 alpha,
                 kl_weight=kl_weight,
                 free_bits=free_bits,
-                prior_alpha=self._prior_alpha,
             )
 
         self._scaler.scale(loss).backward()
@@ -226,7 +220,6 @@ class Trainer:
                     alpha,
                     kl_weight=kl_weight,
                     free_bits=free_bits,
-                    prior_alpha=self._prior_alpha,
                 )
 
             total_loss += loss.detach()
@@ -252,8 +245,8 @@ class Trainer:
         annealer = KLAnnealer(epochs, kl_final=self._params["kl_final"])
 
         # Backward compatibility: if only free_bits is provided, use a flat schedule.
-        start_free_bits = self._params.get("free_bits_start", self._params.get("free_bits", 0.0))
-        end_free_bits = self._params.get("free_bits_end", self._params.get("free_bits", 0.0))
+        start_free_bits = self._params["free_bits_start"]
+        end_free_bits = self._params["free_bits_end"]
         free_bits_annealer = FreeBitsAnnealer(
             total_epochs=epochs,
             start_value=start_free_bits,

@@ -82,10 +82,6 @@ class Settings(BaseSettings):
     hyperparam_n_components_max: int = 64
     hyperparam_n_components_step: Literal["log"] | int = 8
 
-    hyperparam_prior_alpha_min: float = 0.1
-    hyperparam_prior_alpha_max: float = 10.0
-    hyperparam_prior_alpha_step: Literal["log"] | float = "log"
-
     hyperparam_n_fusion_layers_min: int = 1
     hyperparam_n_fusion_layers_max: int = 3
     hyperparam_n_fusion_layers_step: int = 1

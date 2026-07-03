@@ -1,5 +1,4 @@
 import torch
-import torch.nn.functional as func
 from torch import nn
 
 ConvLayerSpec = list[tuple[int, int]]
@@ -81,9 +80,7 @@ class _AntennaEncoder(nn.Module):
         """
         x = x.permute(0, 2, 1).unsqueeze(-1).contiguous()  # (batch_size, n_subcarriers, window_size, 1)
         z = self._conv(x)
-        raw = self._alpha[0](z)  # linear layer output, before Softplus
-        raw = torch.clamp(raw, min=-20.0, max=20.0)
-        return func.softplus(raw) + 0.1  # eps floor: small alpha causes unstable Gamma reparameterization
+        return self._alpha(z) + 1
 
 
 class _AntennaDecoder(nn.Module):

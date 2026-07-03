@@ -69,10 +69,6 @@ def _objective(
         "kl_final",
         **hyperparams.kl_final.to_dict(),
     )
-    prior_alpha = trial.suggest_float(
-        "prior_alpha",
-        **hyperparams.prior_alpha.to_dict(),
-    )
     n_components = trial.suggest_int(
         "n_components",
         **hyperparams.n_components.to_dict(),
@@ -103,7 +99,6 @@ def _objective(
         collapse_patience=settings.collapse_patience,
         lr=lr,
         kl_final=kl_final,
-        prior_alpha=prior_alpha,
         free_bits_start=settings.free_bits_start,
         free_bits_end=settings.free_bits_end,
     )
@@ -170,6 +165,8 @@ def _objective(
         vaes,
         n_components,
         settings.n_activities,
+        settings.vae_window_size,
+        settings.overlap_size,
         n_fusion_layers,
         fusion_dropout,
     )
@@ -182,8 +179,6 @@ def _objective(
             lr=lr,
             early_stop_patience=settings.early_stop_patience,
             early_stop_warmup_epochs=settings.early_stop_warmup_epochs,
-            sample_window_size=settings.vae_window_size,
-            overlap_size=settings.overlap_size,
         ),
         rank,
     )
