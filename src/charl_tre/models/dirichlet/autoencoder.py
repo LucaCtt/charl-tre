@@ -1,21 +1,8 @@
 import torch
 from torch import nn
 
-ConvLayerSpec = list[tuple[int, int]]
-"""Specification for convolutional layers.
 
-Each entry represents (kernel_size_time, stride_time).
-Subcarrier kernel_size and stride are fixed to 1, as we don't want to convolve across subcarriers.
-"""
-CONV_SPECS: list[ConvLayerSpec] = [
-    [(3, 3)],
-    [(5, 5)],
-    [(5, 5), (3, 3)],
-    [(3, 3), (5, 5)],
-]
-
-
-class _AntennaEncoder(nn.Module):
+class _Encoder(nn.Module):
     """Encode a single-antenna CSI window into concentration parameters (alpha) for a Dirichlet distribution."""
 
     def __init__(
@@ -23,15 +10,16 @@ class _AntennaEncoder(nn.Module):
         window_size: int,
         n_subcarriers: int,
         n_components: int,
-        conv_layers: ConvLayerSpec,
+        conv_layers: list[tuple[int, int]],
     ) -> None:
-        """Initialize the AntennaEncoder with convolutional layers and linear head.
+        """Initialize the DirichletEncoder with convolutional layers and linear head.
 
         Arguments:
-            window_size: The size of the time window for CSI input.
-            n_subcarriers: The number of subcarriers in the CSI input.
-            n_components: The dimensionality of the Dirichlet distribution (number of components).
-            conv_layers: A list of tuples specifying the convolutional layers (kernel size and stride).
+            window_size (int): The size of the time window for CSI input.
+            n_subcarriers (int): The number of subcarriers in the CSI input.
+            n_components (int): The dimensionality of the Dirichlet distribution (number of components).
+            conv_layers (list[tuple[int, int]]): A list of tuples specifying
+                the convolutional layers (kernel size and stride).
 
         """
         super().__init__()
@@ -58,8 +46,8 @@ class _AntennaEncoder(nn.Module):
         """Return the latent feature map shape and its flattened size.
 
         Returns:
-            latent_feat_shape: The shape of the feature map after convolution (Channels, H, W).
-            flat_dim: The total number of features when the feature map is flattened.
+            latent_feat_shape (tuple[int, int, int]): The shape of the feature map after convolution (Channels, H, W).
+            flat_dim (int): The total number of features when the feature map is flattened.
 
         """
         x = torch.zeros(1, self._n_subcarriers, self._window_size, 1, device=next(self.parameters()).device)
@@ -70,11 +58,11 @@ class _AntennaEncoder(nn.Module):
         """Compute concentration parameters (alpha) for a single-antenna input.
 
         Arguments:
-            x: Input tensor of shape (batch_size, window_size, n_subcarriers) for one antenna.
-            eps: Small constant to add to the output to avoid zero concentration parameters.
+            x (torch.Tensor): Input tensor of shape (batch_size, window_size, n_subcarriers) for one antenna.
+            eps (float): Small constant to add to the output to avoid zero concentration parameters.
 
         Returns:
-            alpha: Tensor of shape (batch_size, n_components) representing
+            alpha (torch.Tensor): Tensor of shape (batch_size, n_components) representing
                 the concentration parameters of the Dirichlet distribution.
 
         """
@@ -86,7 +74,7 @@ class _AntennaEncoder(nn.Module):
         return self._alpha(z) + eps
 
 
-class _AntennaDecoder(nn.Module):
+class _Decoder(nn.Module):
     """Decode a latent vector back into a CSI window for a single antenna."""
 
     def __init__(
@@ -95,16 +83,17 @@ class _AntennaDecoder(nn.Module):
         flat_dim: int,
         n_subcarriers: int,
         n_components: int,
-        conv_layers: ConvLayerSpec,
+        conv_layers: list[tuple[int, int]],
     ) -> None:
-        """Initialize the AntennaDecoder with linear and deconvolutional layers.
+        """Initialize the DirichletDecoder with linear and deconvolutional layers.
 
         Arguments:
-            latent_feat_shape: The shape of the feature map before flattening in the encoder.
-            flat_dim: The total number of features when the feature map is flattened.
-            n_subcarriers: The number of subcarriers in the CSI input.
-            n_components: The number of Dirichlet components to decode from.
-            conv_layers: A list of tuples specifying the convolutional layers (kernel size and stride)
+            latent_feat_shape (tuple[int, int, int]): The shape of the feature map before flattening in the encoder.
+            flat_dim (int): The total number of features when the feature map is flattened.
+            n_subcarriers (int): The number of subcarriers in the CSI input.
+            n_components (int): The number of Dirichlet components to decode from.
+            conv_layers (list[tuple[int, int]]): A list of tuples
+                specifying the convolutional layers (kernel size and stride)
 
         """
         super().__init__()
@@ -135,11 +124,12 @@ class _AntennaDecoder(nn.Module):
         """Decode the latent vector into a CSI window.
 
         Arguments:
-            z: Input tensor of shape (batch_size, n_components) representing the latent vector for one antenna.
+            z (torch.Tensor): Input tensor of shape (batch_size, n_components)
+                representing the latent vector for one antenna.
 
         Returns:
-            recon: Tensor of shape (batch_size, window_size, n_subcarriers)
-                   representing the reconstructed CSI window for one antenna.
+            recon (torch.Tensor): Tensor of shape (batch_size, window_size, n_subcarriers)
+                representing the reconstructed CSI window for one antenna.
 
         """
         z = self._fc(z)  # (batch_size, flat_dim)
@@ -148,30 +138,31 @@ class _AntennaDecoder(nn.Module):
         return z.squeeze(-1).permute(0, 2, 1)  # (batch_size, window_size, n_subcarriers)
 
 
-class SingleAntenna(nn.Module):
-    """Dirichlet VAE architecture that encodes a single antenna's CSI data."""
+class Autoencoder(nn.Module):
+    """Dirichlet VAE architecture that encodes CSI data."""
 
     def __init__(
         self,
         window_size: int,
         n_subcarriers: int,
         n_components: int,
-        conv_layers: ConvLayerSpec,
+        conv_layers: list[tuple[int, int]],
     ) -> None:
-        """Initialize the DirichletVAE with an encoder and decoder for single-antenna CSI data.
+        """Initialize the DirichletVAE with an encoder and decoder for CSI data.
 
         Arguments:
-            window_size: The size of the time window for CSI input.
-            n_subcarriers: The number of subcarriers in the CSI input.
-            n_components: The number of components in the Dirichlet distribution (latent space dimensionality).
-            conv_layers: A list of tuples specifying the convolutional layers (kernel size and stride).
+            window_size (int): The size of the time window for CSI input.
+            n_subcarriers (int): The number of subcarriers in the CSI input.
+            n_components (int): The number of components in the Dirichlet distribution (latent space dimensionality).
+            conv_layers (list[tuple[int, int]]): A list of tuples
+                specifying the convolutional layers (kernel size and stride).
 
         """
         super().__init__()
 
-        self._encoder = _AntennaEncoder(window_size, n_subcarriers, n_components, conv_layers)
+        self._encoder = _Encoder(window_size, n_subcarriers, n_components, conv_layers)
         latent_feat_shape, flat_dim = self._encoder.get_shapes()
-        self._decoder = _AntennaDecoder(latent_feat_shape, flat_dim, n_subcarriers, n_components, conv_layers)
+        self._decoder = _Decoder(latent_feat_shape, flat_dim, n_subcarriers, n_components, conv_layers)
         self._n_components = n_components
 
         with torch.no_grad():
@@ -185,10 +176,10 @@ class SingleAntenna(nn.Module):
         """Reparameterization trick for Dirichlet distribution.
 
         Arguments:
-            alpha: Concentration parameters of shape (batch_size, n_components)
+            alpha (torch.Tensor): Concentration parameters of shape (batch_size, n_components)
 
         Returns:
-            z: Sampled latent variable of shape (batch_size, n_components)
+            z (torch.Tensor): Sampled latent variable of shape (batch_size, n_components)
 
         """
         gamma_dist = torch.distributions.Gamma(concentration=alpha, rate=torch.ones_like(alpha))
@@ -197,11 +188,29 @@ class SingleAntenna(nn.Module):
         return gamma_samples / gamma_samples.sum(dim=-1, keepdim=True)
 
     def encode(self, x: torch.Tensor) -> torch.Tensor:
-        """Encode the input CSI window into concentration parameters (alpha)."""
+        """Encode the input CSI window into concentration parameters.
+
+        Arguments:
+            x (torch.Tensor): Input tensor of shape (batch_size, window_size, n_subcarriers)
+
+        Returns:
+            alpha (torch.Tensor): Tensor of shape (batch_size, n_components)
+                representing the concentration parameters of the Dirichlet distribution.
+
+        """
         return self._encoder(x)
 
     def decode(self, z: torch.Tensor) -> torch.Tensor:
-        """Decode the latent vector to reconstruct the input."""
+        """Decode the latent vector to reconstruct the input.
+
+        Arguments:
+            z (torch.Tensor): Input tensor of shape (batch_size, n_components)
+
+        Returns:
+            recon (torch.Tensor): Tensor of shape (batch_size, window_size, n_subcarriers)
+                representing the reconstructed CSI window.
+
+        """
         return self._decoder(z)
 
     def forward(
@@ -211,11 +220,12 @@ class SingleAntenna(nn.Module):
         """Encode the input, sample a latent variable, and decode to reconstruct the input.
 
         Arguments:
-            x: Input tensor of shape (batch_size, window_size, n_subcarriers).
+            x (torch.Tensor): Input tensor of shape (batch_size, window_size, n_subcarriers).
 
         Returns:
-            recon: Tensor of shape (batch_size, window_size, n_subcarriers) representing the reconstructed input.
-            alpha: Tensor of shape (batch_size, n_components)
+            recon (torch.Tensor): Tensor of shape (batch_size, window_size, n_subcarriers)
+                representing the reconstructed input.
+            alpha (torch.Tensor): Tensor of shape (batch_size, n_components)
                 representing the concentration parameters of the Dirichlet distribution.
 
         """

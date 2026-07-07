@@ -10,32 +10,12 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from charl_tre.models.early_stopping import EarlyStopping
-from charl_tre.models.vae.collapse_detector import CollapseDetector
-from charl_tre.models.vae.free_bits_annealer import FreeBitsAnnealer
-from charl_tre.models.vae.kl_annealer import KLAnnealer
-from charl_tre.models.vae.loss import dirichlet_loss
-
-
-def _is_dead(tensor: torch.Tensor) -> bool:
-    """Check if a tensor contains NaN or infinite values."""
-    return bool(torch.isnan(tensor).any() or torch.isinf(tensor).any())
-
-
-class DeadLossError(Exception):
-    """Raised when the loss becomes NaN or infinite during training."""
-
-    def __init__(self) -> None:
-        """Initialize the error with the problematic loss value."""
-        super().__init__("Loss became NaN or infinite.")
-
-
-class PosteriorCollapseError(Exception):
-    """Raised when the VAE posterior collapses during training."""
-
-    def __init__(self) -> None:
-        """Initialize the error with a default message."""
-        super().__init__("Posterior collapse detected.")
+from charl_tre.models.common import errors, util
+from charl_tre.models.common.early_stopping import EarlyStopping
+from charl_tre.models.dirichlet.collapse_detector import CollapseDetector
+from charl_tre.models.dirichlet.free_bits_annealer import FreeBitsAnnealer
+from charl_tre.models.dirichlet.kl_annealer import KLAnnealer
+from charl_tre.models.dirichlet.loss import elbo_loss
 
 
 class TrainerParams(TypedDict):
@@ -72,12 +52,12 @@ class Trainer:
         """Initialize the Trainer.
 
         Arguments:
-            model: VAE model to be trained.
-            train_dl: DataLoader for training data.
-            val_dl: DataLoader for validation data.
-            params: VAE training parameters.
-            gpu_id: GPU ID for Distributed Data Parallel.
-            trial: Optuna trial for hyperparameter optimization (optional).
+            model (nn.Module): VAE model to be trained.
+            train_dl (DataLoader): DataLoader for training data.
+            val_dl (DataLoader): DataLoader for validation data.
+            params (TrainerParams): VAE training parameters.
+            gpu_id (int): GPU ID for Distributed Data Parallel.
+            trial (TorchDistributedTrial | None): Optuna trial for hyperparameter optimization (optional).
 
         """
         self._device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
@@ -115,19 +95,20 @@ class Trainer:
         """Run a single training batch.
 
         Arguments:
-            x_true: Ground truth input tensor.
-            kl_weight: Current KL divergence weight.
-            free_bits: Current free-bits floor for KL divergence.
+            x_true (torch.Tensor): Ground truth input tensor.
+            kl_weight (float): Current KL divergence weight.
+            free_bits (float): Current free-bits floor for KL divergence.
 
         Returns:
-            Tuple containing total loss, reconstruction loss, KL divergence loss, and alpha.
+            tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+                Tuple containing total loss, reconstruction loss, KL divergence loss, and alpha.
 
         """
         self._optimizer.zero_grad(set_to_none=True)
 
         with torch.autocast(device_type=self._device.type, dtype=torch.float16):
             x_recon, alpha = self._model(x_true)
-            loss, recon_loss, kl_loss = dirichlet_loss(
+            loss, recon_loss, kl_loss = elbo_loss(
                 x_recon,
                 x_true,
                 alpha,
@@ -152,12 +133,13 @@ class Trainer:
         """Run a single training epoch.
 
         Arguments:
-            epoch: Current epoch number.
-            kl_weight: Current KL divergence weight.
-            free_bits: Current free-bits floor for KL divergence.
+            epoch (int): Current epoch number.
+            kl_weight (float): Current KL divergence weight.
+            free_bits (float): Current free-bits floor for KL divergence.
 
         Returns:
-            Tuple containing average total loss, reconstruction loss, and KL divergence loss.
+            tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+                Tuple containing average total loss, reconstruction loss, and KL divergence loss.
 
         """
         self._model.train()
@@ -198,11 +180,11 @@ class Trainer:
         """Run a single validation epoch.
 
         Arguments:
-            kl_weight: Current KL divergence weight.
-            free_bits: Current free-bits floor for KL divergence.
+            kl_weight (float): Current KL divergence weight.
+            free_bits (float): Current free-bits floor for KL divergence.
 
         Returns:
-            Average validation loss over the validation dataset.
+            torch.Tensor: Average validation loss over the validation dataset.
 
         """
         self._model.eval()
@@ -214,7 +196,7 @@ class Trainer:
 
             with torch.autocast(device_type=self._device.type, dtype=torch.float16):
                 x_recon, alpha = self._model(x_true)
-                loss, _, _ = dirichlet_loss(
+                loss, _, _ = elbo_loss(
                     x_recon,
                     x_true,
                     alpha,
@@ -235,10 +217,11 @@ class Trainer:
         """Train the VAE model for a specified number of epochs.
 
         Arguments:
-            epochs: Number of epochs to train.
+            epochs (int): Number of epochs to train.
 
         Returns:
-            Tuple containing average total loss, reconstruction loss, and KL divergence loss over all epochs.
+            tuple[float, float, float]: Tuple containing average total loss,
+                reconstruction loss, and KL divergence loss over all epochs.
 
         """
         total_metrics = torch.zeros(3, device=self._device)
@@ -263,20 +246,20 @@ class Trainer:
                 free_bits_annealer.value,
             )
 
-            if _is_dead(torch.tensor([epoch_loss, epoch_recon_loss, epoch_kl_loss])):
-                raise DeadLossError
+            if util.is_dead(torch.tensor([epoch_loss, epoch_recon_loss, epoch_kl_loss])):
+                raise errors.DeadLossError
 
             self._collapse_detector.step(epoch_kl_loss)
             if self._collapse_detector.is_collapsed():
-                raise PosteriorCollapseError
+                raise errors.PosteriorCollapseError
 
             # Distributed averaging of metrics
             total_metrics += torch.stack([epoch_loss, epoch_recon_loss, epoch_kl_loss])
             epochs_run += 1
 
             val_loss = self._run_val_epoch(annealer.weight, free_bits_annealer.value)
-            if _is_dead(val_loss):
-                raise DeadLossError
+            if util.is_dead(val_loss):
+                raise errors.DeadLossError
 
             self._early_stopping.step(val_loss)
             if self._early_stopping.should_stop:

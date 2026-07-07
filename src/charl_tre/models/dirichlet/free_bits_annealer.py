@@ -14,9 +14,9 @@ class FreeBitsAnnealer:
         """Initialize a linear-decay free-bits schedule.
 
         Arguments:
-            total_epochs: Number of epochs across which to apply the schedule.
-            start_value: Initial free-bits value at epoch 0.
-            end_value: Final free-bits value at the end of the schedule.
+            total_epochs (int): Number of epochs across which to apply the schedule.
+            start_value (float): Initial free-bits value at epoch 0.
+            end_value (float): Final free-bits value at the end of the schedule.
 
         """
         if total_epochs <= 0:

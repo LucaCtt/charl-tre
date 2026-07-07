@@ -2,8 +2,6 @@ from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from charl_tre.models.vae.dirichlet import CONV_SPECS
-
 
 class Settings(BaseSettings):
     """Configuration settings for the model and training."""
@@ -54,6 +52,12 @@ class Settings(BaseSettings):
     """Initial free-bits floor for the KL divergence term."""
     free_bits_end: float = 0.05
     """Final free-bits floor for the KL divergence term."""
+    dirichlet_conv_specs: list[list[tuple[int, int]]] = [
+        [(5, 5)],
+        [(3, 3)],
+        [(5, 5), (3, 3)],
+        [(3, 3), (5, 5)],
+    ]
 
     # Optuna study settings
     n_trials: int = 100
@@ -90,7 +94,7 @@ class Settings(BaseSettings):
     hyperparam_fusion_dropout_max: float = 0.3
     hyperparam_fusion_dropout_step: float = 0.1
 
-    hyperparam_conv_layers_spec: list[int] = [*range(len(CONV_SPECS))]
+    hyperparam_conv_layers_spec: list[int] = [*range(len(dirichlet_conv_specs))]
 
     @property
     def n_activities(self) -> int:

@@ -8,8 +8,8 @@ class CollapseDetector:
         """Initialize the CollapseDetector with specified parameters.
 
         Arguments:
-            patience: Number of epochs to consider for collapse detection.
-            collapse_threshold: KL loss threshold below which the model is considered collapsed.
+            patience (int): Number of epochs to consider for collapse detection.
+            collapse_threshold (float): KL loss threshold below which the model is considered collapsed.
 
         """
         self._patience = patience
@@ -20,14 +20,19 @@ class CollapseDetector:
         """Add a new KL loss value and check for collapse.
 
         Arguments:
-            kl_loss: The KL divergence loss for the current epoch.
+            kl_loss (torch.Tensor): The KL divergence loss for the current epoch.
 
         """
         self._kl_history.append(kl_loss)
         self._kl_history = self._kl_history[-self._patience :]
 
     def is_collapsed(self) -> bool:
-        """Check if the model is considered collapsed based on recent KL loss history."""
+        """Check if the model is considered collapsed based on recent KL loss history.
+
+        Returns:
+            bool: True if the model is collapsed, False otherwise.
+
+        """
         if len(self._kl_history) < self._patience:
             return False  # Not enough history to determine collapse
 

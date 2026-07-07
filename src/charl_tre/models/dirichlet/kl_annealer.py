@@ -17,15 +17,15 @@ class KLAnnealer:
         """Initialize the KL annealer.
 
         Arguments:
-            total_epochs: Total number of epochs for the entire training run.
-            n_cycles: Number of cycles to divide the epochs into.
-            kl_final: Final KL weight to reach at the end of each ramp.
-            ramp_fraction: Fraction of each cycle spent ramping up the KL weight (between 0 and 1).
+            total_epochs (int): Total number of epochs for the entire training run.
+            n_cycles (int): Number of cycles to divide the epochs into.
+            kl_final (float): Final KL weight to reach at the end of each ramp.
+            ramp_fraction (float): Fraction of each cycle spent ramping up the KL weight (between 0 and 1).
 
         """
-        self.__epoch = 0
-        self.__schedule = self._build_schedule(total_epochs, n_cycles, kl_final, ramp_fraction)
-        self.__weight = self.__schedule[0]
+        self._epoch = 0
+        self._schedule = self._build_schedule(total_epochs, n_cycles, kl_final, ramp_fraction)
+        self._weight = self._schedule[0]
 
     @staticmethod
     def _build_schedule(
@@ -49,11 +49,11 @@ class KLAnnealer:
 
     def step(self) -> None:
         """Advance to the next epoch and update the KL weight accordingly."""
-        if self.__epoch < len(self.__schedule):
-            self.__weight = self.__schedule[self.__epoch]
-            self.__epoch += 1
+        if self._epoch < len(self._schedule):
+            self._weight = self._schedule[self._epoch]
+            self._epoch += 1
 
     @property
     def weight(self) -> float:
         """Get the current KL weight."""
-        return self.__weight
+        return self._weight

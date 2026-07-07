@@ -1,7 +1,6 @@
 import torch
+from torch import nn
 from torch.utils.data import DataLoader
-
-from charl_tre.models import fusion
 
 
 class Evaluator:
@@ -9,7 +8,7 @@ class Evaluator:
 
     def __init__(
         self,
-        model: fusion.Delayed,
+        model: nn.Module,
         dataloader: DataLoader,
         device: torch.device | None = None,
     ) -> None:

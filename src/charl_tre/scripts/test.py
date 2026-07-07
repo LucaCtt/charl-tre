@@ -8,9 +8,8 @@ from torch.multiprocessing.spawn import spawn
 from torch.utils.data import DataLoader
 
 from charl_tre import dataset, util
-from charl_tre.models import fusion, vae
-from charl_tre.models.fusion.evaluator import Evaluator
-from charl_tre.models.vae.dirichlet import CONV_SPECS
+from charl_tre.models import classifier, dirichlet
+from charl_tre.models.evaluator import Evaluator
 from charl_tre.settings import Settings
 from charl_tre.studies import get_best_model, read_study
 
@@ -31,18 +30,18 @@ def _run_test(
     best_model = get_best_model(read_study(settings.study_path))
     best_model_path = Path(settings.study_path) / f"trial_{best_model.trial_number}"
 
-    vaes: list[vae.SingleAntenna] = []
+    vaes: list[dirichlet.Autoencoder] = []
     for _ in range(settings.n_antennas):
-        vae_model = vae.SingleAntenna(
+        vae_model = dirichlet.Autoencoder(
             settings.vae_window_size,
             settings.n_subcarriers,
             best_model.params["n_components"],
-            CONV_SPECS[best_model.params["conv_layers_spec"]],
+            settings.dirichlet_conv_specs[best_model.params["conv_layers_spec"]],
         )
 
         vaes.append(vae_model)
 
-    delayed_fusion = fusion.Delayed(
+    delayed_fusion = classifier.Classifier(
         vaes,
         best_model.params["n_components"],
         settings.n_activities,

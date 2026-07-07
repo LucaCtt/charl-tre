@@ -6,8 +6,8 @@ from torch import distributed as dist
 from torch import nn
 from torch.utils.data import DataLoader, DistributedSampler
 
-from charl_tre.models import fusion
-from charl_tre.models.early_stopping import EarlyStopping
+from charl_tre.models import classifier
+from charl_tre.models.common.early_stopping import EarlyStopping
 
 
 class TrainerParams(TypedDict):
@@ -26,7 +26,7 @@ class Trainer:
 
     def __init__(
         self,
-        model: fusion.Delayed,
+        model: classifier.Classifier,
         train_dl: DataLoader,
         val_dl: DataLoader,
         params: TrainerParams,

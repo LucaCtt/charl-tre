@@ -1,3 +1,5 @@
-from charl_tre.models import fusion, vae
+from charl_tre.models import classifier, dirichlet, early
+from charl_tre.models.common import errors
+from charl_tre.models.evaluator import Evaluator
 
-__all__ = ["fusion", "vae"]
+__all__ = ["Evaluator", "classifier", "dirichlet", "early", "errors"]

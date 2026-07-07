@@ -1,52 +1,23 @@
-import math
-
 import torch
 from torch import nn
 
-from charl_tre.models.vae.dirichlet import SingleAntenna
+from charl_tre.models.common import util
 
 _N_DIMS_MULTIPLE_ANTENNAS: int = 4
 
-
-def _next_multiple_of_8(n: int) -> int:
-    """Round n up to the next multiple of 8."""
-    return math.ceil(n / 8) * 8
-
-
-def _build_fc(in_dim: int, out_dim: int, n_layers: int, dropout: float) -> nn.Sequential:
-    """Build FC block with n_layers, keeping hidden dims as multiples of 8."""
-    if n_layers == 1:
-        return nn.Sequential(nn.Linear(in_dim, out_dim))
-
-    # Geometrically interpolate hidden dims, only internal ones must be multiples of 8
-    dims = (
-        [in_dim]
-        + [_next_multiple_of_8(int(in_dim * ((out_dim / in_dim) ** (i / (n_layers - 1))))) for i in range(1, n_layers)]
-        + [out_dim]
-    )
-
-    layers = []
-    for i in range(n_layers):
-        layers.append(nn.Linear(dims[i], dims[i + 1]))
-        if i < n_layers - 1:
-            if dropout > 0:
-                layers.append(nn.Dropout(p=dropout))
-            layers.append(nn.GELU())
-
-    return nn.Sequential(*layers)
 
 def _split_test_window(x: torch.Tensor, sample_window_size: int, overlap_size: int) -> torch.Tensor:
     """Split every x along the window size dimension into separate samples.
 
     Args:
-        x: (batch_size, n_antennas, in_window_size, n_subcarriers) input tensor.
-        sample_window_size: The size of the windows to split the input into.
-        overlap_size: how many frames to overlap between windows.
+        x (torch.Tensor): (batch_size, n_antennas, in_window_size, n_subcarriers) input tensor.
+        sample_window_size (int): The size of the windows to split the input into.
+        overlap_size (int): how many frames to overlap between windows.
 
     Returns:
-        (batch_size * n_windows, n_antennas, sample_window_size, n_subcarriers) output tensor,
-        where n_windows is the number of windows that can be created from the in_window_size
-        given the sample window size and overlap size.
+        torch.Tensor: (batch_size * n_windows, n_antennas, sample_window_size, n_subcarriers) output tensor,
+            where n_windows is the number of windows that can be created from the in_window_size
+            given the sample window size and overlap size.
 
     """
     if sample_window_size < overlap_size:
@@ -83,12 +54,12 @@ def _split_test_window(x: torch.Tensor, sample_window_size: int, overlap_size: i
     return x_unfold.view(batch_size * n_windows, n_antennas, sample_window_size, n_subcarriers)
 
 
-class Delayed(nn.Module):
-    """Delayed fusion module for multi-antenna CSI data."""
+class Classifier(nn.Module):
+    """Classifier for delayed fusion of Dirichlet latents from multiple antennas."""
 
     def __init__(
         self,
-        antennas: list[SingleAntenna],
+        antennas: list[nn.Module],
         n_components: int,
         n_activities: int,
         sample_window_size: int,
@@ -96,7 +67,18 @@ class Delayed(nn.Module):
         n_layers: int,
         dropout: float,
     ) -> None:
-        """Initialize the delayed fusion module for Dirichlet latents."""
+        """Initialize the classifier for delayed fusion of Dirichlet latents.
+
+        Arguments:
+            antennas (list[nn.Module]): List of trained modules for each antenna.
+            n_components (int): Number of components in the Dirichlet distribution.
+            n_activities (int): Number of activity classes.
+            sample_window_size (int): Size of the sample window.
+            overlap_size (int): Size of the overlap between windows.
+            n_layers (int): Number of layers in the fully connected network.
+            dropout (float): Dropout probability.
+
+        """
         super().__init__()
 
         self._sample_window_size = sample_window_size
@@ -106,22 +88,17 @@ class Delayed(nn.Module):
         for param in self._antennas.parameters():
             param.requires_grad = False
 
-        self._fc = _build_fc(n_components * len(antennas), n_activities, n_layers, dropout)
-
-    @property
-    def antennas(self) -> list[SingleAntenna]:
-        """Return the list of SingleAntenna modules."""
-        return list(self._antennas)  # pyright: ignore[reportReturnType]
+        self._fc = util.build_fc(n_components * len(antennas), n_activities, n_layers, dropout)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass through the delayed fusion module.
 
         Arguments:
-            x: Input tensor of shape (batch_size, n_antennas, window_size, n_subcarriers) if num_antennas > 1,
-                or (batch_size, window_size, n_subcarriers) if num_antennas=1.
+            x (torch.Tensor): Input tensor of shape (batch_size, n_antennas, window_size, n_subcarriers)
+                if num_antennas > 1, or (batch_size, window_size, n_subcarriers) if num_antennas=1.
 
         Returns:
-            Output tensor of shape (batch_size, n_activities).
+            torch.Tensor: Output tensor of shape (batch_size, n_activities).
 
         """
         x_r = _split_test_window(x, self._sample_window_size, self._overlap_size)
@@ -131,7 +108,14 @@ class Delayed(nn.Module):
 
         outs = []
         for i, antenna in enumerate(self._antennas):
-            _, alpha = antenna(x_r[:, i] if x_r.ndim == _N_DIMS_MULTIPLE_ANTENNAS else x_r)
+            # Early fusion modules consume all antennas at once, while delayed-fusion
+            # antenna modules consume a single antenna slice.
+            if x_r.ndim == _N_DIMS_MULTIPLE_ANTENNAS and not hasattr(antenna, "_n_antennas"):
+                antenna_in = x_r[:, i]
+            else:
+                antenna_in = x_r
+
+            _, alpha = antenna(antenna_in)
             alpha = alpha.reshape(batch_size, n_windows, -1).mean(dim=1)
             outs.append(alpha)
 
