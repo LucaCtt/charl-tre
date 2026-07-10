@@ -172,7 +172,8 @@ class Autoencoder(nn.Module):
                 msg = f"Decoder output shape {recon.shape} does not match input shape {dummy.shape}"
                 raise ValueError(msg)
 
-    def _reparameterize(self, alpha: torch.Tensor) -> torch.Tensor:
+    @staticmethod
+    def reparameterize(alpha: torch.Tensor) -> torch.Tensor:
         """Reparameterization trick for Dirichlet distribution.
 
         Arguments:
@@ -230,7 +231,7 @@ class Autoencoder(nn.Module):
 
         """
         alpha = self.encode(x)
-        z = self._reparameterize(alpha)
+        z = self.reparameterize(alpha)
         recon = self.decode(z)
 
         return recon, alpha

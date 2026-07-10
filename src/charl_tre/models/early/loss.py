@@ -43,58 +43,29 @@ def hierarchical_loss(
     batch_size, n_mixtures = mix_logits.shape
     mix_probs = func.softmax(mix_logits, dim=-1)
 
-    # Component-wise losses
-    recon_losses_per_mix = []
-    kl_gaussian_per_mix = []
+    # Single reconstruction loss
+    recon_loss = torch.nn.functional.mse_loss(x_recon, x_true, reduction="mean")
 
-    for m in range(n_mixtures):
-        # MSE for mixture branch m
-        mse_m = func.mse_loss(x_recon[:, m], x_true, reduction="mean")
-        recon_losses_per_mix.append(mse_m)
+    # Single local Gaussian KL
+    # Uses the extracted helper function directly over the batch tensors
+    kl_gaussian = _kl_divergence_gaussian(mu_q, logvar_q, mu_prior, logvar_prior)
+    kl_gaussian = torch.clamp(kl_gaussian, min=free_bits_gaussian).mean()
 
-        # Local Gaussian KL for mixture branch m using the extracted helper
-        kl_gauss_m = _kl_divergence_gaussian(mu_q[:, m], logvar_q[:, m], mu_prior[:, m], logvar_prior[:, m])
-        kl_gaussian_per_mix.append(kl_gauss_m)
-
-    # Pack component losses into tensors: (batch, n_mixtures)
-    recon_losses_tensor = torch.stack(recon_losses_per_mix, dim=-1)  # Broadcasting/scalar handling
-    if recon_losses_tensor.dim() == 1:
-        recon_losses_tensor = recon_losses_tensor.expand(batch_size, -1)
-
-    kl_gaussian_tensor = torch.stack(kl_gaussian_per_mix, dim=-1)
-
-    # Marginalize local tier tasks (expectation over q(c|x))
-    marginalized_recon = (mix_probs * recon_losses_tensor).sum(dim=-1).mean()
-
-    kl_gaussian_samples = (mix_probs * kl_gaussian_tensor).sum(dim=-1)
-    kl_gaussian_samples = torch.clamp(kl_gaussian_samples, min=free_bits_gaussian)
-    marginalized_kl_gaussian = kl_gaussian_samples.mean()
-
-    # Mixture of Dirichlets analytical KL
-    # Categorical component vs Uniform Prior
+    # Mixture of Dirichlets Analytical KL
     kl_categorical = (
-        mix_probs
-        * (
-            torch.log(mix_probs + 1e-6)
-            + torch.log(torch.tensor(n_mixtures, device=mix_logits.device, dtype=mix_logits.dtype))
-        )
+        mix_probs * (torch.log(mix_probs + 1e-6) + torch.log(torch.tensor(n_mixtures, device=mix_logits.device)))
     ).sum(dim=-1)
 
-    # Evaluate Dirichlet-to-Dir(1) segments natively
     _, _, n_comp = alpha.shape
     alpha_flat = alpha.view(-1, n_comp)
     kl_dir_flat = _kl_divergence_dirichlet(alpha_flat).view(batch_size, n_mixtures)
 
     kl_mdm_samples = kl_categorical + (mix_probs * kl_dir_flat).sum(dim=-1)
-    kl_mdm_samples = torch.clamp(kl_mdm_samples, min=free_bits_dirichlet)
-    kl_mdm_loss = kl_mdm_samples.mean()
+    kl_mdm_loss = torch.clamp(kl_mdm_samples, min=free_bits_dirichlet).mean()
 
-    # Total Expected Loss
-    total_loss = (
-        marginalized_recon + (kl_weight_dirichlet * kl_mdm_loss) + (kl_weight_gaussian * marginalized_kl_gaussian)
-    )
+    total_loss = recon_loss + (kl_weight_dirichlet * kl_mdm_loss) + (kl_weight_gaussian * kl_gaussian)
 
-    return total_loss, marginalized_recon, kl_mdm_loss, marginalized_kl_gaussian
+    return total_loss, recon_loss, kl_mdm_loss, kl_gaussian
 
 
 def _kl_divergence_dirichlet(alpha: torch.Tensor) -> torch.Tensor:

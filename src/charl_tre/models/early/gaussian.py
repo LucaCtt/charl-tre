@@ -160,7 +160,18 @@ class Autoencoder(nn.Module):
         latent_feat_shape, flat_dim = self._encoder.get_shapes()
         self._decoder = _Decoder(latent_feat_shape, flat_dim, n_subcarriers, n_gaussians, conv_layers)
 
-    def _reparameterize(self, mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
+    @staticmethod
+    def reparameterize(mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
+        """Reparameterize the latent distribution using the mean and log variance.
+
+        Arguments:
+            mu (torch.Tensor): Mean of the latent distribution.
+            logvar (torch.Tensor): Log variance of the latent distribution.
+
+        Returns:
+            torch.Tensor: Sampled latent vector from the reparameterized distribution.
+
+        """
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
         return mu + eps * std
@@ -211,7 +222,7 @@ class Autoencoder(nn.Module):
 
         """
         h_a, mu_bu, logvar_bu = self.encode(x)
-        z = self._reparameterize(mu_bu, logvar_bu)
+        z = self.reparameterize(mu_bu, logvar_bu)
         x_recon = self.decode(z)
 
         return x_recon, h_a, mu_bu, logvar_bu

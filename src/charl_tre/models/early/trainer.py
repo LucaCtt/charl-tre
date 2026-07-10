@@ -16,6 +16,7 @@ from charl_tre.models.dirichlet.collapse_detector import CollapseDetector
 from charl_tre.models.dirichlet.free_bits_annealer import FreeBitsAnnealer
 from charl_tre.models.dirichlet.kl_annealer import KLAnnealer
 from charl_tre.models.early.loss import hierarchical_loss
+from charl_tre.models.early.temperature_annealer import GumbelTemperatureAnnealer
 
 
 class TrainerParams(TypedDict):
@@ -75,11 +76,12 @@ class Trainer:
         w_gauss: float,
         fb_dir: float,
         fb_gauss: float,
+        temperature: float,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         self._optimizer.zero_grad(set_to_none=True)
 
         with torch.autocast(device_type=self._device.type, dtype=torch.float16):
-            recon, mix_logits, alpha, mu_q, logvar_q, mu_p, logvar_p = self._model(x_true)
+            recon, mix_logits, alpha, mu_q, logvar_q, mu_p, logvar_p = self._model(x_true, temperature)
 
             loss, recon_loss, kl_dir, kl_gauss = hierarchical_loss(
                 recon,
@@ -111,6 +113,7 @@ class Trainer:
         w_gauss: float,
         fb_dir: float,
         fb_gauss: float,
+        temperature: float,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         self._model.train()
         if isinstance(self._train_dl.sampler, DistributedSampler):
@@ -120,7 +123,12 @@ class Trainer:
 
         for x_true, _ in self._train_dl:
             loss, recon_loss, kl_dir, kl_gauss = self._run_batch(
-                x_true.to(self._device, non_blocking=True), w_dir, w_gauss, fb_dir, fb_gauss
+                x_true.to(self._device, non_blocking=True),
+                w_dir,
+                w_gauss,
+                fb_dir,
+                fb_gauss,
+                temperature,
             )
             metrics[0] += loss.detach()
             metrics[1] += recon_loss.detach()
@@ -138,14 +146,16 @@ class Trainer:
         return mean_metrics[0], mean_metrics[1], mean_metrics[2], mean_metrics[3]
 
     @torch.no_grad()
-    def _run_val_epoch(self, w_dir: float, w_gauss: float, fb_dir: float, fb_gauss: float) -> torch.Tensor:
+    def _run_val_epoch(
+        self, w_dir: float, w_gauss: float, fb_dir: float, fb_gauss: float, temperature: float
+    ) -> torch.Tensor:
         self._model.eval()
         total_loss = torch.tensor(0.0, device=self._device)
 
         for x_true_cpu, _ in self._val_dl:
             x_true = x_true_cpu.to(self._device, non_blocking=True)
             with torch.autocast(device_type=self._device.type, dtype=torch.float16):
-                recon, mix_logits, alpha, mu_q, logvar_q, mu_p, logvar_p = self._model(x_true)
+                recon, mix_logits, alpha, mu_q, logvar_q, mu_p, logvar_p = self._model(x_true, temperature)
                 loss, _, _, _ = hierarchical_loss(
                     recon,
                     x_true,
@@ -174,6 +184,7 @@ class Trainer:
 
         dir_annealer = KLAnnealer(epochs, kl_final=self._params["kl_dirichlet_final"])
         gauss_annealer = KLAnnealer(epochs, kl_final=self._params["kl_gaussian_final"])
+        temp_annealer = GumbelTemperatureAnnealer(total_epochs=epochs)
 
         dir_fb_annealer = FreeBitsAnnealer(
             total_epochs=epochs,
@@ -192,9 +203,15 @@ class Trainer:
             gauss_annealer.step()
             dir_fb_annealer.step()
             gauss_fb_annealer.step()
+            temp_annealer.step()
 
             epoch_loss, epoch_recon, epoch_kl_dir, epoch_kl_gauss = self._run_epoch(
-                epoch, dir_annealer.weight, gauss_annealer.weight, dir_fb_annealer.value, gauss_fb_annealer.value
+                epoch,
+                dir_annealer.weight,
+                gauss_annealer.weight,
+                dir_fb_annealer.value,
+                gauss_fb_annealer.value,
+                temp_annealer.value,
             )
 
             if util.is_dead(torch.stack([epoch_loss, epoch_recon, epoch_kl_dir, epoch_kl_gauss])):
@@ -211,7 +228,11 @@ class Trainer:
             epochs_run += 1
 
             val_loss = self._run_val_epoch(
-                dir_annealer.weight, gauss_annealer.weight, dir_fb_annealer.value, gauss_fb_annealer.value
+                dir_annealer.weight,
+                gauss_annealer.weight,
+                dir_fb_annealer.value,
+                gauss_fb_annealer.value,
+                temp_annealer.value
             )
             if util.is_dead(val_loss):
                 raise errors.DeadLossError

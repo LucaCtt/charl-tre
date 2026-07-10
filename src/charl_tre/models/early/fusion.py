@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 
+from charl_tre.models import dirichlet
 from charl_tre.models.common import util
 from charl_tre.models.early import gaussian
 
@@ -72,11 +73,6 @@ class HierarchicalFusion(nn.Module):
             for _ in range(n_antennas)
         ])
 
-    def _reparameterize_dirichlet(self, alpha: torch.Tensor) -> torch.Tensor:
-        gamma_dist = torch.distributions.Gamma(concentration=alpha, rate=torch.ones_like(alpha))
-        gamma_samples = gamma_dist.rsample()
-        return gamma_samples / (gamma_samples.sum(dim=-1, keepdim=True) + self._eps)
-
     def _precision_weighted_merge(
         self,
         mu_bu: torch.Tensor,
@@ -99,11 +95,13 @@ class HierarchicalFusion(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
+        temperature: float = 1.0,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Forward pass with Mixture of Dirichlets allocation and Ladder merging.
 
         Arguments:
             x: Input antenna signals of shape (batch, n_antennas, window_size, n_subcarriers)
+            temperature: Temperature for Gumbel-Softmax sampling of mixture assignments.
 
         Returns:
             recon: Reconstructed antenna signals
@@ -137,54 +135,41 @@ class HierarchicalFusion(nn.Module):
         )
 
         # Sample Dirichlet space for ALL mixtures simultaneously: (batch, n_mixtures, n_components)
-        s_components = self._reparameterize_dirichlet(alpha)
+        s_components = dirichlet.Autoencoder.reparameterize(alpha)
 
-        # Compute shared mixture representation by weighting each mixture's components
-        recons_all_mix = []
-        mu_q_all_mix, logvar_q_all_mix = [], []
-        mu_p_all_mix, logvar_p_all_mix = [], []
+        # Sample continuous relaxation of discrete gate: (Batch, N_Mixtures)
+        mix_sample = nn.functional.gumbel_softmax(mix_logits, tau=temperature, hard=False, dim=-1)
 
-        for m in range(self._n_mixtures):
-            s_m = s_components[:, m, :]  # (batch, n_components)
+        # Contract/Gate the components down to a single selected choice
+        # (Batch, 1, N_Mixtures) @ (Batch, N_Mixtures, N_Components) -> (Batch, N_Components)
+        s_shared = torch.bmm(mix_sample.unsqueeze(1), s_components).squeeze(1)
 
-            recons_m = []
-            mu_q_list, logvar_q_list = [], []
-            mu_prior_list, logvar_prior_list = [], []
+        recons = []
+        mu_q_list, logvar_q_list = [], []
+        mu_prior_list, logvar_prior_list = [], []
 
-            for i, gaussian_vae in enumerate(self._gaussians):
-                prior_params = self._top_down_priors[i](s_m)
-                mu_prior, logvar_prior = torch.chunk(prior_params, 2, dim=-1)
-                logvar_prior = torch.clamp(logvar_prior, min=-10, max=10)
+        for i, gaussian_vae in enumerate(self._gaussians):
+            prior_params = self._top_down_priors[i](s_shared)
+            mu_prior, logvar_prior = torch.chunk(prior_params, 2, dim=-1)
+            logvar_prior = torch.clamp(logvar_prior, min=-10, max=10)
 
-                # Merge with antenna-specific bottom-up parameters
-                mu_q, logvar_q = self._precision_weighted_merge(
-                    mu_bu_list[i],
-                    logvar_bu_list[i],
-                    mu_prior,
-                    logvar_prior,
-                )
+            mu_q, logvar_q = self._precision_weighted_merge(mu_bu_list[i], logvar_bu_list[i], mu_prior, logvar_prior)
 
-                std_q = torch.exp(0.5 * logvar_q)
-                z_a = mu_q + torch.randn_like(std_q) * std_q
+            std_q = torch.exp(0.5 * logvar_q)
+            z_a = mu_q + torch.randn_like(std_q) * std_q
 
-                recons_m.append(gaussian_vae.decode(z_a))  # pyright: ignore[reportCallIssue]
-                mu_q_list.append(mu_q)
-                logvar_q_list.append(logvar_q)
-                mu_prior_list.append(mu_prior)
-                logvar_prior_list.append(logvar_prior)
-
-            recons_all_mix.append(torch.stack(recons_m, dim=1))  # (batch, n_antennas, window, subcarriers)
-            mu_q_all_mix.append(torch.stack(mu_q_list, dim=1))  # (batch, n_antennas, n_gaussians)
-            logvar_q_all_mix.append(torch.stack(logvar_q_list, dim=1))
-            mu_p_all_mix.append(torch.stack(mu_prior_list, dim=1))
-            logvar_p_all_mix.append(torch.stack(logvar_prior_list, dim=1))
+            recons.append(gaussian_vae.decode(z_a))  # pyright: ignore[reportCallIssue]
+            mu_q_list.append(mu_q)
+            logvar_q_list.append(logvar_q)
+            mu_prior_list.append(mu_prior)
+            logvar_prior_list.append(logvar_prior)
 
         return (
-            torch.stack(recons_all_mix, dim=1),  # (batch, n_mixtures, n_antennas, window, subcarriers)
-            mix_logits,  # (batch, n_mixtures)
-            alpha,  # (batch, n_mixtures, n_components)
-            torch.stack(mu_q_all_mix, dim=1),  # (batch, n_mixtures, n_antennas, n_gaussians)
-            torch.stack(logvar_q_all_mix, dim=1),  # (batch, n_mixtures, n_antennas, n_gaussians)
-            torch.stack(mu_p_all_mix, dim=1),  # (batch, n_mixtures, n_antennas, n_gaussians)
-            torch.stack(logvar_p_all_mix, dim=1),  # (batch, n_mixtures, n_antennas, n_gaussians)
+            torch.stack(recons, dim=1),  # Shape: (Batch, N_Antennas, Window, Subcarriers) - NO mixture dimension
+            mix_logits,
+            alpha,
+            torch.stack(mu_q_list, dim=1),
+            torch.stack(logvar_q_list, dim=1),
+            torch.stack(mu_prior_list, dim=1),
+            torch.stack(logvar_prior_list, dim=1),
         )
