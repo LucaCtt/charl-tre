@@ -115,7 +115,9 @@ class Classifier(nn.Module):
             else:
                 antenna_in = x_r
 
-            _, alpha = antenna(antenna_in)
+            model_output = antenna(antenna_in)
+            alpha = model_output[2]
+
             alpha = alpha.reshape(batch_size, n_windows, -1).mean(dim=1)
             outs.append(alpha)
 

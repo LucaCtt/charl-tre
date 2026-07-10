@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     """Number of subcarriers in each CSI sample."""
     n_epochs: int = 150
     """Number of training epochs for the VAE."""
-    early_stop_patience: int = 20
+    early_stop_patience: int = 10
     """Number of epochs to wait before early stopping."""
     early_stop_warmup_epochs: int = 10
     """Number of epochs to wait before starting to check for early stopping."""
@@ -83,7 +83,7 @@ class Settings(BaseSettings):
     hyperparam_kl_final_step: Literal["log"] | float = 0.5
 
     hyperparam_n_components_min: int = 8
-    hyperparam_n_components_max: int = 64
+    hyperparam_n_components_max: int = 32
     hyperparam_n_components_step: Literal["log"] | int = 8
 
     hyperparam_n_fusion_layers_min: int = 1

@@ -241,17 +241,17 @@ def _objective_early(
         "lr",
         **hyperparams.lr.to_dict(),
     )
-    kl_final = trial.suggest_float(
+    kl_dirichlet_final = trial.suggest_float(
         "kl_final",
+        **hyperparams.kl_final.to_dict(),
+    )
+    kl_gaussian_final = trial.suggest_float(
+        "kl_gaussian_final",
         **hyperparams.kl_final.to_dict(),
     )
     n_components = trial.suggest_int(
         "n_components",
         **hyperparams.n_components.to_dict(),
-    )
-    conv_layers_spec = trial.suggest_categorical(
-        "conv_layers_spec",
-        hyperparams.conv_layers_spec.values,
     )
     batch_size = trial.suggest_int(
         "batch_size",
@@ -265,15 +265,21 @@ def _objective_early(
         "fusion_dropout",
         **hyperparams.fusion_dropout.to_dict(),
     )
+    n_mixtures = trial.suggest_int(
+        "n_mixtures",
+        low=1,
+        high=8,
+        step=1,
+    )
 
     if rank == 0:
         logger.info("Starting early fusion trial %s with parameters: %s", trial.number, trial.params)
 
-    early_fusion = early.Fusion(
-        settings.vae_window_size,
-        settings.n_subcarriers,
-        n_components,
-        settings.dirichlet_conv_specs[conv_layers_spec],
+    early_fusion = early.HierarchicalFusion(
+        window_size=settings.vae_window_size,
+        n_subcarriers=settings.n_subcarriers,
+        n_dirichlet_components=n_components,
+        n_mixtures=n_mixtures,
         n_fusion_layers=n_fusion_layers,
         fusion_dropout=fusion_dropout,
         n_antennas=settings.n_antennas,
@@ -297,13 +303,16 @@ def _objective_early(
 
     # Create early fusion VAE trainer parameters
     fusion_params = early.TrainerParams(
+        lr=lr,
         early_stop_patience=settings.early_stop_patience,
         early_stop_warmup_epochs=settings.early_stop_warmup_epochs,
         collapse_patience=settings.collapse_patience,
-        lr=lr,
-        kl_final=kl_final,
-        free_bits_start=settings.free_bits_start,
-        free_bits_end=settings.free_bits_end,
+        kl_dirichlet_final=kl_dirichlet_final,
+        kl_gaussian_final=kl_gaussian_final,
+        free_bits_dirichlet_start=settings.free_bits_start,
+        free_bits_dirichlet_end=settings.free_bits_end,
+        free_bits_gaussian_start=settings.free_bits_start,
+        free_bits_gaussian_end=settings.free_bits_end,
     )
 
     # Train the early fusion VAE
@@ -338,7 +347,7 @@ def _objective_early(
 
     classifier_model = classifier.Classifier(
         antennas=[early_fusion],
-        n_components=n_components,
+        n_components=n_components * n_mixtures,
         n_activities=settings.n_activities,
         sample_window_size=settings.vae_window_size,
         overlap_size=settings.overlap_size,
