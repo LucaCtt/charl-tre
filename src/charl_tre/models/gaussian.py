@@ -37,11 +37,10 @@ class _Encoder(nn.Module):
 
         _, flat_dim = self.get_shapes()
 
-        # Bottom-up proposal heads
-        self._mu_bu = nn.Linear(flat_dim, n_gaussians)
-        self._logvar_bu = nn.Linear(flat_dim, n_gaussians)
+        # Combined heads for bottom-up features and Gaussian distribution parameters
+        self._mu_logvar = nn.Linear(flat_dim, 2 * n_gaussians)
 
-        # Bottom-up feature head
+        # Bottom-up features head
         self._h_head = nn.Sequential(nn.Linear(flat_dim, flat_dim), nn.GELU())
 
     @torch.no_grad()
@@ -76,9 +75,12 @@ class _Encoder(nn.Module):
         """
         x = x.permute(0, 2, 1).unsqueeze(-1).contiguous()
         z = self._conv(x)
+
         h_a = self._h_head(z)
-        mu_bu = self._mu_bu(z)
-        logvar_bu = torch.clamp(self._logvar_bu(z), min=-10, max=10)
+
+        combined = self._mu_logvar(z)
+        mu_bu, logvar_raw = torch.chunk(combined, 2, dim=-1)
+        logvar_bu = torch.clamp(logvar_raw, min=-10, max=10)
 
         return h_a, mu_bu, logvar_bu
 
@@ -154,7 +156,7 @@ class Autoencoder(nn.Module):
         super().__init__()
 
         if conv_layers is None:
-            conv_layers = [(5, 5), (5, 5)]
+            conv_layers = [(5, 5), (5, 5), (3, 3)]
 
         self._encoder = _Encoder(window_size, n_subcarriers, n_gaussians, conv_layers)
         latent_feat_shape, flat_dim = self._encoder.get_shapes()

@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     seed: int = 42
     """Random seed for reproducibility."""
     num_workers: int = 8
+    """Number of workers for data loading."""
 
     # Data and train settings
     dataset_path: str = "dataset/S1a.h5"
@@ -68,13 +69,15 @@ class Settings(BaseSettings):
     """Directory to save model checkpoints."""
     collapse_patience: int = 5
     """Number of epochs to wait before collapsing the latent space."""
+    n_components_penalty_weight: float = 1e-3
+    """Weight for the penalty term on the number of components in the loss function."""
 
     # Optuna hyperparameter search space
-    hyperparam_batch_size_min: int = 32
+    hyperparam_batch_size_min: int = 64
     hyperparam_batch_size_max: int = 128
     hyperparam_batch_size_step: Literal["log"] | int = 32
 
-    hyperparam_lr_min: float = 1e-3
+    hyperparam_lr_min: float = 2e-3
     hyperparam_lr_max: float = 3e-2
     hyperparam_lr_step: Literal["log"] | int = "log"
 
@@ -88,11 +91,11 @@ class Settings(BaseSettings):
 
     hyperparam_n_fusion_layers_min: int = 1
     hyperparam_n_fusion_layers_max: int = 3
-    hyperparam_n_fusion_layers_step: int = 1
+    hyperparam_n_fusion_layers_step: Literal["log"] | int = 1
 
     hyperparam_fusion_dropout_min: float = 0.0
     hyperparam_fusion_dropout_max: float = 0.3
-    hyperparam_fusion_dropout_step: float = 0.1
+    hyperparam_fusion_dropout_step: Literal["log"] | float = 0.1
 
     hyperparam_conv_layers_spec: list[int] = [*range(len(dirichlet_conv_specs))]
 

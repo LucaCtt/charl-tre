@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 
-from charl_tre.models.common import util
+from charl_tre.models import util
 
 _N_DIMS_MULTIPLE_ANTENNAS: int = 4
 

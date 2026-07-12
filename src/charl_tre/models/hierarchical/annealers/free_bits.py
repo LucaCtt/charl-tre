@@ -1,4 +1,4 @@
-class FreeBitsAnnealer:
+class FreeBits:
     """Linear free-bits annealer.
 
     Free bits start at ``start_value`` and decay linearly to ``end_value``

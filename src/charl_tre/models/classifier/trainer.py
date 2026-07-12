@@ -7,7 +7,7 @@ from torch import nn
 from torch.utils.data import DataLoader, DistributedSampler
 
 from charl_tre.models import classifier
-from charl_tre.models.common.early_stopping import EarlyStopping
+from charl_tre.models.hierarchical.early_stopping import EarlyStopping
 
 
 class TrainerParams(TypedDict):

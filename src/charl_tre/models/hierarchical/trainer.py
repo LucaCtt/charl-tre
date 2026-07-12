@@ -10,26 +10,24 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from charl_tre.models.common import errors, util
-from charl_tre.models.common.early_stopping import EarlyStopping
-from charl_tre.models.dirichlet.collapse_detector import CollapseDetector
-from charl_tre.models.dirichlet.free_bits_annealer import FreeBitsAnnealer
-from charl_tre.models.dirichlet.kl_annealer import KLAnnealer
-from charl_tre.models.early.loss import hierarchical_loss
-from charl_tre.models.early.temperature_annealer import GumbelTemperatureAnnealer
+from charl_tre.models import util
+from charl_tre.models.hierarchical import annealers, errors
+from charl_tre.models.hierarchical.collapse_detector import CollapseDetector
+from charl_tre.models.hierarchical.early_stopping import EarlyStopping
+from charl_tre.models.hierarchical.loss import hierarchical_loss
 
 
 class TrainerParams(TypedDict):
+    """Parameters for HierarchicalTrainer."""
+
     lr: float
     early_stop_patience: int
     early_stop_warmup_epochs: int
     collapse_patience: int
     kl_dirichlet_final: float
     kl_gaussian_final: float
-    free_bits_dirichlet_start: float
-    free_bits_dirichlet_end: float
-    free_bits_gaussian_start: float
-    free_bits_gaussian_end: float
+    free_bits_start: float
+    free_bits_end: float
 
 
 class Trainer:
@@ -44,6 +42,17 @@ class Trainer:
         gpu_id: int,
         trial: TorchDistributedTrial | None = None,
     ) -> None:
+        """Initialize the HierarchicalTrainer.
+
+        Arguments:
+            model (nn.Module): The hierarchical model to train.
+            train_dl (DataLoader): The training data loader.
+            val_dl (DataLoader): The validation data loader.
+            params (TrainerParams): The training parameters.
+            gpu_id (int): The ID of the GPU to use.
+            trial (TorchDistributedTrial | None): The Optuna trial for distributed training.
+
+        """
         self._device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
 
         if self._device.type == "cuda":
@@ -59,7 +68,9 @@ class Trainer:
         self._scaler = torch.GradScaler(device=self._device.type)
 
         self._early_stopping = EarlyStopping(
-            self._model, params["early_stop_patience"], params["early_stop_warmup_epochs"]
+            self._model,
+            params["early_stop_patience"],
+            params["early_stop_warmup_epochs"],
         )
 
         # Level-isolated monitors to mitigate localized posterior collapses
@@ -72,16 +83,15 @@ class Trainer:
     def _run_batch(
         self,
         x_true: torch.Tensor,
-        w_dir: float,
-        w_gauss: float,
-        fb_dir: float,
-        fb_gauss: float,
-        temperature: float,
+        kl_weight_dirichlet: float,
+        kl_weight_gaussian: float,
+        free_bits_dirichlet: float,
+        free_bits_gaussian: float,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         self._optimizer.zero_grad(set_to_none=True)
 
         with torch.autocast(device_type=self._device.type, dtype=torch.float16):
-            recon, mix_logits, alpha, mu_q, logvar_q, mu_p, logvar_p = self._model(x_true, temperature)
+            recon, mix_logits, alpha, mu_q, logvar_q, mu_p, logvar_p = self._model(x_true)
 
             loss, recon_loss, kl_dir, kl_gauss = hierarchical_loss(
                 recon,
@@ -92,10 +102,10 @@ class Trainer:
                 logvar_q,
                 mu_p,
                 logvar_p,
-                kl_weight_dirichlet=w_dir,
-                kl_weight_gaussian=w_gauss,
-                free_bits_dirichlet=fb_dir,
-                free_bits_gaussian=fb_gauss,
+                kl_weight_dirichlet=kl_weight_dirichlet,
+                kl_weight_gaussian=kl_weight_gaussian,
+                free_bits_dirichlet=free_bits_dirichlet,
+                free_bits_gaussian=free_bits_gaussian,
             )
 
         self._scaler.scale(loss).backward()
@@ -109,11 +119,10 @@ class Trainer:
     def _run_epoch(
         self,
         epoch: int,
-        w_dir: float,
-        w_gauss: float,
-        fb_dir: float,
-        fb_gauss: float,
-        temperature: float,
+        kl_weight_dirichlet: float,
+        kl_weight_gaussian: float,
+        free_bits_dirichlet: float,
+        free_bits_gaussian: float,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         self._model.train()
         if isinstance(self._train_dl.sampler, DistributedSampler):
@@ -124,11 +133,10 @@ class Trainer:
         for x_true, _ in self._train_dl:
             loss, recon_loss, kl_dir, kl_gauss = self._run_batch(
                 x_true.to(self._device, non_blocking=True),
-                w_dir,
-                w_gauss,
-                fb_dir,
-                fb_gauss,
-                temperature,
+                kl_weight_dirichlet,
+                kl_weight_gaussian,
+                free_bits_dirichlet,
+                free_bits_gaussian,
             )
             metrics[0] += loss.detach()
             metrics[1] += recon_loss.detach()
@@ -147,7 +155,11 @@ class Trainer:
 
     @torch.no_grad()
     def _run_val_epoch(
-        self, w_dir: float, w_gauss: float, fb_dir: float, fb_gauss: float, temperature: float
+        self,
+        kl_weight_dirichlet: float,
+        kl_weight_gaussian: float,
+        free_bits_dirichlet: float,
+        free_bits_gaussian: float,
     ) -> torch.Tensor:
         self._model.eval()
         total_loss = torch.tensor(0.0, device=self._device)
@@ -155,7 +167,7 @@ class Trainer:
         for x_true_cpu, _ in self._val_dl:
             x_true = x_true_cpu.to(self._device, non_blocking=True)
             with torch.autocast(device_type=self._device.type, dtype=torch.float16):
-                recon, mix_logits, alpha, mu_q, logvar_q, mu_p, logvar_p = self._model(x_true, temperature)
+                recon, mix_logits, alpha, mu_q, logvar_q, mu_p, logvar_p = self._model(x_true)
                 loss, _, _, _ = hierarchical_loss(
                     recon,
                     x_true,
@@ -165,10 +177,10 @@ class Trainer:
                     logvar_q,
                     mu_p,
                     logvar_p,
-                    kl_weight_dirichlet=w_dir,
-                    kl_weight_gaussian=w_gauss,
-                    free_bits_dirichlet=fb_dir,
-                    free_bits_gaussian=fb_gauss,
+                    kl_weight_dirichlet=kl_weight_dirichlet,
+                    kl_weight_gaussian=kl_weight_gaussian,
+                    free_bits_dirichlet=free_bits_dirichlet,
+                    free_bits_gaussian=free_bits_gaussian,
                 )
             total_loss += loss.detach()
 
@@ -180,38 +192,48 @@ class Trainer:
         return total_loss / total_batches
 
     def train(self, epochs: int) -> tuple[float, float, float, float]:
+        """Train the model for a specified number of epochs.
+
+        Arguments:
+            epochs (int): The number of epochs to train the model.
+
+        Returns:
+            tuple[float, float, float, float]:
+                - Average loss over the training epochs.
+                - Average reconstruction loss over the training epochs.
+                - Average KL divergence for the Dirichlet distribution over the training epochs.
+                - Average KL divergence for the Gaussian distribution over the training epochs.
+
+        """
         total_metrics = torch.zeros(4, device=self._device)
 
-        dir_annealer = KLAnnealer(epochs, kl_final=self._params["kl_dirichlet_final"])
-        gauss_annealer = KLAnnealer(epochs, kl_final=self._params["kl_gaussian_final"])
-        temp_annealer = GumbelTemperatureAnnealer(total_epochs=epochs)
+        dirichlet_annealer = annealers.KL(epochs, kl_final=self._params["kl_dirichlet_final"])
+        gaussian_annealer = annealers.KL(epochs, kl_final=self._params["kl_gaussian_final"])
 
-        dir_fb_annealer = FreeBitsAnnealer(
+        dirichlet_fb_annealer = annealers.FreeBits(
             total_epochs=epochs,
-            start_value=self._params["free_bits_dirichlet_start"],
-            end_value=self._params["free_bits_dirichlet_end"],
+            start_value=self._params["free_bits_start"],
+            end_value=self._params["free_bits_end"],
         )
-        gauss_fb_annealer = FreeBitsAnnealer(
+        gaussian_fb_annealer = annealers.FreeBits(
             total_epochs=epochs,
-            start_value=self._params["free_bits_gaussian_start"],
-            end_value=self._params["free_bits_gaussian_end"],
+            start_value=self._params["free_bits_start"],
+            end_value=self._params["free_bits_end"],
         )
         epochs_run = 0
 
         for epoch in range(epochs):
-            dir_annealer.step()
-            gauss_annealer.step()
-            dir_fb_annealer.step()
-            gauss_fb_annealer.step()
-            temp_annealer.step()
+            dirichlet_annealer.step()
+            gaussian_annealer.step()
+            dirichlet_fb_annealer.step()
+            gaussian_fb_annealer.step()
 
             epoch_loss, epoch_recon, epoch_kl_dir, epoch_kl_gauss = self._run_epoch(
                 epoch,
-                dir_annealer.weight,
-                gauss_annealer.weight,
-                dir_fb_annealer.value,
-                gauss_fb_annealer.value,
-                temp_annealer.value,
+                dirichlet_annealer.weight,
+                gaussian_annealer.weight,
+                dirichlet_fb_annealer.value,
+                gaussian_fb_annealer.value,
             )
 
             if util.is_dead(torch.stack([epoch_loss, epoch_recon, epoch_kl_dir, epoch_kl_gauss])):
@@ -228,11 +250,10 @@ class Trainer:
             epochs_run += 1
 
             val_loss = self._run_val_epoch(
-                dir_annealer.weight,
-                gauss_annealer.weight,
-                dir_fb_annealer.value,
-                gauss_fb_annealer.value,
-                temp_annealer.value
+                dirichlet_annealer.weight,
+                gaussian_annealer.weight,
+                dirichlet_fb_annealer.value,
+                gaussian_fb_annealer.value,
             )
             if util.is_dead(val_loss):
                 raise errors.DeadLossError

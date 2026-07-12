@@ -1,4 +1,4 @@
-class KLAnnealer:
+class KL:
     """Cyclical KL weight annealer.
 
     Each cycle linearly ramps the weight from 0 to kl_final over ramp_epochs,

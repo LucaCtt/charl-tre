@@ -5,8 +5,7 @@ from torch import nn
 class EarlyStopping:
     """Tracks a validation metric and saves/restores best model weights.
 
-    Supports accuracy-based (higher is better) and loss-based
-    (lower is better, with optional min delta) stepping.
+    Supports loss-based (lower is better, with optional min delta) stepping.
 
     Note that the best weights are stored as a copy of the model's state_dict on the same device.
     This avoids unnecessary CPU-GPU transfers on restore, but may be a problem for GPUs with very limited memory.

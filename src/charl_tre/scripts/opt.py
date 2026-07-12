@@ -12,7 +12,7 @@ from torch.multiprocessing.spawn import spawn
 
 from charl_tre import dataset, util
 from charl_tre.hyperparams import HyperParams
-from charl_tre.models import classifier, dirichlet, early, errors
+from charl_tre.models import classifier, errors, hierarchical
 from charl_tre.settings import Settings
 from charl_tre.studies import make_study
 
@@ -36,7 +36,7 @@ torch.backends.cudnn.allow_tf32 = True  # Allow TensorFloat-32 for faster convol
 torch.backends.cudnn.benchmark = True  # Enable cuDNN auto-tuner for better performance
 
 
-def _objective_delayed(
+def _objective(
     single_trial: optuna.trial.BaseTrial | None,
     rank: int,
     vae_train_ds: dataset.MultiAntenna,
@@ -44,180 +44,7 @@ def _objective_delayed(
     fusion_train_ds: dataset.MultiAntenna,
     fusion_val_ds: dataset.MultiAntenna,
 ) -> float:
-    """Objective function for Optuna hyperparameter optimization.
-
-    Arguments:
-        single_trial: The Optuna trial object
-        rank: Unique identifier of each process
-        vae_train_ds: Training dataset for the VAE
-        vae_val_ds: Validation dataset for the VAE
-        fusion_train_ds: Training dataset for the fusion model
-        fusion_val_ds: Validation dataset for the fusion model
-
-    Returns:
-        The fusion model reconstruction loss after training
-
-    """
-    trial = TorchDistributedTrial(single_trial)
-    hyperparams = HyperParams.from_settings(settings)
-
-    lr = trial.suggest_float(
-        "lr",
-        **hyperparams.lr.to_dict(),
-    )
-    kl_final = trial.suggest_float(
-        "kl_final",
-        **hyperparams.kl_final.to_dict(),
-    )
-    n_components = trial.suggest_int(
-        "n_components",
-        **hyperparams.n_components.to_dict(),
-    )
-    conv_layers_spec = trial.suggest_categorical(
-        "conv_layers_spec",
-        hyperparams.conv_layers_spec.values,
-    )
-    batch_size = trial.suggest_int(
-        "batch_size",
-        **hyperparams.batch_size.to_dict(),
-    )
-    n_fusion_layers = trial.suggest_int(
-        "n_fusion_layers",
-        **hyperparams.n_fusion_layers.to_dict(),
-    )
-    fusion_dropout = trial.suggest_float(
-        "fusion_dropout",
-        **hyperparams.fusion_dropout.to_dict(),
-    )
-
-    if rank == 0:
-        logger.info("Starting trial %s with parameters: %s", trial.number, trial.params)
-
-    vae_params = dirichlet.TrainerParams(
-        early_stop_patience=settings.early_stop_patience,
-        early_stop_warmup_epochs=settings.early_stop_warmup_epochs,
-        collapse_patience=settings.collapse_patience,
-        lr=lr,
-        kl_final=kl_final,
-        free_bits_start=settings.free_bits_start,
-        free_bits_end=settings.free_bits_end,
-    )
-
-    # Train one VAE per antenna
-    vaes = []
-    for antenna_idx in range(settings.n_antennas):
-        antenna_train_ds = dataset.SingleAntenna(vae_train_ds, antenna_idx)
-        antenna_val_ds = dataset.SingleAntenna(vae_val_ds, antenna_idx)
-        antenna_train_dl = util.make_dl(
-            antenna_train_ds,
-            batch_size,
-            shuffle=True,
-            num_workers=settings.num_workers,
-            seed=settings.seed,
-        )
-        antenna_val_dl = util.make_dl(
-            antenna_val_ds,
-            batch_size,
-            shuffle=False,
-            num_workers=settings.num_workers,
-            seed=settings.seed,
-        )
-
-        vae_model = dirichlet.Autoencoder(
-            settings.vae_window_size,
-            settings.n_subcarriers,
-            n_components,
-            settings.dirichlet_conv_specs[conv_layers_spec],
-        )
-
-        vae_trainer = dirichlet.Trainer(
-            vae_model,
-            antenna_train_dl,
-            antenna_val_dl,
-            vae_params,
-            rank,
-            trial,
-        )
-        try:
-            vae_trainer.train(settings.n_epochs)
-        except (errors.PosteriorCollapseError, errors.DeadLossError) as e:
-            raise optuna.TrialPruned(str(e)) from e
-
-        vaes.append(vae_model)
-
-    # Train fusion model on pre-trained VAEs
-    fusion_train_dl = util.make_dl(
-        fusion_train_ds,
-        batch_size,
-        shuffle=True,
-        num_workers=settings.num_workers,
-        seed=settings.seed,
-    )
-    fusion_val_dl = util.make_dl(
-        fusion_val_ds,
-        batch_size,
-        shuffle=False,
-        num_workers=settings.num_workers,
-        seed=settings.seed,
-    )
-
-    delayed_fusion = classifier.Classifier(
-        vaes,
-        n_components,
-        settings.n_activities,
-        settings.vae_window_size,
-        settings.overlap_size,
-        n_fusion_layers,
-        fusion_dropout,
-    )
-
-    fusion_trainer = classifier.Trainer(
-        delayed_fusion,
-        fusion_train_dl,
-        fusion_val_dl,
-        classifier.TrainerParams(
-            lr=lr,
-            early_stop_patience=settings.early_stop_patience,
-            early_stop_warmup_epochs=settings.early_stop_warmup_epochs,
-        ),
-        rank,
-    )
-    fusion_loss, fusion_accuracy = fusion_trainer.train(settings.n_epochs)
-
-    if rank == 0:
-        logger.info(
-            "Trial %s completed: train loss=%.4f, train accuracy=%.4f",
-            trial.number,
-            fusion_loss,
-            fusion_accuracy,
-        )
-        save_path = Path(settings.study_path) / f"trial_{trial.number}"
-        save_path.mkdir(parents=True, exist_ok=True)
-        for i, vae_m in enumerate(vaes):
-            torch.save(vae_m.state_dict(), save_path / f"vae_{i}.pt")
-        torch.save(delayed_fusion.state_dict(), save_path / "fusion.pt")
-
-        results = {
-            "trial_number": trial.number,
-            "fusion_loss": fusion_loss,
-            "fusion_accuracy": fusion_accuracy,
-            "params": trial.params,
-        }
-        with Path.open(save_path / "results.json", "w") as f:
-            json.dump(results, f)
-
-    return fusion_accuracy
-
-
-def _objective_early(
-    single_trial: optuna.trial.BaseTrial | None,
-    rank: int,
-    vae_train_ds: dataset.MultiAntenna,
-    vae_val_ds: dataset.MultiAntenna,
-    fusion_train_ds: dataset.MultiAntenna,
-    fusion_val_ds: dataset.MultiAntenna,
-) -> float:
-    """Objective function for early fusion hyperparameter optimization.
+    """Objective function for hierarchical fusion hyperparameter optimization.
 
     Trains all 4 Dirichlet VAEs jointly with a shared latent space,
     then trains a classifier on top of the shared latent representation.
@@ -273,9 +100,9 @@ def _objective_early(
     )
 
     if rank == 0:
-        logger.info("Starting early fusion trial %s with parameters: %s", trial.number, trial.params)
+        logger.info("Starting trial %s with parameters: %s", trial.number, trial.params)
 
-    early_fusion = early.HierarchicalFusion(
+    early_fusion = hierarchical.Fusion(
         window_size=settings.vae_window_size,
         n_subcarriers=settings.n_subcarriers,
         n_dirichlet_components=n_components,
@@ -302,21 +129,19 @@ def _objective_early(
     )
 
     # Create early fusion VAE trainer parameters
-    fusion_params = early.TrainerParams(
+    fusion_params = hierarchical.TrainerParams(
         lr=lr,
         early_stop_patience=settings.early_stop_patience,
         early_stop_warmup_epochs=settings.early_stop_warmup_epochs,
         collapse_patience=settings.collapse_patience,
         kl_dirichlet_final=kl_dirichlet_final,
         kl_gaussian_final=kl_gaussian_final,
-        free_bits_dirichlet_start=settings.free_bits_start,
-        free_bits_dirichlet_end=settings.free_bits_end,
-        free_bits_gaussian_start=settings.free_bits_start,
-        free_bits_gaussian_end=settings.free_bits_end,
+        free_bits_start=settings.free_bits_start,
+        free_bits_end=settings.free_bits_end,
     )
 
     # Train the early fusion VAE
-    fusion_trainer = early.Trainer(
+    fusion_trainer = hierarchical.Trainer(
         early_fusion,
         vae_train_dl,
         vae_val_dl,
@@ -368,13 +193,15 @@ def _objective_early(
         rank,
     )
     classifier_loss, classifier_accuracy = classifier_trainer.train(settings.n_epochs)
+    objective_score = classifier_accuracy - (settings.n_components_penalty_weight * n_components)
 
     if rank == 0:
         logger.info(
-            "Early fusion trial %s completed: train loss=%.4f, train accuracy=%.4f",
+            "Early fusion trial %s completed: loss=%.4f, accuracy=%.4f, objective=%.4f",
             trial.number,
             classifier_loss,
             classifier_accuracy,
+            objective_score,
         )
         save_path = Path(settings.study_path) / f"early_trial_{trial.number}"
         save_path.mkdir(parents=True, exist_ok=True)
@@ -384,12 +211,13 @@ def _objective_early(
             "trial_number": trial.number,
             "classifier_loss": classifier_loss,
             "classifier_accuracy": classifier_accuracy,
+            "objective_score": objective_score,
             "params": trial.params,
         }
         with Path.open(save_path / "results.json", "w") as f:
             json.dump(results, f)
 
-    return classifier_accuracy
+    return objective_score
 
 
 def _run_optimize(
@@ -406,7 +234,7 @@ def _run_optimize(
     if rank == 0:
         study = make_study(settings.study_name, settings.study_path, settings.seed)
         study.optimize(
-            lambda trial: _objective_early(
+            lambda trial: _objective(
                 trial,
                 rank,
                 vae_train_ds,
@@ -420,7 +248,7 @@ def _run_optimize(
     else:
         for _ in range(settings.n_trials):
             with contextlib.suppress(optuna.TrialPruned):
-                _objective_early(None, rank, vae_train_ds, vae_val_ds, fusion_train_ds, fusion_val_ds)
+                _objective(None, rank, vae_train_ds, vae_val_ds, fusion_train_ds, fusion_val_ds)
 
     torch.distributed.barrier()
 
