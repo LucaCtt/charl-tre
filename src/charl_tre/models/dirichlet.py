@@ -183,10 +183,8 @@ class Autoencoder(nn.Module):
             z (torch.Tensor): Sampled latent variable of shape (batch_size, n_components)
 
         """
-        gamma_dist = torch.distributions.Gamma(concentration=alpha, rate=torch.ones_like(alpha))
-
-        gamma_samples = gamma_dist.rsample()  # reparameterized, gradients flow through alpha
-        return gamma_samples / gamma_samples.sum(dim=-1, keepdim=True)
+        dirichlet_dist = torch.distributions.Dirichlet(alpha)
+        return dirichlet_dist.rsample()
 
     def encode(self, x: torch.Tensor) -> torch.Tensor:
         """Encode the input CSI window into concentration parameters.

@@ -31,8 +31,6 @@ optuna.logging.disable_default_handler()
 warnings.filterwarnings("ignore", module="optuna_integration.pytorch_distributed")
 warnings.filterwarnings("ignore", category=optuna.exceptions.ExperimentalWarning)
 
-torch.backends.cuda.matmul.allow_tf32 = True  # Allow TensorFloat-32 for faster matrix multiplications
-torch.backends.cudnn.allow_tf32 = True  # Allow TensorFloat-32 for faster convolutions
 torch.backends.cudnn.benchmark = True  # Enable cuDNN auto-tuner for better performance
 
 
@@ -151,7 +149,7 @@ def _objective(
     )
     try:
         fusion_trainer.train(settings.n_epochs)
-    except (errors.PosteriorCollapseError, errors.DeadLossError) as e:
+    except (errors.PosteriorCollapseError, errors.DeadLossError, optuna.TrialPruned) as e:
         raise optuna.TrialPruned(str(e)) from e
 
     # Create data loaders for classifier training
@@ -176,8 +174,8 @@ def _objective(
         n_activities=settings.n_activities,
         sample_window_size=settings.vae_window_size,
         overlap_size=settings.overlap_size,
-        n_layers=n_fusion_layers,
-        dropout=fusion_dropout,
+        n_layers=2,
+        dropout=0.1,
     )
 
     # Train the classifier on top of the frozen VAE
@@ -203,7 +201,7 @@ def _objective(
             classifier_accuracy,
             objective_score,
         )
-        save_path = Path(settings.study_path) / f"early_trial_{trial.number}"
+        save_path = Path(settings.study_path) / f"trial_{trial.number}"
         save_path.mkdir(parents=True, exist_ok=True)
         torch.save(early_fusion.state_dict(), save_path / "early_fusion.pt")
 

@@ -73,15 +73,15 @@ class Settings(BaseSettings):
     """Weight for the penalty term on the number of components in the loss function."""
 
     # Optuna hyperparameter search space
-    hyperparam_batch_size_min: int = 64
-    hyperparam_batch_size_max: int = 128
+    hyperparam_batch_size_min: int = 32
+    hyperparam_batch_size_max: int = 96
     hyperparam_batch_size_step: Literal["log"] | int = 32
 
     hyperparam_lr_min: float = 2e-3
     hyperparam_lr_max: float = 3e-2
     hyperparam_lr_step: Literal["log"] | int = "log"
 
-    hyperparam_kl_final_min: float = 0.5
+    hyperparam_kl_final_min: float = 1.5
     hyperparam_kl_final_max: float = 4.0
     hyperparam_kl_final_step: Literal["log"] | float = 0.5
 
