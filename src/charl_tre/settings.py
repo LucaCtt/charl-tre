@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     ]
     vae_window_size: int = 75
     """Size of the window of CSI in a VAE train sample, where 150 CSI = 1 second of data."""
-    fusion_window_size: int = 450
+    classifier_window_size: int = 450
     """Size of the window of CSI in a classifier test sample, where 150 CSI = 1 second of data."""
     stride: int = 25
     """Stride for sliding windows creation, for both train and testing."""
@@ -53,23 +53,17 @@ class Settings(BaseSettings):
     """Initial free-bits floor for the KL divergence term."""
     free_bits_end: float = 0.05
     """Final free-bits floor for the KL divergence term."""
-    dirichlet_conv_specs: list[list[tuple[int, int]]] = [
-        [(5, 5)],
-        [(3, 3)],
-        [(5, 5), (3, 3)],
-        [(3, 3), (5, 5)],
-    ]
 
     # Optuna study settings
     n_trials: int = 100
     """Number of Optuna trials for hyperparameter optimization."""
-    study_name: str = f"a{n_antennas}_w{vae_window_size}_tw{fusion_window_size}"
+    study_name: str = f"a{n_antennas}_w{vae_window_size}_tw{classifier_window_size}"
     """Name of the VAE model, used for checkpointing."""
     study_path: str = f"out/{study_name}"
     """Directory to save model checkpoints."""
     collapse_patience: int = 5
     """Number of epochs to wait before collapsing the latent space."""
-    n_components_penalty_weight: float = 1e-3
+    n_components_penalty_weight: float = 1e-4
     """Weight for the penalty term on the number of components in the loss function."""
 
     # Optuna hyperparameter search space
@@ -89,6 +83,10 @@ class Settings(BaseSettings):
     hyperparam_n_components_max: int = 32
     hyperparam_n_components_step: Literal["log"] | int = 8
 
+    hyperparam_n_mixtures_min: int = 1
+    hyperparam_n_mixtures_max: int = 8
+    hyperparam_n_mixtures_step: Literal["log"] | int = 1
+
     hyperparam_n_fusion_layers_min: int = 1
     hyperparam_n_fusion_layers_max: int = 3
     hyperparam_n_fusion_layers_step: Literal["log"] | int = 1
@@ -96,8 +94,6 @@ class Settings(BaseSettings):
     hyperparam_fusion_dropout_min: float = 0.0
     hyperparam_fusion_dropout_max: float = 0.3
     hyperparam_fusion_dropout_step: Literal["log"] | float = 0.1
-
-    hyperparam_conv_layers_spec: list[int] = [*range(len(dirichlet_conv_specs))]
 
     @property
     def n_activities(self) -> int:

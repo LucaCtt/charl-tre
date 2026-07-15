@@ -31,7 +31,8 @@ optuna.logging.disable_default_handler()
 warnings.filterwarnings("ignore", module="optuna_integration.pytorch_distributed")
 warnings.filterwarnings("ignore", category=optuna.exceptions.ExperimentalWarning)
 
-torch.backends.cudnn.benchmark = True  # Enable cuDNN auto-tuner for better performance
+# Enable cuDNN auto-tuner for better performancwe
+torch.backends.cudnn.benchmark = True
 
 
 def _objective(
@@ -92,15 +93,13 @@ def _objective(
     )
     n_mixtures = trial.suggest_int(
         "n_mixtures",
-        low=1,
-        high=8,
-        step=1,
+        **hyperparams.n_mixtures.to_dict(),
     )
 
     if rank == 0:
         logger.info("Starting trial %s with parameters: %s", trial.number, trial.params)
 
-    early_fusion = hierarchical.Fusion(
+    h_vae = hierarchical.Fusion(
         window_size=settings.vae_window_size,
         n_subcarriers=settings.n_subcarriers,
         n_dirichlet_components=n_components,
@@ -126,41 +125,38 @@ def _objective(
         seed=settings.seed,
     )
 
-    # Create early fusion VAE trainer parameters
-    fusion_params = hierarchical.TrainerParams(
-        lr=lr,
-        early_stop_patience=settings.early_stop_patience,
-        early_stop_warmup_epochs=settings.early_stop_warmup_epochs,
-        collapse_patience=settings.collapse_patience,
-        kl_dirichlet_final=kl_dirichlet_final,
-        kl_gaussian_final=kl_gaussian_final,
-        free_bits_start=settings.free_bits_start,
-        free_bits_end=settings.free_bits_end,
-    )
-
     # Train the early fusion VAE
-    fusion_trainer = hierarchical.Trainer(
-        early_fusion,
+    h_vae_trainer = hierarchical.Trainer(
+        h_vae,
         vae_train_dl,
         vae_val_dl,
-        fusion_params,
+        hierarchical.TrainerParams(
+            lr=lr,
+            early_stop_patience=settings.early_stop_patience,
+            early_stop_warmup_epochs=settings.early_stop_warmup_epochs,
+            collapse_patience=settings.collapse_patience,
+            kl_dirichlet_final=kl_dirichlet_final,
+            kl_gaussian_final=kl_gaussian_final,
+            free_bits_start=settings.free_bits_start,
+            free_bits_end=settings.free_bits_end,
+        ),
         rank,
         trial,
     )
     try:
-        fusion_trainer.train(settings.n_epochs)
+        h_vae_trainer.train(settings.n_epochs)
     except (errors.PosteriorCollapseError, errors.DeadLossError, optuna.TrialPruned) as e:
         raise optuna.TrialPruned(str(e)) from e
 
     # Create data loaders for classifier training
-    fusion_train_dl = util.make_dl(
+    classifier_train_dl = util.make_dl(
         fusion_train_ds,
         batch_size,
         shuffle=True,
         num_workers=settings.num_workers,
         seed=settings.seed,
     )
-    fusion_val_dl = util.make_dl(
+    classifier_val_dl = util.make_dl(
         fusion_val_ds,
         batch_size,
         shuffle=False,
@@ -169,20 +165,20 @@ def _objective(
     )
 
     classifier_model = classifier.Classifier(
-        antennas=[early_fusion],
+        antennas=[h_vae],
         n_components=n_components * n_mixtures,
         n_activities=settings.n_activities,
         sample_window_size=settings.vae_window_size,
         overlap_size=settings.overlap_size,
-        n_layers=2,
-        dropout=0.1,
+        n_layers=1,
+        dropout=0,
     )
 
     # Train the classifier on top of the frozen VAE
     classifier_trainer = classifier.Trainer(
         classifier_model,
-        fusion_train_dl,
-        fusion_val_dl,
+        classifier_train_dl,
+        classifier_val_dl,
         classifier.TrainerParams(
             lr=lr,
             early_stop_patience=settings.early_stop_patience,
@@ -191,11 +187,11 @@ def _objective(
         rank,
     )
     classifier_loss, classifier_accuracy = classifier_trainer.train(settings.n_epochs)
-    objective_score = classifier_accuracy - (settings.n_components_penalty_weight * n_components)
+    objective_score = classifier_accuracy - (settings.n_components_penalty_weight * n_components * n_mixtures)
 
     if rank == 0:
         logger.info(
-            "Early fusion trial %s completed: loss=%.4f, accuracy=%.4f, objective=%.4f",
+            "Trial %s completed: loss=%.4f, accuracy=%.4f, objective=%.4f",
             trial.number,
             classifier_loss,
             classifier_accuracy,
@@ -203,7 +199,8 @@ def _objective(
         )
         save_path = Path(settings.study_path) / f"trial_{trial.number}"
         save_path.mkdir(parents=True, exist_ok=True)
-        torch.save(early_fusion.state_dict(), save_path / "early_fusion.pt")
+        torch.save(h_vae.state_dict(), save_path / "h_vae.pt")
+        torch.save(classifier_model.state_dict(), save_path / "classifier.pt")
 
         results = {
             "trial_number": trial.number,
@@ -293,7 +290,7 @@ def opt() -> None:
     )
     fusion_train_ds, fusion_val_ds, _ = dataset.load(
         dataset_path=Path(settings.dataset_path),
-        window_size=settings.fusion_window_size,
+        window_size=settings.classifier_window_size,
         n_activities=settings.n_activities,
         stride=settings.stride,
     )

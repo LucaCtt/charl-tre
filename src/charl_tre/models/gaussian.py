@@ -40,9 +40,6 @@ class _Encoder(nn.Module):
         # Combined heads for bottom-up features and Gaussian distribution parameters
         self._mu_logvar = nn.Linear(flat_dim, 2 * n_gaussians)
 
-        # Bottom-up features head
-        self._h_head = nn.Sequential(nn.Linear(flat_dim, flat_dim), nn.GELU())
-
     @torch.no_grad()
     def get_shapes(self) -> tuple[tuple, int]:
         """Get the shapes of the latent features and flattened dimension.
@@ -76,13 +73,11 @@ class _Encoder(nn.Module):
         x = x.permute(0, 2, 1).unsqueeze(-1).contiguous()
         z = self._conv(x)
 
-        h_a = self._h_head(z)
-
         combined = self._mu_logvar(z)
         mu_bu, logvar_raw = torch.chunk(combined, 2, dim=-1)
         logvar_bu = torch.clamp(logvar_raw, min=-10, max=10)
 
-        return h_a, mu_bu, logvar_bu
+        return z, mu_bu, logvar_bu
 
 
 class _Decoder(nn.Module):

@@ -3,15 +3,12 @@ from pathlib import Path
 
 import torch
 from rich.logging import RichHandler
-from torch import distributed as dist
-from torch.multiprocessing.spawn import spawn
-from torch.utils.data import DataLoader
 
 from charl_tre import dataset, util
-from charl_tre.models import classifier, dirichlet
+from charl_tre.models import classifier, hierarchical
 from charl_tre.models.evaluator import Evaluator
 from charl_tre.settings import Settings
-from charl_tre.studies import get_best_model, read_study
+from charl_tre.studies import get_best_trial, read_study
 
 settings = Settings()
 
@@ -20,82 +17,75 @@ handler = RichHandler(level=logging.INFO, show_path=False)
 logging.basicConfig(level=logging.INFO, handlers=[handler], format="%(message)s")
 logger = logging.getLogger("rich")
 
-def _run_test(
-    rank: int,
-    world_size: int,
-    test_ds: dataset.MultiAntenna,
-) -> None:
-    util.setup_ddp(rank, world_size)
-
-    best_model = get_best_model(read_study(settings.study_path))
-    best_model_path = Path(settings.study_path) / f"trial_{best_model.trial_number}"
-
-    vaes: list[dirichlet.Autoencoder] = []
-    for _ in range(settings.n_antennas):
-        vae_model = dirichlet.Autoencoder(
-            settings.vae_window_size,
-            settings.n_subcarriers,
-            best_model.params["n_components"],
-            settings.dirichlet_conv_specs[best_model.params["conv_layers_spec"]],
-        )
-
-        vaes.append(vae_model)
-
-    delayed_fusion = classifier.Classifier(
-        vaes,
-        best_model.params["n_components"],
-        settings.n_activities,
-        settings.vae_window_size,
-        settings.overlap_size,
-        best_model.params["n_fusion_layers"],
-        best_model.params["fusion_dropout"],
-    )
-
-    fusion_weights = torch.load(best_model_path / "fusion.pt", weights_only=True)
-    delayed_fusion.load_state_dict(fusion_weights)
-
-    accuracy = 0.0
-    if rank == 0:
-        logger.info("Evaluating on test set...")
-
-        eval_dl = DataLoader(
-            test_ds,
-            batch_size=best_model.params["batch_size"],
-            shuffle=False,
-            num_workers=settings.num_workers,
-            pin_memory=True,
-        )
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        evaluator = Evaluator(model=delayed_fusion, dataloader=eval_dl, device=device)
-        accuracy = evaluator.evaluate()
-
-    dist.barrier()
-
-    if rank == 0:
-        logger.info("Evaluation completed with test accuracy %.4f", accuracy)
-
-    dist.destroy_process_group()
-
 
 def test() -> None:
     """Evaluate the best saved multi-antenna fusion model on the test set."""
+    util.init_rng(settings.seed)
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
     logger.info("Loading scenario from %s...", settings.dataset_path)
     _, _, test_ds = dataset.load(
         dataset_path=Path(settings.dataset_path),
-        window_size=settings.fusion_window_size,
+        window_size=settings.classifier_window_size,
         n_activities=settings.n_activities,
         stride=settings.stride,
     )
     logger.info("Scenario loaded.")
 
-    world_size = torch.cuda.device_count() if torch.cuda.is_available() else 1
+    best_trial = get_best_trial(read_study(settings.study_path))
+    best_trial_path = Path(settings.study_path) / f"trial_{best_trial.trial_number}"
 
-    spawn(
-        _run_test,
-        args=(world_size, test_ds),
-        nprocs=world_size,
-        join=True,
+    n_components = int(best_trial.params["n_components"])
+    n_mixtures = int(best_trial.params["n_mixtures"])
+    n_fusion_layers = int(best_trial.params["n_fusion_layers"])
+    fusion_dropout = float(best_trial.params["fusion_dropout"])
+    batch_size = int(best_trial.params["batch_size"])
+
+    logger.info(
+        "Best trial parameters: n_components=%d, n_mixtures=%d, n_fusion_layers=%d, fusion_dropout=%.4f, batch_size=%d",
+        n_components,
+        n_mixtures,
+        n_fusion_layers,
+        fusion_dropout,
+        batch_size,
     )
+
+    test_dl = util.make_dl(
+        test_ds,
+        batch_size,
+        shuffle=False,
+        num_workers=settings.num_workers,
+        seed=settings.seed,
+    )
+
+    h_vae = hierarchical.Fusion(
+        window_size=settings.vae_window_size,
+        n_subcarriers=settings.n_subcarriers,
+        n_dirichlet_components=n_components,
+        n_mixtures=n_mixtures,
+        n_fusion_layers=n_fusion_layers,
+        fusion_dropout=fusion_dropout,
+        n_antennas=settings.n_antennas,
+    ).to(device)
+    h_vae_weights = torch.load(best_trial_path / "h_vae.pt", weights_only=True)
+    h_vae.load_state_dict(h_vae_weights, strict=True)
+
+    classifier_model = classifier.Classifier(
+        antennas=[h_vae],
+        n_components=n_components * n_mixtures,
+        n_activities=settings.n_activities,
+        sample_window_size=settings.vae_window_size,
+        overlap_size=settings.overlap_size,
+        n_layers=1,
+        dropout=0,
+    ).to(device)
+    classifier_model_weights = torch.load(best_trial_path / "classifier.pt", weights_only=True)
+    classifier_model.load_state_dict(classifier_model_weights, strict=True)
+
+    logger.info("Evaluating classifier on test set...")
+    evaluator = Evaluator(classifier_model, test_dl)
+    accuracy = evaluator.evaluate()
+    logger.info("Test accuracy: %.4f", accuracy)
 
 
 if __name__ == "__main__":

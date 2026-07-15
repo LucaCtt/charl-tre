@@ -137,12 +137,6 @@ class Fusion(nn.Module):
         # Flatten the Batch and Mixture axes into a unified mega-batch dimension: (Batch * N_Mixtures, N_Components)
         s_flat = s_components.view(batch_size * self._n_mixtures, self._n_dirichlet_components)
 
-        # Build tensor shapes of bottom-up signals to broadcast with our mega-batch
-        # Original: (Batch, Latents) -> Intermediary: (Batch, 1, Latents) -> Broadcasted: (Batch, N_Mixtures, Latents)
-        # Final Flat: (Batch * N_Mixtures, Latents)
-        def _flatten_to_mega_batch(tensor: torch.Tensor) -> torch.Tensor:
-            return tensor.unsqueeze(1).expand(-1, self._n_mixtures, -1).reshape(batch_size * self._n_mixtures, -1)
-
         mu_q_all_mix, logvar_q_all_mix = [], []
         mu_p_all_mix, logvar_p_all_mix = [], []
         recons_all_mix = []
@@ -152,12 +146,14 @@ class Fusion(nn.Module):
             # 1. Forward pass through top-down MLPs for ALL mixtures at once
             prior_params_flat = self._top_down_priors[i](s_flat)
             mu_prior_flat, logvar_prior_flat = torch.chunk(prior_params_flat, 2, dim=-1)
-            mu_prior_flat = torch.clamp(mu_prior_flat, min=-10, max=10)
             logvar_prior_flat = torch.clamp(logvar_prior_flat, min=-10, max=10)
 
             # 2. Replicate localized antenna bottom-ups to align with mega-batch shape
-            mu_bu_flat = _flatten_to_mega_batch(mu_bu_list[i])
-            logvar_bu_flat = _flatten_to_mega_batch(logvar_bu_list[i])
+            # Original: (Batch, Latents) -> Intermediary: (Batch, 1, Latents)
+            #   -> Broadcasted: (Batch, N_Mixtures, Latents)
+            # Final Flat: (Batch * N_Mixtures, Latents)
+            mu_bu_flat = mu_bu_list[i].repeat_interleave(self._n_mixtures, dim=0)
+            logvar_bu_flat = logvar_bu_list[i].repeat_interleave(self._n_mixtures, dim=0)
 
             # 3. Mass Precision-Weighted Ladder Merge
             mu_q_flat, logvar_q_flat = self._precision_weighted_merge(
@@ -168,8 +164,7 @@ class Fusion(nn.Module):
             )
 
             # 4. Standard Reparameterization Sampling
-            std_q_flat = torch.exp(0.5 * logvar_q_flat)
-            z_a_flat = mu_q_flat + torch.randn_like(std_q_flat) * std_q_flat
+            z_a_flat = gaussian.Autoencoder.reparameterize(mu_q_flat, logvar_q_flat)
 
             # 5. Decode the global batch array
             recon_flat = gaussian_vae.decode(z_a_flat)  # pyright: ignore[reportCallIssue]

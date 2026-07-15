@@ -7,20 +7,21 @@ import optuna
 
 @dataclass
 class StudyResult:
-    """Data class to store the results of a single Optuna studyl."""
+    """Data class to store the results of a single Optuna study."""
 
     trial_number: int
     trial_value: float
     params: dict[str, Any]
 
 
-def make_study(study_name: str, storage_dir: str | None, seed: int) -> optuna.Study:
-    """Create (or load) an Optuna study backed by a journal file.
+def make_study(study_name: str, storage_dir: str | None = None, seed: int | None = None) -> optuna.Study:
+    """Create (or load) an Optuna study backed by a SQLite database.
 
     Arguments:
-        study_name: The name of the study to create or load.
-        storage_dir: The directory to use for storage. If None, the study will be created without persistent storage.
-        seed: The seed to use for the random number generator.
+        study_name (str): The name of the study to create or load.
+        storage_dir (str | None): The directory to use for storage.
+            If None, the storage will be in-memory and not persisted to disk.
+        seed (int | None): The seed to use for the random number generator.
 
     Returns:
         An Optuna Study object.
@@ -42,14 +43,14 @@ def make_study(study_name: str, storage_dir: str | None, seed: int) -> optuna.St
     return optuna.create_study(
         study_name=study_name,
         storage=storage,
-        sampler=optuna.samplers.TPESampler(seed=seed),
+        sampler=optuna.samplers.TPESampler(seed=seed, multivariate=True),
         direction="maximize",
         load_if_exists=True,
     )
 
 
 def read_study(launch_dir: str) -> optuna.Study:
-    """Read an Optuna study from a journal file in the specified launch directory.
+    """Read an Optuna study from a SQLite file in the specified launch directory.
 
     Arguments:
         launch_dir (Path): The directory where the Optuna study SQLite file is located.
@@ -67,14 +68,14 @@ def read_study(launch_dir: str) -> optuna.Study:
     return optuna.load_study(study_name=study.split(".")[0], storage=f"sqlite:///{Path(launch_dir) / study}")
 
 
-def get_best_model(study: optuna.Study) -> StudyResult:
-    """Return the best model across all studies based on the highest seed accuracy.
+def get_best_trial(study: optuna.Study) -> StudyResult:
+    """Return the best trial across all studies.
 
     Arguments:
         study: An Optuna Study object containing the trials to evaluate.
 
     Returns:
-        StudyResult: A dataclass containing the details of the best model found across all studies.
+        StudyResult: A dataclass containing the details of the best trial found across all studies.
 
     """
     study_df = study.trials_dataframe()

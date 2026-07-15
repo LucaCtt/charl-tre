@@ -42,12 +42,12 @@ class HyperParams:
     """Maximum weight for the KL divergence term during annealing."""
     n_components: ParamRange[int]
     """Number of components in the Dirichlet distribution (latent space dimensionality)."""
+    n_mixtures: ParamRange[int]
+    """Number of mixture components in the Mixture of Dirichlets (MDM) posterior."""
     n_fusion_layers: ParamRange[int]
     """Number of layers in the delayed fusion classifier."""
     fusion_dropout: ParamRange[float]
     """Dropout rate to use in the delayed fusion classifier."""
-    conv_layers_spec: ParamCategorical[int]
-    """Convolutional layers specification for the VAE encoder."""
 
     @staticmethod
     def from_settings(settings: Settings) -> HyperParams:

@@ -107,6 +107,7 @@ class Classifier(nn.Module):
         n_windows = x_r.shape[0] // batch_size
 
         outs = []
+
         for i, antenna in enumerate(self._antennas):
             # Early fusion modules consume all antennas at once, while delayed-fusion
             # antenna modules consume a single antenna slice.
@@ -115,8 +116,9 @@ class Classifier(nn.Module):
             else:
                 antenna_in = x_r
 
-            model_output = antenna(antenna_in)
-            alpha = model_output[2]
+            with torch.no_grad():
+                model_output = antenna(antenna_in)
+                alpha = model_output[2]
 
             alpha = alpha.reshape(batch_size, n_windows, -1).mean(dim=1)
             outs.append(alpha)
