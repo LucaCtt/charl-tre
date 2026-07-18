@@ -8,23 +8,24 @@ dependencies = [
     "dcor>=0.7",
     "gpytorch>=1.15.1",
     "h5py>=3.16.0",
-    "matplotlib>=3.10.8",
     "numba>=0.63.1",
     "optuna>=4.7.0",
     "optuna-integration[pytorch-distributed]>=4.7.0",
     "pydantic-settings>=2.12.0",
     "rich>=14.3.1",
-    "scikit-learn>=1.8.0",
     "scipy>=1.17.0",
-    "seaborn>=0.13.2",
     "tigramite>=5.2.10.1",
     "torch>=2.9.1",
-    "torchmetrics>=1.8.2",
 ]
 
 [dependency-groups]
 dev = [
     "ruff>=0.14.13",
+]
+notebooks = [
+    "matplotlib>=3.10.8",
+    "scienceplots>=2.2.2",
+    "scikit-learn>=1.8.0",
 ]
 
 [project.scripts]
@@ -59,3 +60,6 @@ ignore = [
     "TC002",
     "TC003",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"*.ipynb" = ["T201"]  # `print` found

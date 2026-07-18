@@ -146,7 +146,7 @@ class Fusion(nn.Module):
             # 1. Forward pass through top-down MLPs for ALL mixtures at once
             prior_params_flat = self._top_down_priors[i](s_flat)
             mu_prior_flat, logvar_prior_flat = torch.chunk(prior_params_flat, 2, dim=-1)
-            logvar_prior_flat = torch.clamp(logvar_prior_flat, min=-10, max=10)
+            logvar_prior_flat = torch.clamp(logvar_prior_flat, min=-5, max=5)
 
             # 2. Replicate localized antenna bottom-ups to align with mega-batch shape
             # Original: (Batch, Latents) -> Intermediary: (Batch, 1, Latents)

@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     """Number of subcarriers in each CSI sample."""
     n_epochs: int = 150
     """Number of training epochs for the VAE."""
-    early_stop_patience: int = 10
+    early_stop_patience: int = 20
     """Number of epochs to wait before early stopping."""
     early_stop_warmup_epochs: int = 10
     """Number of epochs to wait before starting to check for early stopping."""
@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     # Optuna study settings
     n_trials: int = 100
     """Number of Optuna trials for hyperparameter optimization."""
-    study_name: str = f"a{n_antennas}_w{vae_window_size}_tw{classifier_window_size}"
+    study_name: str = f"hvae_vw{vae_window_size}_cw{classifier_window_size}"
     """Name of the VAE model, used for checkpointing."""
     study_path: str = f"out/{study_name}"
     """Directory to save model checkpoints."""
@@ -71,12 +71,12 @@ class Settings(BaseSettings):
     hyperparam_batch_size_max: int = 96
     hyperparam_batch_size_step: Literal["log"] | int = 32
 
-    hyperparam_lr_min: float = 2e-3
+    hyperparam_lr_min: float = 1e-3
     hyperparam_lr_max: float = 3e-2
     hyperparam_lr_step: Literal["log"] | int = "log"
 
-    hyperparam_kl_final_min: float = 1.5
-    hyperparam_kl_final_max: float = 4.0
+    hyperparam_kl_final_min: float = 2
+    hyperparam_kl_final_max: float = 6.0
     hyperparam_kl_final_step: Literal["log"] | float = 0.5
 
     hyperparam_n_components_min: int = 8
@@ -92,7 +92,7 @@ class Settings(BaseSettings):
     hyperparam_n_fusion_layers_step: Literal["log"] | int = 1
 
     hyperparam_fusion_dropout_min: float = 0.0
-    hyperparam_fusion_dropout_max: float = 0.3
+    hyperparam_fusion_dropout_max: float = 0.2
     hyperparam_fusion_dropout_step: Literal["log"] | float = 0.1
 
     @property
