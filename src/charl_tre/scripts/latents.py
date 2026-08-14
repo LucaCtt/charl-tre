@@ -115,9 +115,9 @@ def latents() -> None:
         mix_probs[ds_name] = mix_probs_arr
         labels[ds_name] = labels_arr
 
-    np.savez(out_dir / "alphas.npz", *alphas)
-    np.savez(out_dir / "mix_probs.npz", *mix_probs)
-    np.savez(out_dir / "labels.npz", *labels)
+    np.savez(out_dir / "alphas.npz", allow_pickle=False, **alphas)
+    np.savez(out_dir / "mix_probs.npz", allow_pickle=False, **mix_probs)
+    np.savez(out_dir / "labels.npz", allow_pickle=False, **labels)
 
     logger.info("Saved latents to %s", out_dir)
 
