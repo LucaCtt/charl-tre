@@ -40,14 +40,19 @@ def test() -> None:
     n_fusion_layers = int(best_trial.params["n_fusion_layers"])
     fusion_dropout = float(best_trial.params["fusion_dropout"])
     batch_size = int(best_trial.params["batch_size"])
+    lr = float(best_trial.params["lr"])
 
     logger.info(
-        "Best trial parameters: n_components=%d, n_mixtures=%d, n_fusion_layers=%d, fusion_dropout=%.4f, batch_size=%d",
+        (
+            "Best trial parameters: n_components=%d, n_mixtures=%d,"
+            "n_fusion_layers=%d, fusion_dropout=%.4f, batch_size=%d, lr=%.6f"
+        ),
         n_components,
         n_mixtures,
         n_fusion_layers,
         fusion_dropout,
         batch_size,
+        lr,
     )
 
     test_dl = util.make_dl(

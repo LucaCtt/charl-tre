@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Literal, NamedTuple
 
@@ -11,7 +9,7 @@ class ParamRange[NumberT](NamedTuple):
 
     min: NumberT
     max: NumberT
-    step: NumberT | None | Literal["log"] = None
+    step: NumberT | Literal["log"] | None = None
 
     def to_dict(self) -> dict:
         """Convert the ParamRange to a dictionary of properties for Optuna suggest methods."""
@@ -50,7 +48,7 @@ class HyperParams:
     """Dropout rate to use in the delayed fusion classifier."""
 
     @staticmethod
-    def from_settings(settings: Settings) -> HyperParams:
+    def from_settings(settings: Settings) -> "HyperParams":
         """Create a HyperParams instance from a Settings instance."""
         params = {}
 
