@@ -61,7 +61,7 @@ class _Encoder(nn.Module):
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Encode the input CSI window into bottom-up features and distributions.
 
-        Args:
+        Arguments:
             x (torch.Tensor): Input CSI window of shape (batch_size, n_subcarriers, window_size).
 
         Returns:

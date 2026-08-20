@@ -9,7 +9,7 @@ _N_DIMS_MULTIPLE_ANTENNAS: int = 4
 def _split_test_window(x: torch.Tensor, sample_window_size: int, overlap_size: int) -> torch.Tensor:
     """Split every x along the window size dimension into separate samples.
 
-    Args:
+    Arguments:
         x (torch.Tensor): (batch_size, n_antennas, in_window_size, n_subcarriers) input tensor.
         sample_window_size (int): The size of the windows to split the input into.
         overlap_size (int): how many frames to overlap between windows.
