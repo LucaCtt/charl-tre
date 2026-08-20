@@ -6,7 +6,7 @@ import numpy as np
 from rich.logging import RichHandler
 
 from charl_tre import util
-from charl_tre.causal.evaluator import classify, evaluate
+from charl_tre.causal.evaluator import evaluate
 from charl_tre.causal.lpcmci import LPCMCIParams, LPCMCIVariable, run_lpcmci_batch
 from charl_tre.causal.rules import CausalEdge, RuleBuilder
 from charl_tre.settings import Settings
@@ -19,10 +19,28 @@ logging.basicConfig(level=logging.INFO, handlers=[handler], format="%(message)s"
 logger = logging.getLogger("rich")
 
 
+def _dirichlet_clr(latents: np.ndarray) -> np.ndarray:
+    """Apply the centered log-ratio (CLR) transformation to Dirichlet-distributed latents.
+
+    Arguments:
+        latents (np.ndarray): Latents of shape (n_activities, n_windows, n_mixtures, n_components).
+
+    Returns:
+        np.ndarray: CLR-transformed latents of the same shape as the input.
+
+    """
+    n_components = latents.shape[-1]
+    total = latents.sum(axis=-1, keepdims=True) + n_components
+    p = (latents + 1) / total
+    log_p = np.log(p)
+
+    return log_p - log_p.mean(axis=-1, keepdims=True)
+
+
 def _load_latents(latents_dir: Path, n_activities: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Load latents and labels from the specified directory.
 
-    Args:
+    Arguments:
         latents_dir (Path): Directory containing the latents and labels files.
         n_activities (int): Number of activities to load.
 
@@ -40,7 +58,12 @@ def _load_latents(latents_dir: Path, n_activities: int) -> tuple[np.ndarray, np.
             activity_alpha = alphas[ds_name][labels[ds_name] == activity]
             activity_latents.append(activity_alpha)
 
-        latents[ds_name] = np.stack(activity_latents, axis=0)
+        # Create a 4D array of shape (n_activities, n_windows, n_mixtures, n_components)
+        activity_latents = np.stack(activity_latents, axis=0)
+        activity_latents = _dirichlet_clr(activity_latents)
+
+        # Remove the last component to avoid redundancy in the transformation
+        latents[ds_name] = activity_latents
 
     return latents["train"], latents["val"], latents["test"]
 
@@ -61,7 +84,7 @@ def _causal_discovery(
         np.ndarray: Adjacency matrix of shape (n_vars, n_vars, tau_max + 1).
 
     """
-    params = LPCMCIParams(variables=variables)
+    params = LPCMCIParams(variables=variables, ci_test="parcorr", pc_alpha=0.03, max_p_global=10)
     return run_lpcmci_batch(train_latents, params=params, max_workers=6, cache_dir=cache_dir)
 
 
@@ -114,10 +137,10 @@ def causal() -> None:
         for component in range(n_components)
     ]
 
-    if (causal_dir / "adjacency_matrix.npz").exists():
+    if (causal_dir / "adjacency_matrix.npy").exists():
         logger.info("Adjacency matrix already exists. Skipping causal discovery.")
 
-        adjacency_matrix = np.load(causal_dir / "adjacency_matrix.npz")["adjacency_matrix"]
+        adjacency_matrix = np.load(causal_dir / "adjacency_matrix.npy")
     else:
         logger.info("Running LPCMCI discovery...")
 
@@ -125,9 +148,9 @@ def causal() -> None:
             adjacency_matrix = _causal_discovery(train_latents, variables, cache_dir)
 
         Path(causal_dir).mkdir(parents=True, exist_ok=True)
-        np.savez_compressed(
-            causal_dir / "adjacency_matrix.npz",
-            adjacency_matrix=adjacency_matrix,
+        np.save(
+            causal_dir / "adjacency_matrix.npy",
+            adjacency_matrix,
         )
 
         logger.info("Done.")
