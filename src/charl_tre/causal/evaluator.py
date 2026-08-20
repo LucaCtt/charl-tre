@@ -1,10 +1,9 @@
 from dataclasses import dataclass
 
 import numpy as np
+from numpy.lib.stride_tricks import sliding_window_view
 
-from charl_tre.causal.rules import Rule, _conditional_target_mean
-
-_LATENT_NDIM = 3
+from charl_tre.causal.rules import Rule
 
 
 @dataclass(frozen=True)
@@ -59,36 +58,27 @@ class BaseMetrics:
 class EvaluationMetrics:
     """Performance report for activity classification."""
 
-    macro_metrics: BaseMetrics
-    weighted_metrics: BaseMetrics
-    per_class_metrics: dict[int, BaseMetrics]
+    overall: BaseMetrics
+    weighted: BaseMetrics
+    per_activity: dict[int, BaseMetrics]
 
 
-def make_segments(data: np.ndarray, segment_length: int) -> dict[int, np.ndarray]:
-    """Create stride-one segments from activity latent sequences."""
-    if segment_length <= 0:
-        msg = "segment_length must be positive"
-        raise ValueError(msg)
-
+def _make_segments(data: np.ndarray, segment_length: int) -> dict[int, np.ndarray]:
+    """Create stride-one segments using vectorized sliding window views."""
     segments: dict[int, np.ndarray] = {}
     for activity, activity_data in enumerate(data):
-        if activity_data.ndim != _LATENT_NDIM:
-            msg = "activity latent data must have shape (n_windows, n_mixtures, n_components)"
-            raise ValueError(msg)
-        n_segments = max(activity_data.shape[0] - segment_length + 1, 0)
-        if n_segments:
-            segments[activity] = np.stack(
-                [activity_data[start : start + segment_length] for start in range(n_segments)],
-                axis=0,
-            )
+        n_windows = activity_data.shape[0]
+        if n_windows >= segment_length:
+            sw = sliding_window_view(activity_data, window_shape=segment_length, axis=0)
+            segments[activity] = np.moveaxis(sw, -1, 1)
         else:
             segments[activity] = np.empty((0, segment_length, *activity_data.shape[1:]), dtype=activity_data.dtype)
 
     return segments
 
 
-def linspace_indices(n: int, count: int) -> np.ndarray:
-    """Return integer indices matching ``np.linspace(..., dtype=int)``."""
+def _linspace_indices(n: int, count: int) -> np.ndarray:
+    """Return integer indices matching np.linspace(..., dtype=int)."""
     if n <= 0 or count <= 0:
         return np.empty(0, dtype=int)
     if count == 1:
@@ -96,20 +86,42 @@ def linspace_indices(n: int, count: int) -> np.ndarray:
     return np.linspace(0, n - 1, count, dtype=int)
 
 
-def _rule_evidence(sequence: np.ndarray, rule: Rule, eps: float) -> tuple[float, int]:
-    """Score continuous target evidence for one rule in a sequence."""
-    conditional_mean, count = _conditional_target_mean(sequence, rule.edge, rule.source_threshold)
-    if count == 0:
+def _rule_evidence(
+    sequence: np.ndarray,
+    rule: Rule,
+    eps: float = 1e-8,
+    min_count: int = 3,
+    max_evidence: float = 2.0,
+) -> tuple[float, int]:
+    """Compute normalized evidence score and sample count for one rule on a target sequence."""
+    seq_len = sequence.shape[0]
+    if rule.edge.lag >= seq_len:
         return 0.0, 0
 
+    src_seq = sequence[: seq_len - rule.edge.lag, rule.edge.source.mixture, rule.edge.source.component]
+    tgt_seq = sequence[rule.edge.lag :, rule.edge.target.mixture, rule.edge.target.component]
+
+    valid_mask = np.isfinite(src_seq) & np.isfinite(tgt_seq) & (src_seq >= rule.source_threshold)
+    count = int(valid_mask.sum())
+    if count < min_count:
+        # Very small match counts are too noisy to provide stable evidence.
+        return 0.0, 0
+
+    conditional_mean = float(tgt_seq[valid_mask].mean())
     expected_delta = rule.target_mean_train - rule.target_mean_other
     scale = max(abs(expected_delta), eps)
+
     observed_delta = rule.target_direction * (conditional_mean - rule.target_mean_other)
-    return float(observed_delta / scale), count
+    normalized_evidence = float(np.clip(observed_delta / scale, -max_evidence, max_evidence))
+
+    return normalized_evidence, count
 
 
-def score_rules(sequence: np.ndarray, rules: list[Rule], eps: float = 1e-8) -> RuleStats:
-    """Score a continuous latent sequence against one activity's rules."""
+def _score_rules(sequence: np.ndarray, rules: list[Rule], eps: float = 1e-8) -> RuleStats:
+    """Score a continuous latent sequence against an activity's rules."""
+    if not rules:
+        return RuleStats(0.0, 0.0, 0.0, 0.0, 0, 0, 0)
+
     raw_score = raw_weight = 0.0
     core_score = core_weight = 0.0
     tie_score = tie_weight = 0.0
@@ -126,53 +138,64 @@ def score_rules(sequence: np.ndarray, rules: list[Rule], eps: float = 1e-8) -> R
         matched += 1
 
         if rule.is_core:
-            core_weight_value = max(rule.normalized_core_weight or 0.0, 0.0)
-            core_score += core_weight_value * evidence
-            core_weight += core_weight_value
+            c_weight = max(rule.normalized_core_weight or 0.0, 0.0)
+            core_score += c_weight * evidence
+            core_weight += c_weight
             matched_core += 1
         else:
-            tie_weight_value = max(rule.normalized_tie_weight or 0.0, 0.0)
-            tie_score += tie_weight_value * evidence
-            tie_weight += tie_weight_value
+            t_weight = max(rule.normalized_tie_weight or 0.0, 0.0)
+            tie_score += t_weight * evidence
+            tie_weight += t_weight
             matched_tie += 1
 
-    raw = raw_score / raw_weight if raw_weight else 0.0
+    final_raw = raw_score / raw_weight if raw_weight > 0.0 else 0.0
+    final_core = core_score / core_weight if core_weight > 0.0 else final_raw
+    final_tie = tie_score / tie_weight if tie_weight > 0.0 else 0.0
+
     return RuleStats(
-        raw_rule_score=raw,
-        core_score=core_score / core_weight if core_weight else raw,
-        tie_score=tie_score / tie_weight if tie_weight else 0.0,
-        coverage=min(raw_weight, 1.0),
+        raw_rule_score=float(final_raw),
+        core_score=float(final_core),
+        tie_score=float(final_tie),
+        coverage=float(min(raw_weight, 1.0)),
         matched_rules=matched,
         matched_core_rules=matched_core,
         matched_tie_rules=matched_tie,
     )
 
 
-def prototype_score(sequence: np.ndarray, prototype_mean: tuple[float, ...] | np.ndarray) -> float:
-    """Return the negative mean absolute distance from an activity prototype."""
+def _prototype_score(sequence: np.ndarray, prototype_mean: tuple[float, ...] | np.ndarray) -> float:
+    """Return the negative mean absolute error relative to an activity prototype."""
     if sequence.size == 0 or len(prototype_mean) == 0:
         return 0.0
-    observed = np.nanmean(sequence, axis=0).reshape(-1)
-    prototype = np.asarray(prototype_mean, dtype=float).reshape(-1)
+
+    observed = np.nanmean(sequence, axis=0).ravel()
+    prototype = np.ravel(np.asarray(prototype_mean, dtype=np.float64))
+
     if observed.shape != prototype.shape:
         return 0.0
-    return -float(np.nanmean(np.abs(observed - prototype)))
+
+    diff = np.abs(observed - prototype)
+    valid = np.isfinite(diff)
+    return -float(np.mean(diff[valid])) if valid.any() else 0.0
 
 
-def combine(stats: RuleStats, model: ActivityModel, prototype: float, apply_bias: bool = True) -> float:
-    """Combine rule, coverage, prior, prototype, and bias terms."""
+def _combine(stats: RuleStats, model: ActivityModel, prototype: float, apply_bias: bool = True) -> float:
+    """Combine rule score, coverage, priors, prototype fallbacks, and class bias."""
     score = stats.core_score
     score += model.tie_breaker_weight * stats.tie_score
     score += model.coverage_weight * stats.coverage
     score += model.prior_weight * model.log_prior
+
     if model.use_prototype_fallback:
         score += model.prototype_weight * prototype
+
     if apply_bias:
         score += model.score_bias
-    return score
+
+    return float(score)
 
 
-def score_sequence(
+def _score_sequence(
     sequence: np.ndarray,
     rule_library: dict[int, list[Rule]],
     activity_models: dict[int, ActivityModel] | None = None,
@@ -181,88 +204,114 @@ def score_sequence(
     """Score a sequence for every activity in the rule library."""
     scores: dict[int, float] = {}
     diagnostics: dict[int, ScoringDiagnostics] = {}
+
     for activity, rules in rule_library.items():
         model = activity_models.get(activity) if activity_models else None
-        stats = score_rules(sequence, rules)
-        prototype = prototype_score(sequence, model.prototype_mean) if model else 0.0
-        final_score = combine(stats, model, prototype, apply_bias) if model else stats.core_score
+        stats = _score_rules(sequence, rules)
+        proto = _prototype_score(sequence, model.prototype_mean) if model else 0.0
+        final_score = _combine(stats, model, proto, apply_bias) if model else stats.core_score
+
         scores[activity] = final_score
-        diagnostics[activity] = ScoringDiagnostics(stats, prototype, final_score)
+        diagnostics[activity] = ScoringDiagnostics(stats, proto, final_score)
+
     return scores, diagnostics
 
 
-def classify(
+def _classify(
     sequence: np.ndarray,
     rule_library: dict[int, list[Rule]],
     activity_models: dict[int, ActivityModel] | None = None,
 ) -> tuple[int, dict[int, float]]:
-    """Classify a sequence, using diagnostics to break narrow score margins."""
-    scores, diagnostics = score_sequence(sequence, rule_library, activity_models)
-    if not scores:
-        msg = "rule_library must contain at least one activity"
-        raise ValueError(msg)
+    """Classify a sequence, breaking narrow score margins using multi-tiered rule evidence."""
+    scores, diagnostics = _score_sequence(sequence, rule_library, activity_models)
 
-    ranked = sorted(scores, key=lambda activity: scores[activity], reverse=True)
+    ranked = sorted(scores, key=lambda a: scores[a], reverse=True)
     prediction = ranked[0]
+
     if len(ranked) > 1 and activity_models:
         runner_up = ranked[1]
-        required_margin = max(
+        req_margin = max(
             activity_models.get(prediction, ActivityModel()).min_margin,
             activity_models.get(runner_up, ActivityModel()).min_margin,
         )
-        if scores[prediction] - scores[runner_up] < required_margin:
-            prediction_key = (
-                diagnostics[prediction].stats.matched_core_rules,
-                diagnostics[prediction].stats.coverage,
-                diagnostics[prediction].prototype_score,
+
+        if scores[prediction] - scores[runner_up] < req_margin:
+            pred_diag = diagnostics[prediction]
+            runner_diag = diagnostics[runner_up]
+
+            pred_key = (
+                pred_diag.stats.matched_core_rules,
+                pred_diag.stats.coverage,
+                pred_diag.prototype_score,
                 scores[prediction],
             )
-            runner_up_key = (
-                diagnostics[runner_up].stats.matched_core_rules,
-                diagnostics[runner_up].stats.coverage,
-                diagnostics[runner_up].prototype_score,
+            runner_key = (
+                runner_diag.stats.matched_core_rules,
+                runner_diag.stats.coverage,
+                runner_diag.prototype_score,
                 scores[runner_up],
             )
-            if runner_up_key > prediction_key:
+
+            if runner_key > pred_key:
                 prediction = runner_up
+
     return prediction, scores
 
 
 def _metrics(y_true: np.ndarray, y_pred: np.ndarray, labels: list[int]) -> EvaluationMetrics:
-    """Compute per-class, macro, and support-weighted classification metrics."""
-    per_class: dict[int, BaseMetrics] = {}
+    """Compute per-class, macro-averaged, and support-weighted classification metrics."""
     total = len(y_true)
-    accuracy = float(np.mean(y_pred == y_true)) if total else 0.0
-    for label in labels:
-        true_positive = int(np.sum((y_true == label) & (y_pred == label)))
-        support = int(np.sum(y_true == label))
-        predicted = int(np.sum(y_pred == label))
-        precision = true_positive / predicted if predicted else 0.0
-        recall = true_positive / support if support else 0.0
-        f1 = 2.0 * precision * recall / (precision + recall) if precision + recall else 0.0
-        per_class[label] = BaseMetrics(accuracy, precision, recall, f1, support)
-
-    if not labels:
+    if total == 0 or not labels:
         empty = BaseMetrics(0.0, 0.0, 0.0, 0.0, 0)
         return EvaluationMetrics(empty, empty, {})
 
-    class_values = list(per_class.values())
+    per_class: dict[int, BaseMetrics] = {}
+    overall_acc = float(np.mean(y_pred == y_true))
+
+    for label in labels:
+        is_true = y_true == label
+        is_pred = y_pred == label
+
+        tp = int(np.sum(is_true & is_pred))
+        support = int(is_true.sum())
+        pred_count = int(is_pred.sum())
+
+        # In multiclass reports, per-class accuracy is most interpretable as class hit-rate.
+        cls_acc = tp / support if support > 0 else 0.0
+        precision = tp / pred_count if pred_count > 0 else 0.0
+        recall = tp / support if support > 0 else 0.0
+        f1 = (2.0 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+
+        per_class[label] = BaseMetrics(
+            accuracy=float(cls_acc),
+            precision=float(precision),
+            recall=float(recall),
+            f1=float(f1),
+            support=support,
+        )
+
+    class_vals = list(per_class.values())
+
     macro = BaseMetrics(
-        accuracy=float(np.mean([metric.accuracy for metric in class_values])),
-        precision=float(np.mean([metric.precision for metric in class_values])),
-        recall=float(np.mean([metric.recall for metric in class_values])),
-        f1=float(np.mean([metric.f1 for metric in class_values])),
+        accuracy=overall_acc,
+        precision=float(np.mean([m.precision for m in class_vals])),
+        recall=float(np.mean([m.recall for m in class_vals])),
+        f1=float(np.mean([m.f1 for m in class_vals])),
         support=total,
     )
-    weights = np.array([metric.support for metric in class_values], dtype=float)
-    weights = weights / weights.sum() if weights.sum() else np.zeros_like(weights)
+
+    weights = np.array([m.support for m in class_vals], dtype=np.float64)
+    sum_w = weights.sum()
+    weights = weights / sum_w if sum_w > 0 else np.zeros_like(weights)
+
     weighted = BaseMetrics(
-        accuracy=accuracy,
-        precision=float(np.dot(weights, [metric.precision for metric in class_values])),
-        recall=float(np.dot(weights, [metric.recall for metric in class_values])),
-        f1=float(np.dot(weights, [metric.f1 for metric in class_values])),
+        accuracy=overall_acc,
+        precision=float(np.dot(weights, [m.precision for m in class_vals])),
+        recall=float(np.dot(weights, [m.recall for m in class_vals])),
+        f1=float(np.dot(weights, [m.f1 for m in class_vals])),
         support=total,
     )
+
     return EvaluationMetrics(macro, weighted, per_class)
 
 
@@ -272,13 +321,14 @@ def evaluate(
     segment_length: int,
     activity_models: dict[int, ActivityModel] | None = None,
 ) -> EvaluationMetrics:
-    """Evaluate activity classification on stride-one test segments."""
-    segments = make_segments(test_data, segment_length)
+    """Evaluate activity classification performance across test dataset segments."""
+    segments = _make_segments(test_data, segment_length)
     y_true: list[int] = []
     y_pred: list[int] = []
+
     for activity, activity_segments in segments.items():
         for sequence in activity_segments:
-            prediction, _ = classify(sequence, rule_library, activity_models)
+            prediction, _ = _classify(sequence, rule_library, activity_models)
             y_true.append(activity)
             y_pred.append(prediction)
 

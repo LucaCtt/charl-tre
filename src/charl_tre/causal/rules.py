@@ -66,145 +66,174 @@ class SelectionConfig:
     min_delta: float = 0.0
 
 
-def _conditional_target_mean(
-    data: np.ndarray,
+def build_edges_from_adjacency(
+    adjacency: np.ndarray,
+    sorted_variables: list[LPCMCIVariable],
+) -> dict[int, list[CausalEdge]]:
+    """Convert an LPCMCI adjacency array into CausalEdge objects per activity.
+
+    Arguments:
+        adjacency (np.ndarray): An LPCMCI adjacency array of shape (n_activities, n_variables, n_variables, n_lags).
+        sorted_variables (list[LPCMCIVariable]): A list of LPCMCIVariable objects
+            corresponding to the indices in the adjacency array.
+
+    Returns:
+        dict[int, list[CausalEdge]]: A dictionary mapping activity IDs to lists of CausalEdge objects
+            representing the causal relationships for that activity.
+
+    """
+    n_activities = adjacency.shape[0]
+    edges_by_activity: dict[int, list[CausalEdge]] = {}
+
+    for activity_id in range(n_activities):
+        cell = adjacency[activity_id]
+        source_idx, target_idx, lag_idx = np.nonzero(cell["mark"])
+        values = cell["value"][source_idx, target_idx, lag_idx]
+
+        edges_by_activity[activity_id] = [
+            CausalEdge(
+                source=sorted_variables[s],
+                target=sorted_variables[t],
+                lag=int(lag),
+                value=float(val),
+            )
+            for s, t, lag, val in zip(source_idx, target_idx, lag_idx, values, strict=True)
+        ]
+
+    return edges_by_activity
+
+
+def _compute_source_threshold(
+    train_data: np.ndarray,
+    source: LPCMCIVariable,
+) -> float:
+    """Compute the global median threshold across all activities and time windows.
+
+    Arguments:
+        train_data (np.ndarray): The training data array of shape (..., n_mixtures, n_components).
+        source (LPCMCIVariable): The source variable for which to compute the threshold.
+
+    Returns:
+        float: The median value of the source variable across all activities and time windows.
+
+    """
+    values = train_data[..., source.mixture, source.component].ravel()
+    return float(np.median(values))
+
+
+def _compute_unconditional_target_means(
+    train_data: np.ndarray,
+    target: LPCMCIVariable,
+) -> np.ndarray:
+    """Compute unconditional target means for all activities simultaneously.
+
+    Arguments:
+        train_data (np.ndarray): The training data array of shape (..., n_mixtures, n_components).
+        target (LPCMCIVariable): The target variable for which to compute the unconditional means.
+
+    Returns:
+        np.ndarray: An array of shape (n_activities,) containing the unconditional means
+            of the target variable across all time windows.
+
+    """
+    data = train_data[..., target.mixture, target.component]
+    return data.mean(axis=1)
+
+
+def _conditional_target_means(
+    train_data: np.ndarray,
     edge: CausalEdge,
     source_threshold: float,
-) -> tuple[float, int]:
-    """Compute a conditional target mean and sample count for a continuous rule.
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute conditional target means and sample counts across all activities simultaneously via vectorized slicing.
 
     Arguments:
-        data (np.ndarray): 3D array of shape (n_windows, n_mixtures, n_components).
-        edge (CausalEdge): The causal edge containing source, target, lag, and other properties.
-        source_threshold (float): Source value threshold for activating the rule condition.
+        train_data (np.ndarray): The training data array of shape (n_activities, n_windows, n_mixtures, n_components).
+        edge (CausalEdge): The causal edge for which to compute the conditional means.
+        source_threshold (float): The threshold value for the source variable to determine valid samples.
 
     Returns:
-        tuple[float, int]: Conditional target mean and number of source conditions.
+        tuple[np.ndarray, np.ndarray]: A tuple containing:
+            - An array of shape (n_activities,) with the conditional means of the target variable
+              given the source variable exceeds the threshold.
+            - An array of shape (n_activities,) with the counts of valid samples
+                used to compute the conditional means for each activity.
 
     """
-    n_windows = data.shape[0]
-    lag = edge.lag
+    n_activities, n_windows = train_data.shape[:2]
 
-    target_values: list[float] = []
-    for t in range(n_windows - lag):
-        source_value = data[t, edge.source.mixture, edge.source.component]
-        target_value = data[t + lag, edge.target.mixture, edge.target.component]
+    source_seq = train_data[:, : n_windows - edge.lag, edge.source.mixture, edge.source.component]
+    target_seq = train_data[:, edge.lag :, edge.target.mixture, edge.target.component]
 
-        if np.isfinite(source_value) and np.isfinite(target_value) and source_value >= source_threshold:
-            target_values.append(float(target_value))
+    valid_mask = source_seq >= source_threshold
+    counts = valid_mask.sum(axis=1)
 
-    return (float(np.mean(target_values)) if target_values else 0.0), len(target_values)
+    sums = np.where(valid_mask, target_seq, 0.0).sum(axis=1)
+    means = np.divide(sums, counts, out=np.zeros(n_activities), where=counts > 0)
 
-
-def _source_threshold(train_data: np.ndarray, edge: CausalEdge) -> float:
-    """Return a common source threshold so activities are evaluated on the same condition."""
-    source_values = train_data[:, :, edge.source.mixture, edge.source.component]
-    finite_values = source_values[np.isfinite(source_values)]
-    return float(np.median(finite_values)) if finite_values.size else 0.0
-
-
-def _target_mean(data: np.ndarray, edge: CausalEdge) -> float:
-    """Return the unconditional mean of an edge target."""
-    values = data[:, edge.target.mixture, edge.target.component]
-    finite_values = values[np.isfinite(values)]
-    return float(np.mean(finite_values)) if finite_values.size else 0.0
-
-
-def _median(values: list[float]) -> float | None:
-    """Compute the median of a list of float values.
-
-    Arguments:
-        values (list[float]): A list of float values.
-
-    Returns:
-        float | None: The median value, or None if the list is empty.
-
-    """
-    n = len(values)
-    if n == 0:
-        return None
-    sorted_values = sorted(values)
-    mid = n // 2
-    if n % 2 == 0:
-        return (sorted_values[mid - 1] + sorted_values[mid]) / 2.0
-
-    return sorted_values[mid]
+    return means, counts
 
 
 def _annotate_hierarchy(selected: list[Rule], core_fraction: float, eps: float = 1e-8) -> list[Rule]:
-    """Annotate the selected rules with hierarchy information based on their weights.
+    """Annotate selected rules with hierarchy and normalized weight information."""
+    if not selected:
+        return []
 
-    Arguments:
-        selected (list[Rule]): A list of selected Rule objects.
-        core_fraction (float): The fraction of rules to be considered as core.
-        eps (float): A small value to avoid division by zero.
-
-    Returns:
-        list[Rule]: The annotated list of Rule objects with hierarchy information.
-
-    """
     selected.sort(key=lambda r: r.selection_score if r.selection_score is not None else r.weight, reverse=True)
 
-    core_count = max(1, min(len(selected), round(len(selected) * core_fraction)))
-    total_w = sum(max(r.weight, eps) for r in selected)
-    core_w = sum(max(r.weight, eps) for r in selected[:core_count])
-    tie_w = sum(max(r.weight, eps) for r in selected[core_count:])
+    n_selected = len(selected)
+    core_count = max(1, min(n_selected, round(n_selected * core_fraction)))
+
+    weights = np.maximum([r.weight for r in selected], eps)
+    total_weight = float(weights.sum())
+    core_weight = float(weights[:core_count].sum())
+    tie_weight = float(weights[core_count:].sum())
 
     annotated = []
     for idx, rule in enumerate(selected):
-        w = max(rule.weight, eps)
+        w = float(weights[idx])
         is_core = idx < core_count
 
-        annotated_rule = replace(
-            rule,
-            is_core=is_core,
-            normalized_weight=w / total_w if total_w > 0.0 else 0.0,
-            normalized_core_weight=w / core_w if is_core and core_w > 0.0 else 0.0,
-            normalized_tie_weight=w / tie_w if not is_core and tie_w > 0.0 else 0.0,
+        annotated.append(
+            replace(
+                rule,
+                is_core=is_core,
+                normalized_weight=w / total_weight if total_weight > 0.0 else 0.0,
+                normalized_core_weight=w / core_weight if is_core and core_weight > 0.0 else 0.0,
+                normalized_tie_weight=w / tie_weight if not is_core and tie_weight > 0.0 else 0.0,
+            ),
         )
-        annotated.append(annotated_rule)
 
     return annotated
 
 
 class RuleBuilder:
-    """Builds a library of causal rules from causal edges and training data, with budget allocation and selection."""
+    """Builds a library of causal rules from causal edges and training data with budget allocation and selection."""
 
     def __init__(
         self,
         budget_config: RuleBudgetConfig | None = None,
         selection_config: SelectionConfig | None = None,
     ) -> None:
-        """Initialize the RuleBuilder with optional configuration parameters."""
+        """Initialize the RuleBuilder with optional budget and selection configurations."""
         self._budget_config = budget_config or RuleBudgetConfig()
         self._selection_config = selection_config or SelectionConfig()
 
     def build(
         self,
-        edges_by_activity: dict[int, list[CausalEdge]],
+        adjacency: np.ndarray,
+        sorted_variables: list[LPCMCIVariable],
         train_data: np.ndarray,
     ) -> dict[int, list[Rule]]:
-        """Build a library of causal rules from an LPCMCI adjacency matrix.
-
-        Arguments:
-            edges_by_activity (dict[int, list[CausalEdge]]): A dictionary mapping activity IDs to their causal edges.
-            train_data (np.ndarray): A 4D array of shape (n_activities, n_windows, n_mixtures, n_components)
-                representing the training data for each activity.
-
-        Returns:
-            dict[int, list[Rule]]: A dictionary mapping activity IDs to their selected causal rules
-                after budget allocation and selection.
-
-        """
+        """Build a library of causal rules mapped by activity ID."""
+        edges_by_activity = build_edges_from_adjacency(adjacency, sorted_variables)
         candidates_by_activity = self._build_candidates(edges_by_activity, train_data)
         budgets = self._allocate_budgets(candidates_by_activity, edges_by_activity)
 
         library: dict[int, list[Rule]] = {}
         for activity, candidates in candidates_by_activity.items():
             budget = budgets.get(activity, 0)
-            selected = self._select_with_pruning(candidates.copy(), budget)
-
-            library[activity] = selected
+            library[activity] = self._select_with_pruning(candidates, budget)
 
         return library
 
@@ -213,101 +242,88 @@ class RuleBuilder:
         edges_by_activity: dict[int, list[CausalEdge]],
         train_data: np.ndarray,
     ) -> dict[int, list[Rule]]:
-        activities = list(edges_by_activity.keys())
-        result: dict[int, list[Rule]] = {}
+        n_activities = train_data.shape[0]
 
-        for activity in activities:
-            edges = edges_by_activity.get(activity, [])
+        # Collect unique domain objects/configurations across all activities
+        all_edges = [edge for edges in edges_by_activity.values() for edge in edges]
+        unique_sources = {edge.source for edge in all_edges}
+        unique_targets = {edge.target for edge in all_edges}
+        unique_edge_keys = {(e.source, e.target, e.lag): e for e in all_edges}
+
+        # Precompute statistics passing domain objects directly
+        threshold_cache = {src: _compute_source_threshold(train_data, src) for src in unique_sources}
+        uncond_cache = {tgt: _compute_unconditional_target_means(train_data, tgt) for tgt in unique_targets}
+        cond_cache = {
+            key: _conditional_target_means(train_data, edge, threshold_cache[edge.source])
+            for key, edge in unique_edge_keys.items()
+        }
+
+        # Construct candidates with cached lookups
+        result: dict[int, list[Rule]] = {}
+        denom = float(n_activities - 1) if n_activities > 1 else 1.0
+
+        for activity, edges in edges_by_activity.items():
             candidates: list[Rule] = []
 
             for edge in edges:
-                candidate = self._build_candidate(
-                    activity,
-                    activities,
-                    train_data,
-                    edge,
+                source_threshold = threshold_cache[edge.source]
+                uncond_means = uncond_cache[edge.target]
+                cond_means, cond_counts = cond_cache[(edge.source, edge.target, edge.lag)]
+
+                own_mean = float(cond_means[activity])
+                own_count = int(cond_counts[activity])
+
+                if n_activities > 1:
+                    effective = np.where(cond_counts > 0, cond_means, uncond_means)
+                    other_mean = float((effective.sum() - effective[activity]) / denom)
+                else:
+                    other_mean = float(uncond_means[activity])
+
+                target_direction = 1 if edge.is_positive else -1
+                target_mean_train = target_direction * own_mean
+                target_mean_other = target_direction * other_mean
+                delta = target_mean_train - target_mean_other
+                weight = float(edge.strength * max(delta, 0.0) * np.log1p(own_count))
+
+                candidates.append(
+                    Rule(
+                        edge,
+                        target_mean_train,
+                        target_mean_other,
+                        weight,
+                        source_threshold,
+                        target_direction,
+                        selection_score=None,
+                        is_core=False,
+                    ),
                 )
-                if candidate is not None:
-                    candidates.append(candidate)
 
             result[activity] = candidates
 
         return result
-
-    def _build_candidate(
-        self,
-        activity: int,
-        activities: list[int],
-        train_data: np.ndarray,
-        edge: CausalEdge,
-    ) -> Rule | None:
-        own_data = train_data[activity]
-        source_threshold = _source_threshold(train_data, edge)
-
-        own_mean, own_count = _conditional_target_mean(own_data, edge, source_threshold)
-
-        other_means: list[float] = []
-        for other_activity in activities:
-            if other_activity == activity:
-                continue
-            other_data = train_data[other_activity]
-            other_mean, other_count = _conditional_target_mean(other_data, edge, source_threshold)
-            other_means.append(other_mean if other_count > 0 else _target_mean(other_data, edge))
-
-        other_mean = sum(other_means) / len(other_means) if other_means else _target_mean(own_data, edge)
-
-        target_train, target_other = (own_mean, other_mean) if edge.is_positive else (-own_mean, -other_mean)
-
-        delta = target_train - target_other
-        weight = edge.strength * max(delta, 0.0) * np.log1p(own_count)
-
-        return Rule(
-            edge=edge,
-            target_mean_train=target_train,
-            target_mean_other=target_other,
-            weight=weight,
-            source_threshold=source_threshold,
-            target_direction=1 if edge.is_positive else -1,
-            selection_score=None,
-            is_core=False,
-        )
 
     def _allocate_budgets(
         self,
         candidates_by_activity: dict[int, list[Rule]],
         edges_by_activity: dict[int, list[CausalEdge]],
     ) -> dict[int, int]:
-        """Allocate budgets for each activity based on the number of candidate rules and the configuration parameters.
+        counts = [len(c) for c in candidates_by_activity.values() if len(c) > 0]
+        median_ref = float(np.median(counts)) if counts else 1.0
 
-        Arguments:
-            candidates_by_activity (dict[int, list[Rule]]): A dictionary mapping activity IDs to their candidate rules.
-            edges_by_activity (dict[int, list[CausalEdge]]): A dictionary mapping activity IDs to their causal edges.
-
-        Returns:
-            dict[int, int]: A dictionary mapping activity IDs to their allocated budgets (maximum number of rules).
-
-        """
-        non_zero_candidates = [float(len(c)) for c in candidates_by_activity.values() if len(c) > 0]
-        median_references = _median(non_zero_candidates) or 1.0
-
-        max_budget = max(
-            self._budget_config.top_rules_per_activity * self._budget_config.max_rules_scale,
-            self._budget_config.top_rules_per_activity,
-        )
+        cfg = self._budget_config
+        max_budget = max(cfg.top_rules_per_activity * cfg.max_rules_scale, cfg.top_rules_per_activity)
 
         budgets: dict[int, int] = {}
         for activity, candidates in candidates_by_activity.items():
             count = len(candidates)
+            scale = (count / median_ref) ** 0.5 if median_ref > 0 else 1.0
+            raw_budget = cfg.top_rules_per_activity * scale
+            budget = min(max(raw_budget, cfg.min_rules_per_activity), max_budget, count)
 
-            scale = (count / median_references) ** 0.5 if median_references > 0 else 1.0
-            raw_budget = self._budget_config.top_rules_per_activity * scale
-
-            budget = min(max(raw_budget, self._budget_config.min_rules_per_activity), max_budget, count)
-
-            if len(edges_by_activity.get(activity, [])) <= self._budget_config.low_edge_threshold:
+            if len(edges_by_activity.get(activity, [])) <= cfg.low_edge_threshold:
                 low_cap = max(
-                    self._budget_config.top_rules_per_activity * self._budget_config.low_edge_budget_ratio,
-                    self._budget_config.min_rules_per_activity,
+                    cfg.top_rules_per_activity * cfg.low_edge_budget_ratio,
+                    cfg.min_rules_per_activity,
                 )
                 budget = min(budget, low_cap)
 
@@ -316,24 +332,13 @@ class RuleBuilder:
         return budgets
 
     def _select_with_pruning(self, candidates: list[Rule], budget: int) -> list[Rule]:
-        """Select rules from candidates with pruning based on the selection configuration and budget.
-
-        Arguments:
-            candidates (list[Rule]): A list of candidate Rule objects.
-            budget (int): The maximum number of rules to select.
-
-        Returns:
-            list[Rule]: A list of selected Rule objects after pruning and selection.
-
-        """
         if budget == 0 or not candidates:
             return []
 
         best_by_key: dict[tuple[LPCMCIVariable, LPCMCIVariable, int, int], Rule] = {}
         for rule in candidates:
             key = (rule.edge.source, rule.edge.target, rule.edge.lag, rule.target_direction)
-            existing = best_by_key.get(key)
-            if existing is None or existing.weight < rule.weight:
+            if key not in best_by_key or best_by_key[key].weight < rule.weight:
                 best_by_key[key] = rule
 
         deduped = list(best_by_key.values())
@@ -380,12 +385,11 @@ class RuleBuilder:
             chosen_rule = pool.pop(best_idx)
             chosen_rule = replace(chosen_rule, selection_score=best_score)
 
-            source_lag_counts[(chosen_rule.edge.source, chosen_rule.edge.lag)] = (
-                source_lag_counts.get((chosen_rule.edge.source, chosen_rule.edge.lag), 0) + 1
-            )
-            pair_counts[(chosen_rule.edge.source, chosen_rule.edge.target)] = (
-                pair_counts.get((chosen_rule.edge.source, chosen_rule.edge.target), 0) + 1
-            )
+            sl_key = (chosen_rule.edge.source, chosen_rule.edge.lag)
+            pc_key = (chosen_rule.edge.source, chosen_rule.edge.target)
+            source_lag_counts[sl_key] = source_lag_counts.get(sl_key, 0) + 1
+            pair_counts[pc_key] = pair_counts.get(pc_key, 0) + 1
+
             selected_keys.add((
                 chosen_rule.edge.source,
                 chosen_rule.edge.target,

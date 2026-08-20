@@ -3,12 +3,15 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
+from rich.console import Console
 from rich.logging import RichHandler
+from rich.table import Table
+from rich.text import Text
 
 from charl_tre import util
-from charl_tre.causal.evaluator import evaluate
+from charl_tre.causal.evaluator import BaseMetrics, EvaluationMetrics, evaluate
 from charl_tre.causal.lpcmci import LPCMCIParams, LPCMCIVariable, run_lpcmci_batch
-from charl_tre.causal.rules import CausalEdge, RuleBuilder
+from charl_tre.causal.rules import RuleBuilder
 from charl_tre.settings import Settings
 
 settings = Settings()
@@ -88,37 +91,35 @@ def _causal_discovery(
     return run_lpcmci_batch(train_latents, params=params, max_workers=6, cache_dir=cache_dir)
 
 
-def _edges_from_adjacency(
-    adjacency_matrix: np.ndarray,
-    variables: list[LPCMCIVariable],
-) -> dict[int, list[CausalEdge]]:
-    """Convert an adjacency matrix to a dictionary of edges by activity.
+def _metrics_table(metrics: EvaluationMetrics) -> Table:
+    table = Table()
 
-    Arguments:
-        adjacency_matrix (np.ndarray): The adjacency matrix of shape (n_activities, n_vars, n_vars, tau_max+1).
-        variables (list[LPCMCIVariable]): List of LPCMCIVariable instances representing the variables.
+    table.add_column("Metric", style="cyan")
+    table.add_column("Accuracy", justify="right", style="green")
+    table.add_column("F1", justify="right", style="green")
+    table.add_column("Precision", justify="right", style="green")
+    table.add_column("Recall", justify="right", style="green")
 
-    Returns:
-        dict[int, list[CausalEdge]]: A dictionary mapping activity IDs to their causal edges.
+    def format_metric(metric: BaseMetrics) -> list[str]:
+        return [
+            f"{metric.accuracy:.4f}",
+            f"{metric.f1:.4f}",
+            f"{metric.precision:.4f}",
+            f"{metric.recall:.4f}",
+        ]
 
-    """
-    edges_by_activity: dict[int, list[CausalEdge]] = {}
+    # Per-activity metrics
+    for activity, activity_metrics in metrics.per_activity.items():
+        table.add_row(
+            settings.activities[activity],
+            *format_metric(activity_metrics),
+            end_section=activity == settings.n_activities - 1,
+        )
 
-    for activity in range(adjacency_matrix.shape[0]):
-        edges: list[CausalEdge] = []
-        marked = np.argwhere(adjacency_matrix[activity]["mark"])
-        for source, target, lag in marked:
-            edges.append(
-                CausalEdge(
-                    source=variables[source],
-                    target=variables[target],
-                    lag=int(lag),
-                    value=float(adjacency_matrix[activity, source, target, lag]["value"]),
-                ),
-            )
-        edges_by_activity[activity] = edges
+    # Overall metrics
+    table.add_row("Overall", *format_metric(metrics.overall), style="bold magenta")
 
-    return edges_by_activity
+    return table
 
 
 def causal() -> None:
@@ -156,11 +157,16 @@ def causal() -> None:
         logger.info("Done.")
 
     rule_builder = RuleBuilder()
-    edges_by_activity = _edges_from_adjacency(adjacency_matrix, variables)
-    rules = rule_builder.build(edges_by_activity, train_latents)
+    rules = rule_builder.build(adjacency_matrix, variables, train_latents)
 
     metrics = evaluate(rules, train_latents, 5)
-    print(metrics)
+    table = _metrics_table(metrics)
+
+    # Ugly code to capture the table output and log it using RichHandler
+    console = Console()
+    with console.capture() as capture:
+        console.print(table)
+    logger.info("Evaluation metrics:\n%s", Text.from_ansi(capture.get()))
 
 
 if __name__ == "__main__":
