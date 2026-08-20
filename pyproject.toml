@@ -5,10 +5,8 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
-    "dcor>=0.7",
-    "gpytorch>=1.15.1",
+    "causalts>=0.25.2",
     "h5py>=3.16.0",
-    "numba>=0.63.1",
     "optuna>=4.7.0",
     "optuna-integration[pytorch-distributed]>=4.7.0",
     "pandas>=3.0.5",
