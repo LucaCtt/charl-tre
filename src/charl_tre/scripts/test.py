@@ -5,8 +5,8 @@ import torch
 from rich.logging import RichHandler
 
 from charl_tre import dataset, util
+from charl_tre.metrics import compute_metrics, metrics_table
 from charl_tre.models import classifier, hierarchical
-from charl_tre.models.evaluator import Evaluator
 from charl_tre.settings import Settings
 from charl_tre.studies import get_best_trial, read_study
 
@@ -18,6 +18,7 @@ logging.basicConfig(level=logging.INFO, handlers=[handler], format="%(message)s"
 logger = logging.getLogger("rich")
 
 
+@torch.no_grad()
 def test() -> None:
     """Evaluate the best saved multi-antenna fusion model on the test set."""
     util.init_rng(settings.seed)
@@ -88,9 +89,19 @@ def test() -> None:
     classifier_model.load_state_dict(classifier_model_weights, strict=True)
 
     logger.info("Evaluating classifier on test set...")
-    evaluator = Evaluator(classifier_model, test_dl)
-    accuracy = evaluator.evaluate()
-    logger.info("Test accuracy: %.4f", accuracy)
+    classifier_model.eval()
+    y_preds = []
+    y_true = []
+
+    for batch_x, batch_y in test_dl:
+        x, y = batch_x.to(device), batch_y.to(device)
+        with torch.autocast(device_type=device.type, dtype=torch.float16):
+            batch_preds = classifier_model(x).argmax(dim=1)
+        y_preds.extend(batch_preds.cpu().numpy())
+        y_true.extend(y.cpu().numpy())
+
+    metrics = compute_metrics(y_true, y_preds)
+    logger.info("Evaluation metrics:\n%s", metrics_table(metrics, labels=settings.activities))
 
 
 if __name__ == "__main__":
