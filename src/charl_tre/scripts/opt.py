@@ -1,6 +1,7 @@
 import contextlib
 import json
 import logging
+import os
 import warnings
 from pathlib import Path
 
@@ -8,6 +9,7 @@ import optuna
 import torch
 from optuna_integration.pytorch_distributed import TorchDistributedTrial
 from rich.logging import RichHandler
+from torch import distributed as dist
 from torch.multiprocessing.spawn import spawn
 
 from charl_tre import dataset, util
@@ -33,6 +35,28 @@ warnings.filterwarnings("ignore", category=optuna.exceptions.ExperimentalWarning
 
 # Enable cuDNN auto-tuner for better performancwe
 torch.backends.cudnn.benchmark = True
+
+
+def _setup_ddp(rank: int, world_size: int) -> None:
+    """Initialize the distributed environment. Must be called by every distributed process.
+
+    Arguments:
+        rank: Unique identifier of each distributed process
+        world_size: Total number of distributed processes
+
+    """
+    if "MASTER_ADDR" not in os.environ:
+        os.environ["MASTER_ADDR"] = "localhost"
+    if "MASTER_PORT" not in os.environ:
+        os.environ["MASTER_PORT"] = "12345"
+
+    acc = torch.accelerator.current_accelerator()
+    if acc is None:
+        msg = "No accelerator found for DDP setup."
+        raise RuntimeError(msg)
+    backend = torch.distributed.get_default_backend_for_device(acc)
+
+    dist.init_process_group(backend=backend, rank=rank, world_size=world_size, device_id=rank)
 
 
 def _objective(
@@ -114,14 +138,14 @@ def _objective(
         vae_train_ds,
         batch_size,
         shuffle=True,
-        num_workers=settings.num_workers,
+        n_workers=settings.n_workers,
         seed=settings.seed,
     )
     vae_val_dl = util.make_dl(
         vae_val_ds,
         batch_size,
         shuffle=False,
-        num_workers=settings.num_workers,
+        n_workers=settings.n_workers,
         seed=settings.seed,
     )
 
@@ -153,14 +177,14 @@ def _objective(
         fusion_train_ds,
         batch_size,
         shuffle=True,
-        num_workers=settings.num_workers,
+        n_workers=settings.n_workers,
         seed=settings.seed,
     )
     classifier_val_dl = util.make_dl(
         fusion_val_ds,
         batch_size,
         shuffle=False,
-        num_workers=settings.num_workers,
+        n_workers=settings.n_workers,
         seed=settings.seed,
     )
 
@@ -223,7 +247,7 @@ def _run_optimize(
     fusion_train_ds: dataset.MultiAntenna,
     fusion_val_ds: dataset.MultiAntenna,
 ) -> None:
-    util.setup_ddp(rank, world_size)
+    _setup_ddp(rank, world_size)
 
     study = None
     if rank == 0:

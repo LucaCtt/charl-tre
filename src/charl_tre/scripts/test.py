@@ -60,7 +60,7 @@ def test() -> None:
         test_ds,
         batch_size,
         shuffle=False,
-        num_workers=settings.num_workers,
+        n_workers=settings.n_workers,
         seed=settings.seed,
     )
 

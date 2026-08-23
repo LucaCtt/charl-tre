@@ -54,7 +54,7 @@ def latents() -> None:
         train_ds,
         batch_size,
         shuffle=False,
-        num_workers=settings.num_workers,
+        n_workers=settings.n_workers,
         seed=settings.seed,
     )
 
@@ -62,7 +62,7 @@ def latents() -> None:
         val_ds,
         batch_size,
         shuffle=False,
-        num_workers=settings.num_workers,
+        n_workers=settings.n_workers,
         seed=settings.seed,
     )
 
@@ -70,7 +70,7 @@ def latents() -> None:
         test_ds,
         batch_size,
         shuffle=False,
-        num_workers=settings.num_workers,
+        n_workers=settings.n_workers,
         seed=settings.seed,
     )
 

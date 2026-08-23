@@ -95,7 +95,7 @@ class Classifier(nn.Module):
 
         Arguments:
             x (torch.Tensor): Input tensor of shape (batch_size, n_antennas, window_size, n_subcarriers)
-                if num_antennas > 1, or (batch_size, window_size, n_subcarriers) if num_antennas=1.
+                if n_antennas > 1, or (batch_size, window_size, n_subcarriers) if n_antennas=1.
 
         Returns:
             torch.Tensor: Output tensor of shape (batch_size, n_activities).

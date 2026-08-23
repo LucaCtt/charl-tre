@@ -14,7 +14,7 @@ def is_dead(tensor: torch.Tensor) -> bool:
         bool: True if the tensor contains NaN or infinite values, False otherwise.
 
     """
-    return bool(torch.isnan(tensor).any() or torch.isinf(tensor).any())
+    return bool(not torch.isfinite(tensor).all())
 
 
 def build_fc(in_dim: int, out_dim: int, n_layers: int, dropout: float) -> nn.Sequential:
