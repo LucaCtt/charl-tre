@@ -26,30 +26,29 @@ class BaseMetrics:
     """Classification metrics for one class aggregate."""
 
     accuracy: float
-    """Accuracy of the class predictions: TP + TN / (TP + TN + FP + FN)"""
-
     precision: float
-    """Precision of the class predictions: TP / (TP + FP)"""
-
     recall: float
-    """Recall of the class predictions: TP / (TP + FN)"""
-
     f1: float
-    """F1 score of the class predictions: 2 * (precision * recall) / (precision + recall)"""
-
     support: int
-    """Number of true instances for the class."""
 
 
 @dataclass(frozen=True)
 class Metrics[LabelT: Hashable]:
     """Classification metrics for multiple classes."""
 
-    overall: BaseMetrics
-    """Mean metrics across all classes, weighted by support."""
+    multi_class: BaseMetrics
+    """Multi-class metrics.
+
+    Accuracy is computed as the total number of correct predictions divided by the total number of instances.
+    Precision, recall, and F1 score are computed as support-weighted averages across all classes
+    """
 
     per_class: dict[LabelT, BaseMetrics]
-    """Metrics for each class label."""
+    """Per-class metrics.
+
+    Accuracy, precision, recall, and F1 score are computed for each class individually,
+    using a one-vs-rest approach.
+    """
 
 
 def _compute_class_metrics(y_true: np.ndarray, y_pred: np.ndarray, label: Hashable) -> BaseMetrics:
@@ -67,14 +66,16 @@ def _compute_class_metrics(y_true: np.ndarray, y_pred: np.ndarray, label: Hashab
     is_true = y_true == label
     is_pred = y_pred == label
 
-    tp = int(np.sum(is_true & is_pred))
-    support = int(is_true.sum())
-    pred_count = int(is_pred.sum())
+    tp = float(np.sum(is_true & is_pred))
+    tn = float(np.sum(~is_true & ~is_pred))
+    fp = float(np.sum(~is_true & is_pred))
+    fn = float(np.sum(is_true & ~is_pred))
 
-    class_acc = tp / support if support > 0 else 0.0
-    precision = tp / pred_count if pred_count > 0 else 0.0
-    recall = class_acc
-    f1 = (2.0 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+    class_acc = (tp + tn) / (tp + tn + fp + fn) if (tp + tn + fp + fn) > 0 else 0.0
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    f1 = (2.0 * tp) / (2.0 * tp + fp + fn) if (2.0 * tp + fp + fn) > 0 else 0.0
+    support = int(np.sum(is_true))
 
     return BaseMetrics(
         accuracy=float(class_acc),
@@ -130,10 +131,10 @@ def compute_metrics(y_true: ArrayLike, y_pred: ArrayLike) -> Metrics[Hashable]:
         support=overall_support,
     )
 
-    return Metrics(overall=overall, per_class=per_class)
+    return Metrics(multi_class=overall, per_class=per_class)
 
 
-def metrics_table(metrics: Metrics, labels: dict[Hashable, str] | list[str] | None = None) -> Text:
+def metrics_summary(metrics: Metrics, labels: dict[Hashable, str] | list[str] | None = None) -> Text:
     """Create a table summarizing the evaluation metrics.
 
     Arguments:
@@ -177,7 +178,7 @@ def metrics_table(metrics: Metrics, labels: dict[Hashable, str] | list[str] | No
         )
 
     # Overall metrics
-    table.add_row("Overall", *format_metric(metrics.overall), style="bold magenta")
+    table.add_row("Overall", *format_metric(metrics.multi_class), style="bold magenta")
 
     console = Console()
     with console.capture() as capture:

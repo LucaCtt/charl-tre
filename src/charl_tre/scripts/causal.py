@@ -87,7 +87,7 @@ def _causal_discovery(
         np.ndarray: Adjacency matrix of shape (n_vars, n_vars, tau_max + 1).
 
     """
-    params = LPCMCIParams(variables=variables, ci_test="parcorr", pc_alpha=0.03, max_p_global=10)
+    params = LPCMCIParams(variables=variables, pc_alpha=0.03, max_p_global=10)
     return run_lpcmci_batch(train_latents, params=params, max_workers=6, cache_dir=cache_dir)
 
 
