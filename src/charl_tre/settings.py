@@ -11,8 +11,8 @@ class Settings(BaseSettings):
     # General settings
     seed: int = 42
     """Random seed for reproducibility."""
-    num_workers: int = 8
-    """Number of workers for data loading."""
+    n_workers: int = 8
+    """Number of workers for data loading and LPCMCI."""
 
     # Data and train settings
     dataset_path: str = "dataset/S1a.h5"

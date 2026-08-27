@@ -3,22 +3,20 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
-from rich.console import Console
 from rich.logging import RichHandler
-from rich.table import Table
-from rich.text import Text
 
 from charl_tre import util
-from charl_tre.causal.evaluator import BaseMetrics, EvaluationMetrics, evaluate
+from charl_tre.causal.evaluator import evaluate
 from charl_tre.causal.lpcmci import LPCMCIParams, LPCMCIVariable, run_lpcmci_batch
 from charl_tre.causal.rules import RuleBuilder
+from charl_tre.metrics import metrics_summary
 from charl_tre.settings import Settings
 
 settings = Settings()
 
 # Configure logging
-handler = RichHandler(level=logging.INFO, show_path=False)
-logging.basicConfig(level=logging.INFO, handlers=[handler], format="%(message)s")
+handler = RichHandler(level=logging.DEBUG, show_path=False)
+logging.basicConfig(level=logging.DEBUG, handlers=[handler], format="%(message)s")
 logger = logging.getLogger("rich")
 
 
@@ -91,37 +89,6 @@ def _causal_discovery(
     return run_lpcmci_batch(train_latents, params=params, max_workers=6, cache_dir=cache_dir)
 
 
-def _metrics_table(metrics: EvaluationMetrics) -> Table:
-    table = Table()
-
-    table.add_column("Metric", style="cyan")
-    table.add_column("Accuracy", justify="right", style="green")
-    table.add_column("F1", justify="right", style="green")
-    table.add_column("Precision", justify="right", style="green")
-    table.add_column("Recall", justify="right", style="green")
-
-    def format_metric(metric: BaseMetrics) -> list[str]:
-        return [
-            f"{metric.accuracy:.4f}",
-            f"{metric.f1:.4f}",
-            f"{metric.precision:.4f}",
-            f"{metric.recall:.4f}",
-        ]
-
-    # Per-activity metrics
-    for activity, activity_metrics in metrics.per_activity.items():
-        table.add_row(
-            settings.activities[activity],
-            *format_metric(activity_metrics),
-            end_section=activity == settings.n_activities - 1,
-        )
-
-    # Overall metrics
-    table.add_row("Overall", *format_metric(metrics.overall), style="bold magenta")
-
-    return table
-
-
 def causal() -> None:
     """Extract and save mixture-Dirichlet latents for the full dataset."""
     util.init_rng(settings.seed)
@@ -129,7 +96,7 @@ def causal() -> None:
 
     logger.info("Loading latents...")
     latents_dir = Path(settings.study_path) / "latents"
-    train_latents, _, _ = _load_latents(latents_dir, settings.n_activities)
+    train_latents, _, test_latents = _load_latents(latents_dir, settings.n_activities)
 
     _, _, n_mixtures, n_components = train_latents.shape
     variables = [
@@ -159,14 +126,15 @@ def causal() -> None:
     rule_builder = RuleBuilder()
     rules = rule_builder.build(adjacency_matrix, variables, train_latents)
 
-    metrics = evaluate(rules, train_latents, 5)
-    table = _metrics_table(metrics)
+    for activity in range(settings.n_activities):
+        rules_strs = [
+            f"□(z_{rule.edge.source.component} → ○{rule.edge.lag} z_{rule.edge.target.component})"
+            for rule in rules.get(activity, [])
+        ]
+        logger.debug("%s: %s", settings.activities[activity], rules_strs)
 
-    # Ugly code to capture the table output and log it using RichHandler
-    console = Console()
-    with console.capture() as capture:
-        console.print(table)
-    logger.info("Evaluation metrics:\n%s", Text.from_ansi(capture.get()))
+    metrics = evaluate(rules, test_latents, 22)
+    logger.info("Evaluation metrics:\n%s", metrics_summary(metrics, settings.activities))
 
 
 if __name__ == "__main__":

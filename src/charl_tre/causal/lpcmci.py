@@ -1,13 +1,11 @@
 import multiprocessing as mp
-import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from typing import Literal
 
 import numpy as np
 import pandas as pd
 import torch
-from causalts.ci_tests import ParCorrGPU, SplitKCIGPU
+from causalts.ci_tests import ParCorrGPU
 from causalts.tigramite_discovery import run_lpcmci
 
 _DEVICE: str | None = None  # worker-process global, set once by _init_worker
@@ -37,7 +35,6 @@ class LPCMCIParams:
     pc_alpha: float = 0.05
     max_p_global: int = 5
     n_preliminary_iterations: int = 1
-    ci_test: Literal["parcorr", "split_kci"] = "parcorr"
 
 
 class LPCMCIActivityError(Exception):
@@ -55,8 +52,7 @@ def _init_worker(device_queue: "mp.Queue[str]") -> None:
 
     This is needed to set each worker's device to a fixed value for its lifetime.
     Other solutions, such as setting the device depending on the activity ID,
-    would lead to recycled workers being assigned to different devices,
-    causing memory leaks on the GPUs.
+    lead to recycled workers being assigned to different devices, causing memory leaks on the GPUs.
     """
     global _DEVICE  # noqa: PLW0603
     _DEVICE = device_queue.get()
@@ -90,18 +86,11 @@ def _run_one_activity(
 
     """
     n_windows, n_mixtures, n_components = activity_latents.shape
-
     var_names = [str(v) for v in params.variables]
 
     # Build LPCMCI input DataFrame
     flat = activity_latents.reshape(n_windows, n_mixtures * n_components)
     df = pd.DataFrame(flat, columns=var_names)
-
-    match params.ci_test:
-        case "split_kci":
-            ci_test = SplitKCIGPU
-        case _:
-            ci_test = ParCorrGPU
 
     graph, info = run_lpcmci(
         df,
@@ -110,7 +99,7 @@ def _run_one_activity(
         pc_alpha=params.pc_alpha,
         max_p_global=params.max_p_global,
         n_preliminary_iterations=params.n_preliminary_iterations,
-        ci_test=ci_test(
+        ci_test=ParCorrGPU(
             data=flat,
             device=_DEVICE,
             cache_dir=cache_dir,
@@ -123,10 +112,10 @@ def _run_one_activity(
 def run_lpcmci_batch(
     latents: np.ndarray,
     params: LPCMCIParams,
-    max_workers: int | None = None,
+    max_workers: int = 1,
     cache_dir: str | None = None,
 ) -> np.ndarray:
-    """Run LPCMCI for every activity in `latents`, in parallel.
+    """Run LPCMCI for every activity in `latents`, in parallel, using GPU-accelerated ParCorr tests.
 
     No sorting of the variables is done here, the ordering of the variables in the adjacency matrix
     corresponds to the order of `params.variables`.
@@ -134,16 +123,16 @@ def run_lpcmci_batch(
     Arguments:
         latents (np.ndarray): Latents of shape (n_activities, n_windows, n_mixtures, n_components).
         params (LPCMCIParams): LPCMCIParams object.
-        max_workers (int | None): Maximum number of workers to use for parallel processing.
-            Default is None, which means no maximum limit (i.e., use all available cores).
+        max_workers (int): Maximum number of workers to use for parallel processing.
+            Default is 1, which means no parallel processing.
         cache_dir (str | None): Directory to store temporary files for the tests.
 
     Returns:
         np.ndarray: Adjacency matrix of shape
             (n_activities, len(params.variables), len(params.variables), params.tau_max + 1),
             containing tuples of (bool, float) for each pair of variables and lag.
-            The first element of the tuple indicates whether a causal link exists,
-            and the second element is the corresponding value from the LPCMCI output.
+            The first element of the tuple indicates the presence of a link (see `LPCMCILink`),
+            and the second element is the statistic value returned by ParCorr, in [-1,1].
 
     """
     n_activities, _, n_mixtures, n_components = latents.shape
@@ -154,14 +143,18 @@ def run_lpcmci_batch(
         )
         raise ValueError(msg)
 
-    adjacency_matrix = np.empty(
+    if not torch.cuda.is_available():
+        msg_0 = "CUDA is not available. LPCMCI requires a CUDA-enabled GPU."
+        raise RuntimeError(msg_0)
+
+    adjacency_matrix = np.zeros(
         (n_activities, len(params.variables), len(params.variables), params.tau_max + 1),
         dtype=np.dtype([("mark", np.bool_), ("value", np.float32)]),
     )
 
-    ctx = mp.get_context("spawn")
+    ctx = mp.get_context("spawn")  # Fork is probably also fine, but spawn is safer for CUDA
     device_queue: "mp.Queue[str]" = ctx.Queue()
-    for i in range(max_workers or os.cpu_count() or 1):
+    for i in range(max_workers):
         device_queue.put(f"cuda:{i % torch.cuda.device_count()}")
     pool = ProcessPoolExecutor(
         max_workers=max_workers,
