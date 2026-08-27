@@ -49,7 +49,7 @@ class Fusion(nn.Module):
             [gaussian.Autoencoder(window_size, n_subcarriers, n_gaussians_per_antenna) for _ in range(n_antennas)],
         )
 
-        _, flat_dim = self._gaussians[0].get_shapes()  # pyright: ignore[reportCallIssue]
+        _, flat_dim = self._gaussians[0].get_shapes()  # ty: ignore[call-non-callable]
 
         # Outputs component probabilities (logits) + concentration parameters for each mixture
         total_mdm_outputs = n_mixtures + (n_mixtures * n_dirichlet_components)
@@ -113,7 +113,7 @@ class Fusion(nn.Module):
 
         # Bottom-up encoding of each antenna's signal
         for i, gaussian_vae in enumerate(self._gaussians):
-            h_a, mu_bu, logvar_bu = gaussian_vae.encode(x[:, i])  # pyright: ignore[reportCallIssue]
+            h_a, mu_bu, logvar_bu = gaussian_vae.encode(x[:, i])  # ty: ignore[call-non-callable]
             h_list.append(h_a)
             mu_bu_list.append(mu_bu)
             logvar_bu_list.append(logvar_bu)
@@ -167,7 +167,7 @@ class Fusion(nn.Module):
             z_a_flat = gaussian.Autoencoder.reparameterize(mu_q_flat, logvar_q_flat)
 
             # 5. Decode the global batch array
-            recon_flat = gaussian_vae.decode(z_a_flat)  # pyright: ignore[reportCallIssue]
+            recon_flat = gaussian_vae.decode(z_a_flat)  # ty: ignore[call-non-callable]
 
             # 6. Unflatten back to structured separate mixture axes
             recons_all_mix.append(recon_flat.view(batch_size, self._n_mixtures, *recon_flat.shape[1:]))

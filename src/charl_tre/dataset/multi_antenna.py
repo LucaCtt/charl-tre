@@ -54,7 +54,7 @@ class MultiAntenna(Dataset):
     def __len__(self) -> int:
         return len(self.__index_map)
 
-    def __getitem__(self, idx: int) -> tuple[torch.Tensor, int]:
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, int]:
         label, start = self.__index_map[idx]
         csi = self.__data[label]
 

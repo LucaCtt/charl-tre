@@ -29,6 +29,6 @@ class SingleAntenna(Dataset):
     def __len__(self) -> int:
         return len(self.__dataset)
 
-    def __getitem__(self, idx: int) -> tuple[torch.Tensor, int]:
-        x, y = self.__dataset[idx]
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, int]:
+        x, y = self.__dataset[index]
         return x[self.__antenna_select], y

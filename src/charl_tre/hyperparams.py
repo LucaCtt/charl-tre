@@ -74,4 +74,4 @@ class HyperParams:
             message = f"Missing hyperparameter settings for '{field_name}'"
             raise AttributeError(message)
 
-        return HyperParams(**params)
+        return HyperParams(**params)  # ty: ignore[invalid-argument-type]
