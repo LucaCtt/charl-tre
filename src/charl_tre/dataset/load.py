@@ -51,6 +51,11 @@ def load(
             for key in activity_keys:
                 split_mats[split].append(np.array(group[key]))
 
-    return tuple(  # type: ignore[return-value]
-        MultiAntenna(csi_mats=split_mats[split], window_size=window_size, stride=stride) for split in _SPLITS
-    )
+    return tuple(
+        MultiAntenna(
+            csi_mats=split_mats[split],
+            window_size=window_size,
+            stride=stride,
+        )
+        for split in _SPLITS
+    )  # ty: ignore[invalid-return-type]

@@ -6,7 +6,7 @@ from torch import distributed as dist
 from torch import nn
 from torch.utils.data import DataLoader, DistributedSampler
 
-from charl_tre.models import classifier
+from charl_tre.models import classifier, errors, util
 from charl_tre.models.hierarchical.early_stopping import EarlyStopping
 
 
@@ -152,15 +152,16 @@ class Trainer:
 
         for epoch in range(epochs):
             epoch_loss, epoch_accuracy = self._run_epoch(epoch)
+            if util.is_dead(epoch_loss):
+                raise errors.DeadLossError
 
             total_metrics[0] += epoch_loss
             total_metrics[1] += epoch_accuracy
             epochs_run += 1
 
             val_loss = self._run_val_epoch()
-            if torch.isinf(val_loss).any() or torch.isnan(val_loss).any():
-                msg = f"Validation loss is {val_loss.item()}, which is invalid. Stopping training."
-                raise ValueError(msg)
+            if util.is_dead(val_loss):
+                raise errors.DeadLossError
 
             self._early_stopping.step(val_loss)
             if self._early_stopping.should_stop:

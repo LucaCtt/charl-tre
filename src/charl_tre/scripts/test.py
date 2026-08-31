@@ -5,7 +5,7 @@ import torch
 from rich.logging import RichHandler
 
 from charl_tre import dataset, util
-from charl_tre.metrics import compute_metrics, metrics_table
+from charl_tre.metrics import compute_metrics, metrics_summary
 from charl_tre.models import classifier, hierarchical
 from charl_tre.settings import Settings
 from charl_tre.studies import get_best_trial, read_study
@@ -101,7 +101,7 @@ def test() -> None:
         y_true.extend(y.cpu().numpy())
 
     metrics = compute_metrics(y_true, y_preds)
-    logger.info("Evaluation metrics:\n%s", metrics_table(metrics, labels=settings.activities))
+    logger.info("Evaluation metrics:\n%s", metrics_summary(metrics, labels=settings.activities))
 
 
 if __name__ == "__main__":

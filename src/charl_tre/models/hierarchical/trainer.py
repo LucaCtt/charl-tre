@@ -10,8 +10,8 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from charl_tre.models import util
-from charl_tre.models.hierarchical import annealers, errors
+from charl_tre.models import errors, util
+from charl_tre.models.hierarchical import annealers
 from charl_tre.models.hierarchical.collapse_detector import CollapseDetector
 from charl_tre.models.hierarchical.early_stopping import EarlyStopping
 from charl_tre.models.hierarchical.loss import hierarchical_loss

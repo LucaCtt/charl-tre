@@ -16,7 +16,7 @@ class MultiAntenna(Dataset):
 
         Arguments:
             csi_mats: List of CSI matrices, one per activity, each with shape
-                (n_antennas, n_samples, n_subcarriers).
+                (n_antennas, n_parts, n_samples, n_subcarriers).
             window_size: Number of time steps per window.
             stride: Step size between consecutive windows.
 
@@ -36,29 +36,37 @@ class MultiAntenna(Dataset):
         self.__window_size = window_size
 
         self.__data: list[np.ndarray] = []
-        self.__index_map: list[tuple[int, int]] = []
+        self.__index_map: list[tuple[int, int, int]] = []
 
         # Load files once, build index map
         for label, csi in enumerate(csi_mats):
-            n_samples = csi.shape[1]
-            if n_samples < window_size:
-                msg = f"Activity {label}: n_samples={n_samples} < window_size={window_size}"
+            _, n_parts, n_samples, _ = csi.shape
+            if n_parts * n_samples < window_size:
+                msg = f"Window size {window_size} is larger than the total number of samples for label {label}"
+                raise ValueError(msg)
+
+            if (n_samples - window_size) % stride != 0:
+                msg = (
+                    f"Window size {window_size} and stride {stride} would create a window that is not fully contained "
+                    f"in the partition for label {label}. Consider adjusting the window size or stride."
+                )
                 raise ValueError(msg)
 
             self.__data.append(csi)
 
             # Build lazy sliding-window index
-            for offset in range(0, n_samples - window_size + 1, stride):
-                self.__index_map.append((label, offset))
+            for part in range(n_parts):
+                for offset in range(0, n_samples - window_size + 1, stride):
+                    self.__index_map.append((label, part, offset))
 
     def __len__(self) -> int:
         return len(self.__index_map)
 
     def __getitem__(self, index: int) -> tuple[torch.Tensor, int]:
-        label, start = self.__index_map[idx]
+        label, part, start = self.__index_map[index]
         csi = self.__data[label]
 
-        window = csi[:, start : start + self.__window_size, :]
+        window = csi[:, part, start : start + self.__window_size, :]
 
         x = torch.from_numpy(window)
         return x, label

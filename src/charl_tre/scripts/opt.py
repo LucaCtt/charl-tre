@@ -169,7 +169,7 @@ def _objective(
     )
     try:
         h_vae_trainer.train(settings.n_epochs)
-    except (errors.PosteriorCollapseError, errors.DeadLossError, optuna.TrialPruned) as e:
+    except (errors.PosteriorCollapseError, errors.DeadLossError) as e:
         raise optuna.TrialPruned(str(e)) from e
 
     # Create data loaders for classifier training
@@ -210,7 +210,11 @@ def _objective(
         ),
         rank,
     )
-    classifier_loss, classifier_accuracy = classifier_trainer.train(settings.n_epochs)
+    try:
+        classifier_loss, classifier_accuracy = classifier_trainer.train(settings.n_epochs)
+    except errors.DeadLossError as e:
+        raise optuna.TrialPruned(str(e)) from e
+
     objective_score = classifier_accuracy - (settings.n_components_penalty_weight * n_components * n_mixtures)
 
     if rank == 0:
@@ -250,54 +254,56 @@ def _run_optimize(
     _setup_ddp(rank, world_size)
 
     study = None
-    if rank == 0:
-        study = make_study(settings.study_name, settings.study_path, settings.seed)
-        study.optimize(
-            lambda trial: _objective(
-                trial,
-                rank,
-                vae_train_ds,
-                vae_val_ds,
-                fusion_train_ds,
-                fusion_val_ds,
-            ),
-            n_trials=settings.n_trials,
-            gc_after_trial=True,
-        )
-    else:
-        for _ in range(settings.n_trials):
-            with contextlib.suppress(optuna.TrialPruned):
-                _objective(None, rank, vae_train_ds, vae_val_ds, fusion_train_ds, fusion_val_ds)
+    try:
+        if rank == 0:
+            study = make_study(settings.study_name, settings.study_path, settings.seed)
+            study.optimize(
+                lambda trial: _objective(
+                    trial,
+                    rank,
+                    vae_train_ds,
+                    vae_val_ds,
+                    fusion_train_ds,
+                    fusion_val_ds,
+                ),
+                n_trials=settings.n_trials,
+                gc_after_trial=True,
+            )
+        else:
+            for _ in range(settings.n_trials):
+                with contextlib.suppress(optuna.TrialPruned):
+                    _objective(None, rank, vae_train_ds, vae_val_ds, fusion_train_ds, fusion_val_ds)
 
-    torch.distributed.barrier()
+        torch.distributed.barrier()
 
-    if rank == 0 and study is not None:
-        pruned_trials = study.get_trials(deepcopy=False, states=[optuna.trial.TrialState.PRUNED])
-        complete_trials = study.get_trials(deepcopy=False, states=[optuna.trial.TrialState.COMPLETE])
+        if rank == 0 and study is not None:
+            pruned_trials = study.get_trials(deepcopy=False, states=[optuna.trial.TrialState.PRUNED])
+            complete_trials = study.get_trials(deepcopy=False, states=[optuna.trial.TrialState.COMPLETE])
 
-        logger.info(
-            "Study done with %d trials: %d pruned, %d complete.",
-            len(study.trials),
-            len(pruned_trials),
-            len(complete_trials),
-        )
-        logger.info(
-            "Best trial #%d: value=%.4f, params=%s",
-            study.best_trial.number,
-            study.best_trial.value,
-            study.best_trial.params,
-        )
+            logger.info(
+                "Study done with %d trials: %d pruned, %d complete.",
+                len(study.trials),
+                len(pruned_trials),
+                len(complete_trials),
+            )
+            logger.info(
+                "Best trial #%d: value=%.4f, params=%s",
+                study.best_trial.number,
+                study.best_trial.value,
+                study.best_trial.params,
+            )
 
-        results = {
-            "best_trial": study.best_trial.number,
-            "best_value": study.best_trial.value,
-            "pruned_trials": len(pruned_trials),
-            "completed_trials": len(complete_trials),
-        }
-        with Path.open(Path(settings.study_path) / "study_results.json", "w") as f:
-            json.dump(results, f)
+            results = {
+                "best_trial": study.best_trial.number,
+                "best_value": study.best_trial.value,
+                "pruned_trials": len(pruned_trials),
+                "completed_trials": len(complete_trials),
+            }
+            with Path.open(Path(settings.study_path) / "study_results.json", "w") as f:
+                json.dump(results, f)
 
-    torch.distributed.destroy_process_group()
+    finally:
+        torch.distributed.destroy_process_group()
 
 
 def opt() -> None:
