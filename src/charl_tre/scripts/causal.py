@@ -3,14 +3,16 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
+import optuna
 from rich.logging import RichHandler
 
 from charl_tre import util
 from charl_tre.causal.evaluator import evaluate
 from charl_tre.causal.lpcmci import LPCMCIParams, LPCMCIVariable, run_lpcmci_batch
 from charl_tre.causal.rules import RuleBuilder
-from charl_tre.metrics import metrics_summary
+from charl_tre.metrics import Metrics, metrics_summary
 from charl_tre.settings import Settings
+from charl_tre.studies import make_study
 
 settings = Settings()
 
@@ -85,8 +87,39 @@ def _causal_discovery(
         np.ndarray: Adjacency matrix of shape (n_vars, n_vars, tau_max + 1).
 
     """
-    params = LPCMCIParams(variables=variables, pc_alpha=0.03, max_p_global=10)
-    return run_lpcmci_batch(train_latents, params=params, max_workers=6, cache_dir=cache_dir)
+    params = LPCMCIParams(variables=variables, pc_alpha=0.03, tau_min=1, tau_max=5)
+    return run_lpcmci_batch(train_latents, params=params, max_workers=settings.n_workers, cache_dir=cache_dir)
+
+
+def _build_rules(
+    trial: optuna.Trial,
+    adjacency: np.ndarray,
+    variables: list[LPCMCIVariable],
+    train_latents: np.ndarray,
+    test_latents: np.ndarray,
+) -> float:
+    """Build rules from the adjacency matrix and training latents.
+
+    Arguments:
+        adjacency (np.ndarray): Adjacency matrix of shape (n_vars, n_vars, tau_max + 1).
+        variables (list[LPCMCIVariable]): List of LPCMCIVariable instances representing the variables.
+        train_latents (np.ndarray): Training latents of shape (n_activities, n_windows, n_mixtures, n_components).
+        test_latents (np.ndarray): Test latents of shape (n_activities, n_windows, n_mixtures, n_components).
+
+    Returns:
+        float: The evaluation metric to optimize.
+
+    """
+    min_mci_strength = trial.suggest_float("min_mci_strength", 0.05, 0.40, step=0.05)
+    min_samples = trial.suggest_int("min_samples", 5, 20, step=5)
+    top_rules_per_activity = trial.suggest_int("top_rules_per_activity", 5, 50, step=5)
+    null_clip_sigma = trial.suggest_float("null_clip_sigma", 1.0, 5.0, step=0.5)
+
+    rule_builder = RuleBuilder(min_mci_strength, min_samples, top_rules_per_activity)
+    rules = rule_builder.build(adjacency, variables, train_latents)
+    metrics = evaluate(rules, test_latents, test_latents.shape[1] // 4, null_clip_sigma)
+
+    return metrics.multi_class.accuracy - 1e-4 * top_rules_per_activity  # Penalize for too many rules
 
 
 def causal() -> None:
@@ -112,7 +145,7 @@ def causal() -> None:
     else:
         logger.info("Running LPCMCI discovery...")
 
-        with tempfile.TemporaryDirectory() as cache_dir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as cache_dir:
             adjacency_matrix = _causal_discovery(train_latents, variables, cache_dir)
 
         Path(causal_dir).mkdir(parents=True, exist_ok=True)
@@ -123,18 +156,19 @@ def causal() -> None:
 
         logger.info("Done.")
 
-    rule_builder = RuleBuilder()
-    rules = rule_builder.build(adjacency_matrix, variables, train_latents)
+    study = make_study(
+        study_name="causal_rule_discovery",
+        storage_dir=f"{settings.study_path}/causal",
+        seed=settings.seed,
+    )
+    study.optimize(
+        lambda trial: (
+            _build_rules(trial, adjacency_matrix, variables, train_latents, test_latents)
+        ),
+        n_trials=settings.n_trials,
+    )
 
-    for activity in range(settings.n_activities):
-        rules_strs = [
-            f"□(z_{rule.edge.source.component} → ○{rule.edge.lag} z_{rule.edge.target.component})"
-            for rule in rules.get(activity, [])
-        ]
-        logger.debug("%s: %s", settings.activities[activity], rules_strs)
-
-    metrics = evaluate(rules, test_latents, 22)
-    logger.info("Evaluation metrics:\n%s", metrics_summary(metrics, settings.activities))
+    logger.info("Best trial value: %s", study.best_value)
 
 
 if __name__ == "__main__":

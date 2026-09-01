@@ -32,13 +32,23 @@ class Rule:
     bg_distribution: tuple[float, float]
     """Gaussian distribution parameters (mean, std) for the target variable under background conditions"""
 
-    kl_divergence: float
+    null_llr_std: float
+    """Standard deviation of the log-likelihood ratio under the null hypothesis (background distribution)"""
 
-    def llr(self, target_values: np.ndarray) -> float:
+    kl_divergence: float
+    """KL divergence between the class and background distributions"""
+
+    @property
+    def weight(self) -> float:
+        """Return the weight of the rule based on KL divergence and edge strength."""
+        return self.edge.strength
+
+    def llr(self, target_values: np.ndarray, null_clip_sigma: float = 3.0) -> float:
         """Compute robust clipped LLR sum: log[P_class(y) / P_bg(y)].
 
         Arguments:
             target_values (np.ndarray): Target variable values to evaluate.
+            null_clip_sigma (float): Number of standard deviations to clip the per-step LLRs under the null hypothesis.
 
         Returns:
             float: The sum of the clipped log-likelihood ratios for the provided target values.
@@ -56,17 +66,13 @@ class Rule:
 
         per_step_llr = log_std_ratio - quad_class + quad_bg
 
-        # Cap the LLR values to avoid extreme values that could dominate the sum.
-        # We use the 95th percentile of the absolute LLR values for clipping.
-        max_clip = float(np.percentile(np.abs(per_step_llr), 95.0))
-        clipped_llr = np.clip(per_step_llr, -max_clip, max_clip)
-
-        return float(np.sum(clipped_llr))
+        clip = null_clip_sigma * self.null_llr_std
+        return float(np.sum(np.clip(per_step_llr, -clip, clip)))
 
 
 def _build_edges_from_adjacency(
     adjacency: np.ndarray,
-    sorted_variables: list[LPCMCIVariable],
+    variables: list[LPCMCIVariable],
     min_strength: float,
 ) -> dict[int, list[CausalEdge]]:
     """Convert an LPCMCI adjacency array into filtered CausalEdge objects per activity."""
@@ -83,8 +89,8 @@ def _build_edges_from_adjacency(
             if abs(val) >= min_strength:
                 valid_edges.append(
                     CausalEdge(
-                        source=sorted_variables[s],
-                        target=sorted_variables[t],
+                        source=variables[s],
+                        target=variables[t],
                         lag=int(lag),
                         value=float(val),
                     ),
@@ -95,14 +101,29 @@ def _build_edges_from_adjacency(
     return edges_by_activity
 
 
+def _null_llr_variance(mu_a: float, std_a: float, mu_bg: float, std_bg: float) -> float:
+    """Variance of a single per-step LLR when data is drawn from P_bg (the null).
+
+    Derived by computing Var_{P_bg}[log(P_class(y)/P_bg(y))] analytically for two Gaussians.
+    """
+    var_a = std_a**2
+    var_bg = std_bg**2
+    ratio = var_bg / var_a
+
+    mean_shift_term = ((mu_a - mu_bg) ** 2 / var_bg) * (ratio - 1 + (mu_a - mu_bg) ** 2 / var_bg)
+    variance_term = 0.5 * (ratio - 1) ** 2
+
+    return float(mean_shift_term + variance_term)
+
+
 class RuleBuilder:
     """Builds a diverse, noise-filtered library of causal rules ranked by KL divergence."""
 
     def __init__(
         self,
-        min_mci_strength: float = 0.10,
-        min_samples: int = 5,
-        top_rules_per_activity: int = 2,
+        min_mci_strength: float = 0.20,
+        min_samples: int = 10,
+        top_rules_per_activity: int = 12,
     ) -> None:
         """Initialize the RuleBuilder."""
         self._min_mci_strength = min_mci_strength
@@ -112,25 +133,25 @@ class RuleBuilder:
     def build(
         self,
         adjacency: np.ndarray,
-        sorted_variables: list[LPCMCIVariable],
+        variables: list[LPCMCIVariable],
         train_data: np.ndarray,
+        eps: float = 1e-4,
     ) -> dict[int, list[Rule]]:
         """Build library with MCI thresholding and target diversity constraints.
 
         Arguments:
             adjacency: A 3D numpy array representing the LPCMCI adjacency matrix.
-            sorted_variables: A list of LPCMCIVariable objects corresponding to the adjacency matrix.
+            variables: A list of LPCMCIVariable objects corresponding to the adjacency matrix.
             train_data: A 4D numpy array of shape (n_activities, n_windows, n_mixtures, n_components)
                 representing the training sequences for each activity.
+            eps: A small constant for numerical stability.
 
         Returns:
             A dictionary mapping activity indices to lists of Rule objects.
 
         """
         n_activities, n_windows, _, _ = train_data.shape
-
-        # ParCorr outputs values in [-1, 1], we use Fisher's z-transform to the full real line
-        edges_by_activity = _build_edges_from_adjacency(adjacency, sorted_variables, self._min_mci_strength)
+        edges_by_activity = _build_edges_from_adjacency(adjacency, variables, self._min_mci_strength)
 
         # Array of activity IDs for indexing
         activity_ids = np.arange(n_activities)[:, None]
@@ -164,13 +185,15 @@ class RuleBuilder:
                     continue
 
                 # Compute Gaussian params for both activity and background samples
-                mu_a, std_a = (float(np.mean(y_activity)), float(np.sqrt(np.var(y_activity))))
-                mu_bg, std_bg = float(np.mean(y_bg)), float(np.sqrt(np.var(y_bg)))
+                mu_a, std_a = (float(np.mean(y_activity)), float(np.sqrt(np.var(y_activity) + eps)))
+                mu_bg, std_bg = float(np.mean(y_bg)), float(np.sqrt(np.var(y_bg) + eps))
 
                 # Compute KL divergence between the two Gaussian distributions
                 var_a, var_bg = std_a**2, std_bg**2
                 kl_div = np.log(std_bg / std_a) + (var_a + (mu_a - mu_bg) ** 2) / (2.0 * var_bg) - 0.5
                 kl_div = max(kl_div, 0.0)
+
+                null_llr_std = float(np.sqrt(max(_null_llr_variance(mu_a, std_a, mu_bg, std_bg), eps)))
 
                 candidates.append(
                     Rule(
@@ -178,6 +201,7 @@ class RuleBuilder:
                         source_threshold,
                         class_distribution=(mu_a, std_a),
                         bg_distribution=(mu_bg, std_bg),
+                        null_llr_std=null_llr_std,
                         kl_divergence=kl_div,
                     ),
                 )

@@ -29,11 +29,11 @@ class LPCMCIVariable:
 class LPCMCIParams:
     """Parameters for LPCMCI discovery."""
 
-    variables: list[LPCMCIVariable] = field(default_factory=list)
-    tau_min: int = 1
-    tau_max: int = 5
-    pc_alpha: float = 0.05
-    max_p_global: int = 5
+    variables: list[LPCMCIVariable]
+    tau_min: int
+    tau_max: int
+    pc_alpha: float = 0.03
+    max_p_global: int = 10
     n_preliminary_iterations: int = 1
 
 

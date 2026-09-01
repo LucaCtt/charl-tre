@@ -4,13 +4,14 @@ from charl_tre.causal.rules import Rule
 from charl_tre.metrics import Metrics, compute_metrics
 
 
-def _score_activity_rules(activity_data: np.ndarray, rules: list[Rule]) -> float:
+def _score_activity_rules(activity_data: np.ndarray, rules: list[Rule], null_clip_sigma: float) -> float:
     """Score a single activity's test sequences against its rules.
 
     Arguments:
         activity_data: A 3D numpy array of shape (n_windows, n_mixtures, n_components)
             representing the test sequences for a single activity.
         rules: A list of Rule objects associated with the activity.
+        null_clip_sigma: A float representing the number of standard deviations to clip the null distribution.
 
     Returns:
         A float representing the average log-likelihood ratio score for the activity based on its rules.
@@ -18,7 +19,6 @@ def _score_activity_rules(activity_data: np.ndarray, rules: list[Rule]) -> float
     """
     n_windows = activity_data.shape[0]
     total_llr = 0.0
-    matched_rules = 0
 
     for rule in rules:
         source_seq = activity_data[: n_windows - rule.edge.lag, rule.edge.source.mixture, rule.edge.source.component]
@@ -26,16 +26,16 @@ def _score_activity_rules(activity_data: np.ndarray, rules: list[Rule]) -> float
 
         y_active = target_seq[source_seq >= rule.source_threshold]
         if y_active.size > 0:
-            total_llr += rule.llr(y_active)
-            matched_rules += 1
+            total_llr += rule.llr(y_active, null_clip_sigma) * rule.weight
 
-    return total_llr / float(matched_rules) if matched_rules > 0 else 0.0
+    return total_llr
 
 
 def evaluate(
     rules: dict[int, list[Rule]],
     test_data: np.ndarray,
     segment_length: int,
+    null_clip_sigma: float,
 ) -> Metrics:
     """Evaluate test data against rules and compute metrics.
 
@@ -51,6 +51,7 @@ def evaluate(
         test_data: A 3D numpy array of shape (n_activities, n_windows, n_mixtures, n_components)
             representing the test sequences for each activity.
         segment_length: An integer representing the length of each segment in the test data.
+        null_clip_sigma: A float representing the number of standard deviations to clip the null distribution.
 
     Returns:
         A Metrics object containing classification metrics for the evaluation.
@@ -64,7 +65,7 @@ def evaluate(
         for start in range(0, n_windows - segment_length + 1, segment_length):
             segment = test_data[activity, start : start + segment_length]
             scores = {
-                rule_activity: _score_activity_rules(segment, activity_rules)
+                rule_activity: _score_activity_rules(segment, activity_rules, null_clip_sigma)
                 for rule_activity, activity_rules in rules.items()
             }
             prediction = max(scores, key=lambda act: scores[act])
