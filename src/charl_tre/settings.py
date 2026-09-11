@@ -9,8 +9,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env")
 
     # General settings
-    seed: int = 42
-    """Random seed for reproducibility."""
+    starter_seed: int = 42
+    """Random starter seed for reproducibility."""
     n_workers: int = 8
     """Number of workers for data loading and LPCMCI."""
 
@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     ]
     vae_window_size: int = 75
     """Size of the window of CSI in a VAE train sample, where 150 CSI = 1 second of data."""
-    classifier_window_size: int = 450
+    classifier_window_size: int = 200
     """Size of the window of CSI in a classifier test sample, where 150 CSI = 1 second of data."""
     stride: int = 25
     """Stride for sliding windows creation, for both train and testing."""
@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     # Optuna study settings
     n_trials: int = 100
     """Number of Optuna trials for hyperparameter optimization."""
+    n_seeds_per_trial: int = 10
+    """Number of random seeds to use for each Optuna trial."""
+    max_seeds_failed: float = 2
+    """Maximum number of failed seeds allowed for each Optuna trial before considering the trial as failed."""
     study_name: str = f"hvae_vw{vae_window_size}_cw{classifier_window_size}"
     """Name of the VAE model, used for checkpointing."""
     study_path: str = f"out/{study_name}"
@@ -84,7 +88,7 @@ class Settings(BaseSettings):
     hyperparam_n_components_step: Literal["log"] | int = 8
 
     hyperparam_n_mixtures_min: int = 1
-    hyperparam_n_mixtures_max: int = 8
+    hyperparam_n_mixtures_max: int = 1 # We use only one mixture
     hyperparam_n_mixtures_step: Literal["log"] | int = 1
 
     hyperparam_n_fusion_layers_min: int = 1
