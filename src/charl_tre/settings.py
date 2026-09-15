@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     ]
     vae_window_size: int = 75
     """Size of the window of CSI in a VAE train sample, where 150 CSI = 1 second of data."""
-    classifier_window_size: int = 200
+    classifier_window_size: int = 300
     """Size of the window of CSI in a classifier test sample, where 150 CSI = 1 second of data."""
     stride: int = 25
     """Stride for sliding windows creation, for both train and testing."""

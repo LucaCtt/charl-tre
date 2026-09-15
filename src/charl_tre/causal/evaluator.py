@@ -62,7 +62,7 @@ def evaluate(
 
     for activity in range(test_data.shape[0]):
         n_windows = test_data.shape[1]
-        for start in range(0, n_windows - segment_length + 1, segment_length):
+        for start in range(0, n_windows - segment_length + 1, 1):
             segment = test_data[activity, start : start + segment_length]
             scores = {
                 rule_activity: _score_activity_rules(segment, activity_rules, null_clip_sigma)

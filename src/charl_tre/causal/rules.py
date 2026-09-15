@@ -116,19 +116,56 @@ def _null_llr_variance(mu_a: float, std_a: float, mu_bg: float, std_bg: float) -
     return float(mean_shift_term + variance_term)
 
 
+def _select_rules_by_elbow(
+    candidates: list[Rule],
+    max_rules: int,
+    drop_threshold: float,
+) -> list[Rule]:
+    """Select rules up to the first significant KL drop.
+
+    Keeps rules while the next rule's KL is at least `drop_threshold`
+    fraction of the current rule's KL. A value of 0.5 means: stop when
+    the next rule has less than half the KL of the current one.
+
+    `max_rules` is a hard bound -- principled selection
+    within it, never below or above regardless of the KL curve shape.
+    """
+    if not candidates:
+        return []
+
+    selected = [candidates[0]]
+
+    for i in range(1, min(len(candidates), max_rules)):
+        prev_kl = candidates[i - 1].kl_divergence
+        curr_kl = candidates[i].kl_divergence
+
+        if prev_kl <= 0:
+            break
+
+        relative_drop = curr_kl / prev_kl
+        if relative_drop < drop_threshold and len(selected) != 0:
+            break
+
+        selected.append(candidates[i])
+
+    return selected
+
+
 class RuleBuilder:
     """Builds a diverse, noise-filtered library of causal rules ranked by KL divergence."""
 
     def __init__(
         self,
-        min_mci_strength: float = 0.20,
-        min_samples: int = 10,
-        top_rules_per_activity: int = 12,
+        min_mci_strength: float,
+        min_samples: int,
+        top_rules_per_activity: int,
+        drop_threshold: float,
     ) -> None:
         """Initialize the RuleBuilder."""
         self._min_mci_strength = min_mci_strength
         self._min_samples = min_samples
         self._top_rules_per_activity = top_rules_per_activity
+        self._drop_threshold = drop_threshold
 
     def build(
         self,
@@ -207,6 +244,10 @@ class RuleBuilder:
                 )
 
             candidates.sort(key=lambda r: r.kl_divergence, reverse=True)
-            rules[activity] = candidates[: self._top_rules_per_activity]
+            rules[activity] = _select_rules_by_elbow(
+                candidates,
+                self._top_rules_per_activity,
+                self._drop_threshold,
+            )
 
         return rules

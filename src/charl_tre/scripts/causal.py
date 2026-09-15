@@ -10,9 +10,8 @@ from charl_tre import util
 from charl_tre.causal.evaluator import evaluate
 from charl_tre.causal.lpcmci import LPCMCIParams, LPCMCIVariable, run_lpcmci_batch
 from charl_tre.causal.rules import RuleBuilder
-from charl_tre.metrics import Metrics, metrics_summary
+from charl_tre.metrics import metrics_summary
 from charl_tre.settings import Settings
-from charl_tre.studies import make_study
 
 settings = Settings()
 
@@ -22,22 +21,30 @@ logging.basicConfig(level=logging.DEBUG, handlers=[handler], format="%(message)s
 logger = logging.getLogger("rich")
 
 
-def _dirichlet_clr(latents: np.ndarray) -> np.ndarray:
-    """Apply the centered log-ratio (CLR) transformation to Dirichlet-distributed latents.
+def _clr(
+    alphas: np.ndarray,  # (n_activities, n_windows, n_mixtures, n_components)
+) -> np.ndarray:
+    """Decompose raw Dirichlet alphas into [log_concentration | CLR_reduced].
 
-    Arguments:
-        latents (np.ndarray): Latents of shape (n_activities, n_windows, n_mixtures, n_components).
+    Returns shape (n_activities, n_windows, n_mixtures, n_components)
+    where the last axis contains:
+      - index 0: log(sum of alphas) -- the log-concentration scalar
+      - indices 1..K-1: CLR-transformed composition, last component dropped
 
-    Returns:
-        np.ndarray: CLR-transformed latents of the same shape as the input.
-
+    The returned array has the same shape as the input -- log-concentration
+    replaces the dropped CLR component rather than expanding the dimension,
+    keeping downstream code shape-compatible.
     """
-    n_components = latents.shape[-1]
-    total = latents.sum(axis=-1, keepdims=True) + n_components
-    p = (latents + 1) / total
-    log_p = np.log(p)
+    n_components = alphas.shape[-1]
 
-    return log_p - log_p.mean(axis=-1, keepdims=True)
+    # Smoothed Dirichlet mean: avoids log(0) for near-zero alphas
+    total = alphas.sum(axis=-1, keepdims=True) + n_components
+    p = (alphas + 1.0) / total
+
+    # CLR: log(p_i) - mean_j(log(p_j)), then drop last component
+    log_p = np.log(p)
+    clr = log_p - log_p.mean(axis=-1, keepdims=True)
+    return clr[..., :-1]  # drop redundant last component, (K-1) dims
 
 
 def _load_latents(latents_dir: Path, n_activities: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -63,32 +70,9 @@ def _load_latents(latents_dir: Path, n_activities: int) -> tuple[np.ndarray, np.
 
         # Create a 4D array of shape (n_activities, n_windows, n_mixtures, n_components)
         activity_latents = np.stack(activity_latents, axis=0)
-        activity_latents = _dirichlet_clr(activity_latents)
-
-        # Remove the last component to avoid redundancy in the transformation
-        latents[ds_name] = activity_latents
+        latents[ds_name] = _clr(activity_latents)
 
     return latents["train"], latents["val"], latents["test"]
-
-
-def _causal_discovery(
-    train_latents: np.ndarray,
-    variables: list[LPCMCIVariable],
-    cache_dir: str | None = None,
-) -> np.ndarray:
-    """Run LPCMCI discovery on the training latents.
-
-    Arguments:
-        train_latents (np.ndarray): Training latents of shape (n_activities, n_windows, n_mixtures, n_components).
-        variables (list[LPCMCIVariable]): List of LPCMCIVariable instances representing the variables.
-        cache_dir (str | None): Directory to store temporary files for the tests.
-
-    Returns:
-        np.ndarray: Adjacency matrix of shape (n_vars, n_vars, tau_max + 1).
-
-    """
-    params = LPCMCIParams(variables=variables, pc_alpha=0.03, tau_min=1, tau_max=5)
-    return run_lpcmci_batch(train_latents, params=params, max_workers=settings.n_workers, cache_dir=cache_dir)
 
 
 def _build_rules(
@@ -96,40 +80,44 @@ def _build_rules(
     adjacency: np.ndarray,
     variables: list[LPCMCIVariable],
     train_latents: np.ndarray,
-    test_latents: np.ndarray,
+    val_latents: np.ndarray,
 ) -> float:
     """Build rules from the adjacency matrix and training latents.
 
     Arguments:
+        trial (optuna.Trial): Optuna trial object for hyperparameter optimization.
         adjacency (np.ndarray): Adjacency matrix of shape (n_vars, n_vars, tau_max + 1).
         variables (list[LPCMCIVariable]): List of LPCMCIVariable instances representing the variables.
         train_latents (np.ndarray): Training latents of shape (n_activities, n_windows, n_mixtures, n_components).
-        test_latents (np.ndarray): Test latents of shape (n_activities, n_windows, n_mixtures, n_components).
+        val_latents (np.ndarray): Validation latents of shape (n_activities, n_windows, n_mixtures, n_components).
 
     Returns:
         float: The evaluation metric to optimize.
 
     """
-    min_mci_strength = trial.suggest_float("min_mci_strength", 0.05, 0.40, step=0.05)
-    min_samples = trial.suggest_int("min_samples", 5, 20, step=5)
-    top_rules_per_activity = trial.suggest_int("top_rules_per_activity", 5, 50, step=5)
+    min_mci_strength = trial.suggest_float("min_mci_strength", 0.1, 0.4, step=0.1)
+    min_samples = trial.suggest_int("min_samples", 10, 30, step=5)
+    top_rules_per_activity = trial.suggest_int("top_rules_per_activity", 2, 12, step=2)
+    drop_threshold = trial.suggest_float("drop_threshold", 0.1, 0.5, step=0.05)
     null_clip_sigma = trial.suggest_float("null_clip_sigma", 1.0, 5.0, step=0.5)
+    segment_length = trial.suggest_int("segment_length", 10, 30, step=2)
 
-    rule_builder = RuleBuilder(min_mci_strength, min_samples, top_rules_per_activity)
+    rule_builder = RuleBuilder(min_mci_strength, min_samples, top_rules_per_activity, drop_threshold)
     rules = rule_builder.build(adjacency, variables, train_latents)
-    metrics = evaluate(rules, test_latents, test_latents.shape[1] // 4, null_clip_sigma)
+    metrics = evaluate(rules, val_latents, segment_length, null_clip_sigma)
 
-    return metrics.multi_class.accuracy - 1e-4 * top_rules_per_activity  # Penalize for too many rules
+    total_rules = sum(len(rules_list) for rules_list in rules.values())
+    return metrics.multi_class.accuracy - 1e-3 * total_rules  # Penalize for too many rules
 
 
 def causal() -> None:
     """Extract and save mixture-Dirichlet latents for the full dataset."""
-    util.init_rng(settings.seed)
+    util.init_rng(settings.starter_seed)
     causal_dir = Path(settings.study_path) / "causal"
 
     logger.info("Loading latents...")
     latents_dir = Path(settings.study_path) / "latents"
-    train_latents, _, test_latents = _load_latents(latents_dir, settings.n_activities)
+    train_latents, val_latents, test_latents = _load_latents(latents_dir, settings.n_activities)
 
     _, _, n_mixtures, n_components = train_latents.shape
     variables = [
@@ -146,7 +134,13 @@ def causal() -> None:
         logger.info("Running LPCMCI discovery...")
 
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as cache_dir:
-            adjacency_matrix = _causal_discovery(train_latents, variables, cache_dir)
+            params = LPCMCIParams(variables=variables, tau_min=1, tau_max=9, max_p_global=3)
+            adjacency_matrix = run_lpcmci_batch(
+                train_latents,
+                params=params,
+                max_workers=settings.n_workers,
+                cache_dir=cache_dir,
+            )
 
         Path(causal_dir).mkdir(parents=True, exist_ok=True)
         np.save(
@@ -156,19 +150,38 @@ def causal() -> None:
 
         logger.info("Done.")
 
-    study = make_study(
+    # Hyperparameter optimization for rule building on the validation set
+    study = util.make_study(
         study_name="causal_rule_discovery",
         storage_dir=f"{settings.study_path}/causal",
-        seed=settings.seed,
+        seed=settings.starter_seed,
     )
     study.optimize(
-        lambda trial: (
-            _build_rules(trial, adjacency_matrix, variables, train_latents, test_latents)
-        ),
+        lambda trial: _build_rules(trial, adjacency_matrix, variables, train_latents, val_latents),
         n_trials=settings.n_trials,
     )
 
     logger.info("Best trial value: %s", study.best_value)
+
+    # Final evaluation on the test set using the best hyperparameters
+    params = study.best_params
+    rule_builder = RuleBuilder(
+        min_mci_strength=params["min_mci_strength"],
+        min_samples=params["min_samples"],
+        top_rules_per_activity=params["top_rules_per_activity"],
+        drop_threshold=params["drop_threshold"],
+    )
+    rules = rule_builder.build(adjacency_matrix, variables, train_latents)
+
+    for activity in range(settings.n_activities):
+        rules_strs = [
+            f"□(z_{rule.edge.source.component} → ○{rule.edge.lag} z_{rule.edge.target.component})"
+            for rule in rules.get(activity, [])
+        ]
+        logger.debug("%s: %s", settings.activities[activity], rules_strs)
+
+    metrics = evaluate(rules, test_latents, params["segment_length"], params["null_clip_sigma"])
+    logger.info("Evaluation metrics:\n%s", metrics_summary(metrics, settings.activities))
 
 
 if __name__ == "__main__":

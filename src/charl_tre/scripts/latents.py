@@ -9,7 +9,6 @@ from rich.logging import RichHandler
 from charl_tre import dataset, util
 from charl_tre.models import hierarchical
 from charl_tre.settings import Settings
-from charl_tre.studies import get_best_trial, read_study
 
 settings = Settings()
 
@@ -21,7 +20,7 @@ logger = logging.getLogger("rich")
 
 def latents() -> None:
     """Extract and save mixture-Dirichlet latents for the full dataset."""
-    util.init_rng(settings.seed)
+    util.init_rng(settings.starter_seed)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     logger.info("Loading scenario from %s...", settings.dataset_path)
@@ -32,8 +31,8 @@ def latents() -> None:
         stride=settings.stride,
     )
 
-    best_trial = get_best_trial(read_study(settings.study_path))
-    best_trial_path = Path(settings.study_path) / f"trial_{best_trial.trial_number}"
+    best_trial = util.read_study(settings.study_path).best_trial
+    best_trial_path = Path(settings.study_path) / f"trial_{best_trial.number}"
 
     n_components = int(best_trial.params["n_components"])
     n_mixtures = int(best_trial.params["n_mixtures"])
@@ -41,13 +40,20 @@ def latents() -> None:
     fusion_dropout = float(best_trial.params["fusion_dropout"])
     batch_size = int(best_trial.params["batch_size"])
 
+    accuracies = best_trial.user_attrs["accuracies"]
+    best_seed = int(max(accuracies, key=accuracies.get))
+    best_seed_accuracy = accuracies[str(best_seed)]
+
     logger.info(
-        "Best trial parameters: n_components=%d, n_mixtures=%d, n_fusion_layers=%d, fusion_dropout=%.4f, batch_size=%d",
+        "Best trial parameters: n_components=%d, n_mixtures=%d, n_fusion_layers=%d, fusion_dropout=%.4f, "
+        "batch_size=%d (best seed %d, accuracy=%.4f)",
         n_components,
         n_mixtures,
         n_fusion_layers,
         fusion_dropout,
         batch_size,
+        best_seed,
+        best_seed_accuracy,
     )
 
     train_dl = util.make_dl(
@@ -55,7 +61,7 @@ def latents() -> None:
         batch_size,
         shuffle=False,
         n_workers=settings.n_workers,
-        seed=settings.seed,
+        seed=settings.starter_seed,
     )
 
     val_dl = util.make_dl(
@@ -63,7 +69,7 @@ def latents() -> None:
         batch_size,
         shuffle=False,
         n_workers=settings.n_workers,
-        seed=settings.seed,
+        seed=settings.starter_seed,
     )
 
     test_dl = util.make_dl(
@@ -71,7 +77,7 @@ def latents() -> None:
         batch_size,
         shuffle=False,
         n_workers=settings.n_workers,
-        seed=settings.seed,
+        seed=settings.starter_seed,
     )
 
     h_vae = hierarchical.Fusion(
@@ -83,7 +89,7 @@ def latents() -> None:
         fusion_dropout=fusion_dropout,
         n_antennas=settings.n_antennas,
     ).to(device)
-    h_vae_weights = torch.load(best_trial_path / "h_vae.pt", weights_only=True)
+    h_vae_weights = torch.load(best_trial_path / f"h_vae_{best_seed}.pt", weights_only=True)
     h_vae.load_state_dict(h_vae_weights, strict=True)
     h_vae.eval()
 

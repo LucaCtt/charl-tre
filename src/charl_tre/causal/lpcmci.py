@@ -1,6 +1,6 @@
 import multiprocessing as mp
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
