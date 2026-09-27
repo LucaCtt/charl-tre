@@ -16,8 +16,8 @@ from charl_tre.settings import Settings
 settings = Settings()
 
 # Configure logging
-handler = RichHandler(level=logging.DEBUG, show_path=False)
-logging.basicConfig(level=logging.DEBUG, handlers=[handler], format="%(message)s")
+handler = RichHandler(level=logging.INFO, show_path=False)
+logging.basicConfig(level=logging.INFO, handlers=[handler], format="%(message)s")
 logger = logging.getLogger("rich")
 
 
@@ -47,7 +47,7 @@ def _clr(
     return clr[..., :-1]  # drop redundant last component, (K-1) dims
 
 
-def _load_latents(latents_dir: Path, n_activities: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def load_latents(latents_dir: Path, n_activities: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Load latents and labels from the specified directory.
 
     Arguments:
@@ -100,7 +100,7 @@ def _build_rules(
     top_rules_per_activity = trial.suggest_int("top_rules_per_activity", 2, 12, step=2)
     drop_threshold = trial.suggest_float("drop_threshold", 0.1, 0.5, step=0.05)
     null_clip_sigma = trial.suggest_float("null_clip_sigma", 1.0, 5.0, step=0.5)
-    segment_length = trial.suggest_int("segment_length", 10, 30, step=2)
+    segment_length = trial.suggest_int("segment_length", 12, 30, step=2)
 
     rule_builder = RuleBuilder(min_mci_strength, min_samples, top_rules_per_activity, drop_threshold)
     rules = rule_builder.build(adjacency, variables, train_latents)
@@ -117,7 +117,7 @@ def causal() -> None:
 
     logger.info("Loading latents...")
     latents_dir = Path(settings.study_path) / "latents"
-    train_latents, val_latents, test_latents = _load_latents(latents_dir, settings.n_activities)
+    train_latents, val_latents, test_latents = load_latents(latents_dir, settings.n_activities)
 
     _, _, n_mixtures, n_components = train_latents.shape
     variables = [
@@ -134,7 +134,7 @@ def causal() -> None:
         logger.info("Running LPCMCI discovery...")
 
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as cache_dir:
-            params = LPCMCIParams(variables=variables, tau_min=1, tau_max=9, max_p_global=3)
+            params = LPCMCIParams(variables=variables, tau_min=1, tau_max=11, max_p_global=3)
             adjacency_matrix = run_lpcmci_batch(
                 train_latents,
                 params=params,
@@ -175,7 +175,10 @@ def causal() -> None:
 
     for activity in range(settings.n_activities):
         rules_strs = [
-            f"□(z_{rule.edge.source.component} → ○{rule.edge.lag} z_{rule.edge.target.component})"
+            (
+                f"□(z_{rule.edge.source.component} → ○{rule.edge.lag} "
+                f"{'' if rule.edge.value > 0 else '-'}z_{rule.edge.target.component})"
+            )
             for rule in rules.get(activity, [])
         ]
         logger.debug("%s: %s", settings.activities[activity], rules_strs)

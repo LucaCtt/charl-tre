@@ -30,6 +30,7 @@ class BaseMetrics:
     recall: float
     f1: float
     support: int
+    confusion_matrix: np.ndarray
 
 
 @dataclass(frozen=True)
@@ -83,6 +84,7 @@ def _compute_class_metrics(y_true: np.ndarray, y_pred: np.ndarray, label: Hashab
         recall=float(recall),
         f1=float(f1),
         support=support,
+        confusion_matrix=np.array([[tn, fp], [fn, tp]]),
     )
 
 
@@ -123,12 +125,18 @@ def compute_metrics(y_true: ArrayLike, y_pred: ArrayLike) -> Metrics[Hashable]:
 
     accuracy = float(np.sum(y_true == y_pred)) / total if total > 0 else 0.0
 
+    confusion_matrix = np.zeros((len(labels), len(labels)), dtype=int)
+    for i, true_label in enumerate(labels):
+        for j, pred_label in enumerate(labels):
+            confusion_matrix[i, j] = np.sum((y_true == true_label) & (y_pred == pred_label))
+
     overall = BaseMetrics(
         accuracy=accuracy,
         precision=weighted_precision,
         recall=weighted_recall,
         f1=weighted_f1,
         support=overall_support,
+        confusion_matrix=confusion_matrix,
     )
 
     return Metrics(multi_class=overall, per_class=per_class)

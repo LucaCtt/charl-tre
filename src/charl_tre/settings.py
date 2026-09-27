@@ -26,7 +26,7 @@ class Settings(BaseSettings):
         "Stand",
         "Waving",
         "Clap",
-        "Lay down",
+        "Lie down",
         "Wipe",
         "Squat",
         "Stretch",
