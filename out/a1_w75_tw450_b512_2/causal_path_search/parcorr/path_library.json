@@ -1,0 +1,506 @@
+{
+  "Walk": {
+    "activity_id": 0,
+    "own_score": 0.0,
+    "margin_to_next_activity": 0.0,
+    "strictly_unique": false,
+    "path": [
+      "Z0 -[1]-> Z0"
+    ],
+    "path_edges": [
+      [
+        0,
+        0,
+        1
+      ]
+    ],
+    "edge_states": [
+      {
+        "src": 0,
+        "dst": 0,
+        "lag": 1,
+        "strength": 0.0,
+        "src_state": 0,
+        "dst_state": 0,
+        "support": 1.0,
+        "info_gain": 0.0,
+        "joint_probs": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "src_probs": [
+          1.0,
+          0.0
+        ],
+        "dst_probs": [
+          1.0,
+          0.0
+        ]
+      }
+    ]
+  },
+  "Run": {
+    "activity_id": 1,
+    "own_score": 0.0,
+    "margin_to_next_activity": 0.0,
+    "strictly_unique": false,
+    "path": [
+      "Z0 -[1]-> Z0"
+    ],
+    "path_edges": [
+      [
+        0,
+        0,
+        1
+      ]
+    ],
+    "edge_states": [
+      {
+        "src": 0,
+        "dst": 0,
+        "lag": 1,
+        "strength": 0.0,
+        "src_state": 0,
+        "dst_state": 0,
+        "support": 1.0,
+        "info_gain": 0.0,
+        "joint_probs": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "src_probs": [
+          1.0,
+          0.0
+        ],
+        "dst_probs": [
+          1.0,
+          0.0
+        ]
+      }
+    ]
+  },
+  "Jump": {
+    "activity_id": 2,
+    "own_score": 0.0,
+    "margin_to_next_activity": 0.0,
+    "strictly_unique": false,
+    "path": [
+      "Z0 -[1]-> Z0"
+    ],
+    "path_edges": [
+      [
+        0,
+        0,
+        1
+      ]
+    ],
+    "edge_states": [
+      {
+        "src": 0,
+        "dst": 0,
+        "lag": 1,
+        "strength": 0.0,
+        "src_state": 0,
+        "dst_state": 0,
+        "support": 1.0,
+        "info_gain": 0.0,
+        "joint_probs": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "src_probs": [
+          1.0,
+          0.0
+        ],
+        "dst_probs": [
+          1.0,
+          0.0
+        ]
+      }
+    ]
+  },
+  "Sit": {
+    "activity_id": 3,
+    "own_score": 0.0,
+    "margin_to_next_activity": 0.0,
+    "strictly_unique": false,
+    "path": [
+      "Z0 -[1]-> Z0"
+    ],
+    "path_edges": [
+      [
+        0,
+        0,
+        1
+      ]
+    ],
+    "edge_states": [
+      {
+        "src": 0,
+        "dst": 0,
+        "lag": 1,
+        "strength": 0.0,
+        "src_state": 0,
+        "dst_state": 0,
+        "support": 1.0,
+        "info_gain": 0.0,
+        "joint_probs": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "src_probs": [
+          1.0,
+          0.0
+        ],
+        "dst_probs": [
+          1.0,
+          0.0
+        ]
+      }
+    ]
+  },
+  "Empty": {
+    "activity_id": 4,
+    "own_score": 0.0,
+    "margin_to_next_activity": 0.0,
+    "strictly_unique": false,
+    "path": [
+      "Z0 -[1]-> Z0"
+    ],
+    "path_edges": [
+      [
+        0,
+        0,
+        1
+      ]
+    ],
+    "edge_states": [
+      {
+        "src": 0,
+        "dst": 0,
+        "lag": 1,
+        "strength": 0.0,
+        "src_state": 0,
+        "dst_state": 0,
+        "support": 1.0,
+        "info_gain": 0.0,
+        "joint_probs": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "src_probs": [
+          1.0,
+          0.0
+        ],
+        "dst_probs": [
+          1.0,
+          0.0
+        ]
+      }
+    ]
+  },
+  "Stand": {
+    "activity_id": 5,
+    "own_score": 0.0,
+    "margin_to_next_activity": 0.0,
+    "strictly_unique": false,
+    "path": [
+      "Z0 -[1]-> Z0"
+    ],
+    "path_edges": [
+      [
+        0,
+        0,
+        1
+      ]
+    ],
+    "edge_states": [
+      {
+        "src": 0,
+        "dst": 0,
+        "lag": 1,
+        "strength": 0.0,
+        "src_state": 0,
+        "dst_state": 0,
+        "support": 1.0,
+        "info_gain": 0.0,
+        "joint_probs": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "src_probs": [
+          1.0,
+          0.0
+        ],
+        "dst_probs": [
+          1.0,
+          0.0
+        ]
+      }
+    ]
+  },
+  "Waving": {
+    "activity_id": 6,
+    "own_score": 0.0,
+    "margin_to_next_activity": 0.0,
+    "strictly_unique": false,
+    "path": [
+      "Z0 -[1]-> Z0"
+    ],
+    "path_edges": [
+      [
+        0,
+        0,
+        1
+      ]
+    ],
+    "edge_states": [
+      {
+        "src": 0,
+        "dst": 0,
+        "lag": 1,
+        "strength": 0.0,
+        "src_state": 0,
+        "dst_state": 0,
+        "support": 1.0,
+        "info_gain": 0.0,
+        "joint_probs": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "src_probs": [
+          1.0,
+          0.0
+        ],
+        "dst_probs": [
+          1.0,
+          0.0
+        ]
+      }
+    ]
+  },
+  "Clap": {
+    "activity_id": 7,
+    "own_score": 0.0,
+    "margin_to_next_activity": 0.0,
+    "strictly_unique": false,
+    "path": [
+      "Z0 -[1]-> Z0"
+    ],
+    "path_edges": [
+      [
+        0,
+        0,
+        1
+      ]
+    ],
+    "edge_states": [
+      {
+        "src": 0,
+        "dst": 0,
+        "lag": 1,
+        "strength": 0.0,
+        "src_state": 0,
+        "dst_state": 0,
+        "support": 1.0,
+        "info_gain": 0.0,
+        "joint_probs": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "src_probs": [
+          1.0,
+          0.0
+        ],
+        "dst_probs": [
+          1.0,
+          0.0
+        ]
+      }
+    ]
+  },
+  "Lay down": {
+    "activity_id": 8,
+    "own_score": 0.0,
+    "margin_to_next_activity": 0.0,
+    "strictly_unique": false,
+    "path": [
+      "Z0 -[1]-> Z0"
+    ],
+    "path_edges": [
+      [
+        0,
+        0,
+        1
+      ]
+    ],
+    "edge_states": [
+      {
+        "src": 0,
+        "dst": 0,
+        "lag": 1,
+        "strength": 0.0,
+        "src_state": 0,
+        "dst_state": 0,
+        "support": 1.0,
+        "info_gain": 0.0,
+        "joint_probs": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "src_probs": [
+          1.0,
+          0.0
+        ],
+        "dst_probs": [
+          1.0,
+          0.0
+        ]
+      }
+    ]
+  },
+  "Wipe": {
+    "activity_id": 9,
+    "own_score": 0.0,
+    "margin_to_next_activity": 0.0,
+    "strictly_unique": false,
+    "path": [
+      "Z0 -[1]-> Z0"
+    ],
+    "path_edges": [
+      [
+        0,
+        0,
+        1
+      ]
+    ],
+    "edge_states": [
+      {
+        "src": 0,
+        "dst": 0,
+        "lag": 1,
+        "strength": 0.0,
+        "src_state": 0,
+        "dst_state": 0,
+        "support": 1.0,
+        "info_gain": 0.0,
+        "joint_probs": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "src_probs": [
+          1.0,
+          0.0
+        ],
+        "dst_probs": [
+          1.0,
+          0.0
+        ]
+      }
+    ]
+  },
+  "Squat": {
+    "activity_id": 10,
+    "own_score": 0.0,
+    "margin_to_next_activity": 0.0,
+    "strictly_unique": false,
+    "path": [
+      "Z0 -[1]-> Z0"
+    ],
+    "path_edges": [
+      [
+        0,
+        0,
+        1
+      ]
+    ],
+    "edge_states": [
+      {
+        "src": 0,
+        "dst": 0,
+        "lag": 1,
+        "strength": 0.0,
+        "src_state": 0,
+        "dst_state": 0,
+        "support": 1.0,
+        "info_gain": 0.0,
+        "joint_probs": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "src_probs": [
+          1.0,
+          0.0
+        ],
+        "dst_probs": [
+          1.0,
+          0.0
+        ]
+      }
+    ]
+  },
+  "Stretch": {
+    "activity_id": 11,
+    "own_score": 0.0,
+    "margin_to_next_activity": 0.0,
+    "strictly_unique": false,
+    "path": [
+      "Z0 -[1]-> Z0"
+    ],
+    "path_edges": [
+      [
+        0,
+        0,
+        1
+      ]
+    ],
+    "edge_states": [
+      {
+        "src": 0,
+        "dst": 0,
+        "lag": 1,
+        "strength": 0.0,
+        "src_state": 0,
+        "dst_state": 0,
+        "support": 1.0,
+        "info_gain": 0.0,
+        "joint_probs": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "src_probs": [
+          1.0,
+          0.0
+        ],
+        "dst_probs": [
+          1.0,
+          0.0
+        ]
+      }
+    ]
+  }
+}

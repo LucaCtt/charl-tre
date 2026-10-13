@@ -1,0 +1,23 @@
+[Walk]
+
+[Run]
+
+[Jump]
+
+[Sit]
+
+[Empty]
+
+[Stand]
+
+[Waving]
+
+[Clap]
+
+[Lay down]
+
+[Wipe]
+
+[Squat]
+
+[Stretch]

@@ -1,0 +1,298 @@
+{
+  "source_raw_dir": "../out/a1_w75_tw450_b512_2/causal_graphs_raw/parcorr",
+  "independence_test": "parcorr",
+  "tau_min": 1,
+  "tau_max": 5,
+  "filter_threshold": 0.1,
+  "path_threshold": 0.0,
+  "classifier_stride": 75,
+  "classifier_train_ratio": 0.7,
+  "segment_length": 64,
+  "segment_hop": 12,
+  "top_rules_per_activity": 50,
+  "rule_min_delta": 0.0,
+  "min_rules_per_activity": 6,
+  "low_edge_threshold": 3,
+  "top_fallback_source_vars": 8,
+  "top_fallback_target_vars": 12,
+  "min_condition_count": 8,
+  "fallback_min_delta": 0.05,
+  "fallback_pool_size": 300,
+  "core_fraction": 0.6,
+  "tie_breaker_weight": 0.25,
+  "coverage_weight": 0.2,
+  "prior_weight": 0.1,
+  "prototype_weight": 0.25,
+  "min_margin": 0.02,
+  "max_rules_scale": 1.6,
+  "low_edge_budget_ratio": 0.3,
+  "calibration_clip": 2.0,
+  "n_states_per_variable": 2,
+  "n_latent_variables": 24,
+  "activities": {
+    "Walk": {
+      "activity_id": 0,
+      "n_samples_raw": 925,
+      "n_edges": 0,
+      "top_edges": [],
+      "top_paths": [
+        {
+          "path": [
+            "Z0 -[1]-> Z0"
+          ],
+          "score": 0.0
+        }
+      ],
+      "n_rules": 0,
+      "n_graph_rules": 0,
+      "n_fallback_rules": 0,
+      "rule_budget": 0,
+      "core_rule_count": 0,
+      "tie_rule_count": 0,
+      "use_prototype_fallback": true,
+      "top_rules": []
+    },
+    "Run": {
+      "activity_id": 1,
+      "n_samples_raw": 925,
+      "n_edges": 0,
+      "top_edges": [],
+      "top_paths": [
+        {
+          "path": [
+            "Z0 -[1]-> Z0"
+          ],
+          "score": 0.0
+        }
+      ],
+      "n_rules": 0,
+      "n_graph_rules": 0,
+      "n_fallback_rules": 0,
+      "rule_budget": 0,
+      "core_rule_count": 0,
+      "tie_rule_count": 0,
+      "use_prototype_fallback": true,
+      "top_rules": []
+    },
+    "Jump": {
+      "activity_id": 2,
+      "n_samples_raw": 925,
+      "n_edges": 0,
+      "top_edges": [],
+      "top_paths": [
+        {
+          "path": [
+            "Z0 -[1]-> Z0"
+          ],
+          "score": 0.0
+        }
+      ],
+      "n_rules": 0,
+      "n_graph_rules": 0,
+      "n_fallback_rules": 0,
+      "rule_budget": 0,
+      "core_rule_count": 0,
+      "tie_rule_count": 0,
+      "use_prototype_fallback": true,
+      "top_rules": []
+    },
+    "Sit": {
+      "activity_id": 3,
+      "n_samples_raw": 925,
+      "n_edges": 0,
+      "top_edges": [],
+      "top_paths": [
+        {
+          "path": [
+            "Z0 -[1]-> Z0"
+          ],
+          "score": 0.0
+        }
+      ],
+      "n_rules": 0,
+      "n_graph_rules": 0,
+      "n_fallback_rules": 0,
+      "rule_budget": 0,
+      "core_rule_count": 0,
+      "tie_rule_count": 0,
+      "use_prototype_fallback": true,
+      "top_rules": []
+    },
+    "Empty": {
+      "activity_id": 4,
+      "n_samples_raw": 925,
+      "n_edges": 0,
+      "top_edges": [],
+      "top_paths": [
+        {
+          "path": [
+            "Z0 -[1]-> Z0"
+          ],
+          "score": 0.0
+        }
+      ],
+      "n_rules": 0,
+      "n_graph_rules": 0,
+      "n_fallback_rules": 0,
+      "rule_budget": 0,
+      "core_rule_count": 0,
+      "tie_rule_count": 0,
+      "use_prototype_fallback": true,
+      "top_rules": []
+    },
+    "Stand": {
+      "activity_id": 5,
+      "n_samples_raw": 925,
+      "n_edges": 0,
+      "top_edges": [],
+      "top_paths": [
+        {
+          "path": [
+            "Z0 -[1]-> Z0"
+          ],
+          "score": 0.0
+        }
+      ],
+      "n_rules": 0,
+      "n_graph_rules": 0,
+      "n_fallback_rules": 0,
+      "rule_budget": 0,
+      "core_rule_count": 0,
+      "tie_rule_count": 0,
+      "use_prototype_fallback": true,
+      "top_rules": []
+    },
+    "Waving": {
+      "activity_id": 6,
+      "n_samples_raw": 925,
+      "n_edges": 0,
+      "top_edges": [],
+      "top_paths": [
+        {
+          "path": [
+            "Z0 -[1]-> Z0"
+          ],
+          "score": 0.0
+        }
+      ],
+      "n_rules": 0,
+      "n_graph_rules": 0,
+      "n_fallback_rules": 0,
+      "rule_budget": 0,
+      "core_rule_count": 0,
+      "tie_rule_count": 0,
+      "use_prototype_fallback": true,
+      "top_rules": []
+    },
+    "Clap": {
+      "activity_id": 7,
+      "n_samples_raw": 925,
+      "n_edges": 0,
+      "top_edges": [],
+      "top_paths": [
+        {
+          "path": [
+            "Z0 -[1]-> Z0"
+          ],
+          "score": 0.0
+        }
+      ],
+      "n_rules": 0,
+      "n_graph_rules": 0,
+      "n_fallback_rules": 0,
+      "rule_budget": 0,
+      "core_rule_count": 0,
+      "tie_rule_count": 0,
+      "use_prototype_fallback": true,
+      "top_rules": []
+    },
+    "Lay down": {
+      "activity_id": 8,
+      "n_samples_raw": 925,
+      "n_edges": 0,
+      "top_edges": [],
+      "top_paths": [
+        {
+          "path": [
+            "Z0 -[1]-> Z0"
+          ],
+          "score": 0.0
+        }
+      ],
+      "n_rules": 0,
+      "n_graph_rules": 0,
+      "n_fallback_rules": 0,
+      "rule_budget": 0,
+      "core_rule_count": 0,
+      "tie_rule_count": 0,
+      "use_prototype_fallback": true,
+      "top_rules": []
+    },
+    "Wipe": {
+      "activity_id": 9,
+      "n_samples_raw": 925,
+      "n_edges": 0,
+      "top_edges": [],
+      "top_paths": [
+        {
+          "path": [
+            "Z0 -[1]-> Z0"
+          ],
+          "score": 0.0
+        }
+      ],
+      "n_rules": 0,
+      "n_graph_rules": 0,
+      "n_fallback_rules": 0,
+      "rule_budget": 0,
+      "core_rule_count": 0,
+      "tie_rule_count": 0,
+      "use_prototype_fallback": true,
+      "top_rules": []
+    },
+    "Squat": {
+      "activity_id": 10,
+      "n_samples_raw": 925,
+      "n_edges": 0,
+      "top_edges": [],
+      "top_paths": [
+        {
+          "path": [
+            "Z0 -[1]-> Z0"
+          ],
+          "score": 0.0
+        }
+      ],
+      "n_rules": 0,
+      "n_graph_rules": 0,
+      "n_fallback_rules": 0,
+      "rule_budget": 0,
+      "core_rule_count": 0,
+      "tie_rule_count": 0,
+      "use_prototype_fallback": true,
+      "top_rules": []
+    },
+    "Stretch": {
+      "activity_id": 11,
+      "n_samples_raw": 925,
+      "n_edges": 0,
+      "top_edges": [],
+      "top_paths": [
+        {
+          "path": [
+            "Z0 -[1]-> Z0"
+          ],
+          "score": 0.0
+        }
+      ],
+      "n_rules": 0,
+      "n_graph_rules": 0,
+      "n_fallback_rules": 0,
+      "rule_budget": 0,
+      "core_rule_count": 0,
+      "tie_rule_count": 0,
+      "use_prototype_fallback": true,
+      "top_rules": []
+    }
+  }
+}

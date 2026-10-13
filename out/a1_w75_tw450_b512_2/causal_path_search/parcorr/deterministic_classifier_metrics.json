@@ -1,0 +1,305 @@
+{
+  "accuracy": 0.08333333333333333,
+  "n_segments": 216,
+  "labels": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+  ],
+  "confusion_matrix": [
+    [
+      18,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      18,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      18,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      18,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      18,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      18,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      18,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      18,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      18,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      18,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      18,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      18,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  ],
+  "classification_report": {
+    "Walk": {
+      "precision": 0.08333333333333333,
+      "recall": 1.0,
+      "f1-score": 0.15384615384615385,
+      "support": 18.0
+    },
+    "Run": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 18.0
+    },
+    "Jump": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 18.0
+    },
+    "Sit": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 18.0
+    },
+    "Empty": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 18.0
+    },
+    "Stand": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 18.0
+    },
+    "Waving": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 18.0
+    },
+    "Clap": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 18.0
+    },
+    "Lay down": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 18.0
+    },
+    "Wipe": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 18.0
+    },
+    "Squat": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 18.0
+    },
+    "Stretch": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 18.0
+    },
+    "accuracy": 0.08333333333333333,
+    "macro avg": {
+      "precision": 0.006944444444444444,
+      "recall": 0.08333333333333333,
+      "f1-score": 0.012820512820512822,
+      "support": 216.0
+    },
+    "weighted avg": {
+      "precision": 0.006944444444444444,
+      "recall": 0.08333333333333333,
+      "f1-score": 0.01282051282051282,
+      "support": 216.0
+    }
+  },
+  "mean_prediction_margin": 0.0,
+  "median_prediction_margin": 0.0,
+  "train_points_per_activity": {
+    "Walk": 647,
+    "Run": 647,
+    "Jump": 647,
+    "Sit": 647,
+    "Empty": 647,
+    "Stand": 647,
+    "Waving": 647,
+    "Clap": 647,
+    "Lay down": 647,
+    "Wipe": 647,
+    "Squat": 647,
+    "Stretch": 647
+  },
+  "test_points_per_activity": {
+    "Walk": 278,
+    "Run": 278,
+    "Jump": 278,
+    "Sit": 278,
+    "Empty": 278,
+    "Stand": 278,
+    "Waving": 278,
+    "Clap": 278,
+    "Lay down": 278,
+    "Wipe": 278,
+    "Squat": 278,
+    "Stretch": 278
+  }
+}
