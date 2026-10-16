@@ -17,18 +17,24 @@ def _score_activity_rules(activity_data: np.ndarray, rules: list[Rule], null_cli
         A float representing the average log-likelihood ratio score for the activity based on its rules.
 
     """
+    if not rules:
+        return 0.0
+
+    total_weight = sum(r.weight for r in rules)
+    if total_weight <= 0:
+        return 0.0
+
     n_windows = activity_data.shape[0]
     total_llr = 0.0
 
     for rule in rules:
         source_seq = activity_data[: n_windows - rule.edge.lag, rule.edge.source.mixture, rule.edge.source.component]
         target_seq = activity_data[rule.edge.lag :, rule.edge.target.mixture, rule.edge.target.component]
-
         y_active = target_seq[source_seq >= rule.source_threshold]
         if y_active.size > 0:
-            total_llr += rule.llr(y_active, null_clip_sigma) * rule.weight
+            total_llr += (rule.weight / total_weight) * rule.llr(y_active, null_clip_sigma)
 
-    return total_llr
+    return total_llr / n_windows
 
 
 def evaluate(

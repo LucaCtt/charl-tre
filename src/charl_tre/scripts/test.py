@@ -60,7 +60,7 @@ def test() -> None:
         seed=settings.starter_seed,
     )
 
-    h_vae = hierarchical.Fusion(
+    h_vae = hierarchical.Autoencoder(
         window_size=settings.vae_window_size,
         n_subcarriers=settings.n_subcarriers,
         n_dirichlet_components=n_components,

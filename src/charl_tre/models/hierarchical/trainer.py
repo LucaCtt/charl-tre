@@ -10,11 +10,10 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from charl_tre.models import errors, util
+from charl_tre.models import errors, hierarchical, util
 from charl_tre.models.hierarchical import annealers
 from charl_tre.models.hierarchical.collapse_detector import CollapseDetector
 from charl_tre.models.hierarchical.early_stopping import EarlyStopping
-from charl_tre.models.hierarchical.loss import hierarchical_loss
 
 
 class TrainerParams(TypedDict):
@@ -93,7 +92,7 @@ class Trainer:
         with torch.autocast(device_type=self._device.type, dtype=torch.float16):
             recon, mix_logits, alpha, mu_q, logvar_q, mu_p, logvar_p = self._model(x_true)
 
-            loss, recon_loss, kl_dir, kl_gauss = hierarchical_loss(
+            loss, recon_loss, kl_dir, kl_gauss = hierarchical.loss(
                 recon,
                 x_true,
                 mix_logits,
@@ -168,7 +167,7 @@ class Trainer:
             x_true = x_true_cpu.to(self._device, non_blocking=True)
             with torch.autocast(device_type=self._device.type, dtype=torch.float16):
                 recon, mix_logits, alpha, mu_q, logvar_q, mu_p, logvar_p = self._model(x_true)
-                loss, _, _, _ = hierarchical_loss(
+                loss, _, _, _ = hierarchical.loss(
                     recon,
                     x_true,
                     mix_logits,

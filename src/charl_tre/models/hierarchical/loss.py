@@ -1,8 +1,10 @@
 import torch
 import torch.nn.functional as func
 
+from charl_tre.models import dirichlet
 
-def hierarchical_loss(
+
+def loss(
     x_recon: torch.Tensor,
     x_true: torch.Tensor,
     mix_logits: torch.Tensor,
@@ -81,7 +83,7 @@ def hierarchical_loss(
     # Flat matrix projection for vectorized base Dirichlet computation
     _, _, n_comp = alpha.shape
     alpha_flat = alpha.view(-1, n_comp)
-    kl_dir_flat = _kl_divergence_dirichlet(alpha_flat).view(batch_size, n_mixtures)
+    kl_dir_flat = dirichlet.kl_divergence(alpha_flat).view(batch_size, n_mixtures)
 
     # Aggregate categorical assignments with continuous coordinate penalties
     kl_mdm_samples = kl_categorical + (mix_probs * kl_dir_flat).sum(dim=-1)
@@ -93,35 +95,6 @@ def hierarchical_loss(
     )
 
     return total_loss, marginalized_recon, kl_mdm_loss, marginalized_kl_gaussian
-
-
-def _kl_divergence_dirichlet(alpha: torch.Tensor) -> torch.Tensor:
-    """Calculate the KL divergence between a Dirichlet distribution and a uniform prior.
-
-    Arguments:
-        alpha (torch.Tensor): The concentration parameters of the Dirichlet distribution.
-
-    Returns:
-        torch.Tensor: The KL divergence for each sample in the batch.
-
-    """
-    prior_alpha = torch.full_like(alpha, 1)
-
-    # Log gammas for numerical stability
-    log_gamma_alpha = torch.lgamma(alpha)
-    log_gamma_sum_alpha = torch.lgamma(alpha.sum(dim=-1))
-    log_gamma_prior = torch.lgamma(prior_alpha)
-    log_gamma_sum_prior = torch.lgamma(prior_alpha.sum(dim=-1))
-
-    digamma_alpha = torch.digamma(alpha)
-    digamma_sum_alpha = torch.digamma(alpha.sum(dim=-1, keepdim=True))
-
-    log_b_prior = log_gamma_prior.sum(dim=-1) - log_gamma_sum_prior
-    log_b_alpha = log_gamma_alpha.sum(dim=-1) - log_gamma_sum_alpha
-
-    kl = log_b_prior - log_b_alpha
-    kl += ((alpha - prior_alpha) * (digamma_alpha - digamma_sum_alpha)).sum(dim=-1)
-    return kl
 
 
 def _kl_divergence_gaussian(

@@ -4,7 +4,7 @@ from torch import nn
 from charl_tre.models import dirichlet, gaussian, util
 
 
-class Fusion(nn.Module):
+class Autoencoder(nn.Module):
     """Hierarchical Ladder VAE using a global Mixture of Dirichlets (MDM) posterior.
 
     Permutation-invariant pooling across antennas routes through discrete components
@@ -23,7 +23,7 @@ class Fusion(nn.Module):
         n_gaussians_per_antenna: int = 2,
         eps: float = 1e-4,
     ) -> None:
-        """Initialize the HierarchicalFusion model.
+        """Initialize the model.
 
         Arguments:
             window_size (int): Size of the input window for each antenna signal.

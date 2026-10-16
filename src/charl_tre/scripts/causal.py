@@ -100,7 +100,7 @@ def _build_rules(
     top_rules_per_activity = trial.suggest_int("top_rules_per_activity", 2, 12, step=2)
     drop_threshold = trial.suggest_float("drop_threshold", 0.1, 0.5, step=0.05)
     null_clip_sigma = trial.suggest_float("null_clip_sigma", 1.0, 5.0, step=0.5)
-    segment_length = trial.suggest_int("segment_length", 12, 30, step=2)
+    segment_length = trial.suggest_int("segment_length", 12, 36, step=2)
 
     rule_builder = RuleBuilder(min_mci_strength, min_samples, top_rules_per_activity, drop_threshold)
     rules = rule_builder.build(adjacency, variables, train_latents)
